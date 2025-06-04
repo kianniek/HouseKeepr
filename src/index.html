@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Smart Household Agenda</title>
+  <link rel="stylesheet" href="calendar.css" />
 </head>
 <body>
   <noscript>This application requires JavaScript.</noscript>
@@ -14,6 +15,14 @@
   <script>
     const { useState, useEffect } = React;
 
+    function parseICSTime(s) {
+      if (!s) return null;
+      const m = s.match(/(\d{4})(\d{2})(\d{2})(T(\d{2})(\d{2})(\d{2})Z?)?/);
+      if (!m) return null;
+      const [, y, mo, d, , h = '0', mi = '0', sec = '0'] = m;
+      return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +sec));
+    }
+
     function parseICS(text) {
       const events = [];
       const blocks = text.split('BEGIN:VEVENT').slice(1);
@@ -23,10 +32,166 @@
         const start = (body.match(/DTSTART(?:;[^:]+)?:([^\n\r]+)/) || [])[1];
         const end = (body.match(/DTEND(?:;[^:]+)?:([^\n\r]+)/) || [])[1];
         if (summary && start) {
-          events.push({ summary: summary.trim(), start: start.trim(), end: end ? end.trim() : '' });
+          events.push({
+            summary: summary.trim(),
+            start: start.trim(),
+            end: end ? end.trim() : '',
+            startDate: parseICSTime(start.trim())
+          });
         }
       }
       return events;
+    }
+
+    function groupEventsByDay(events) {
+      const map = {};
+      events.forEach(ev => {
+        if (!ev.startDate) return;
+        const key = ev.startDate.toISOString().slice(0, 10);
+        if (!map[key]) map[key] = [];
+        map[key].push(ev);
+      });
+      return map;
+    }
+
+    function CalendarMonth({ events, date }) {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+
+      const eventsByDay = groupEventsByDay(events);
+
+      const monthStart = new Date(year, month, 1);
+      const monthEnd = new Date(year, month + 1, 0);
+      const firstDay = monthStart.getDay();
+      const totalCells = Math.ceil((firstDay + monthEnd.getDate()) / 7) * 7;
+
+      const cells = [];
+      for (let i = 0; i < totalCells; i++) {
+        const date = new Date(year, month, i - firstDay + 1);
+        const key = date.toISOString().slice(0, 10);
+        const dayEvents = eventsByDay[key] || [];
+        cells.push(React.createElement('div', { className: 'cell', key: key },
+          React.createElement('div', { className: 'date' }, date.getDate()),
+          React.createElement('ul', null,
+            dayEvents.map((ev, idx) => React.createElement('li', { key: idx }, ev.summary))
+          )
+        ));
+      }
+
+      const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d =>
+        React.createElement('div', { className: 'cell header', key: d }, d)
+      );
+
+      return React.createElement('div', { className: 'calendar' },
+        dayHeaders.concat(cells)
+      );
+    }
+
+    function CalendarWeek({ events, date }) {
+      const eventsByDay = groupEventsByDay(events);
+      const start = new Date(date);
+      start.setDate(start.getDate() - start.getDay());
+
+      const cells = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        const key = d.toISOString().slice(0, 10);
+        const dayEvents = eventsByDay[key] || [];
+        cells.push(React.createElement('div', { className: 'cell', key: key },
+          React.createElement('div', { className: 'date' }, d.getDate()),
+          React.createElement('ul', null,
+            dayEvents.map((ev, idx) => React.createElement('li', { key: idx }, ev.summary))
+          )
+        ));
+      }
+
+      const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d =>
+        React.createElement('div', { className: 'cell header', key: d }, d)
+      );
+
+      return React.createElement('div', { className: 'calendar' }, dayHeaders.concat(cells));
+    }
+
+    function CalendarDay({ events, date }) {
+      const eventsByDay = groupEventsByDay(events);
+      const key = date.toISOString().slice(0, 10);
+      const dayEvents = eventsByDay[key] || [];
+      return React.createElement('div', null,
+        React.createElement('h3', null, date.toDateString()),
+        React.createElement('ul', null,
+          dayEvents.map((ev, idx) => React.createElement('li', { key: idx }, ev.summary))
+        )
+      );
+    }
+
+    function CalendarYear({ events, date }) {
+      const year = date.getFullYear();
+      const months = [];
+      for (let m = 0; m < 12; m++) {
+        const d = new Date(year, m, 1);
+        months.push(React.createElement('div', { className: 'month', key: m },
+          d.toLocaleString('default', { month: 'long' })
+        ));
+      }
+      return React.createElement('div', { className: 'year-view' }, months);
+    }
+
+    function Calendar({ events }) {
+      const [view, setView] = useState('month');
+      const [date, setDate] = useState(new Date());
+
+      function navigate(delta) {
+        setDate(prev => {
+          const d = new Date(prev);
+          if (view === 'day') {
+            d.setDate(d.getDate() + delta);
+          } else if (view === 'week') {
+            d.setDate(d.getDate() + delta * 7);
+          } else if (view === 'month') {
+            d.setMonth(d.getMonth() + delta);
+          } else if (view === 'year') {
+            d.setFullYear(d.getFullYear() + delta);
+          }
+          return d;
+        });
+      }
+
+      let title = '';
+      if (view === 'day') {
+        title = date.toDateString();
+      } else if (view === 'week') {
+        const start = new Date(date);
+        start.setDate(start.getDate() - start.getDay());
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        title = `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
+      } else if (view === 'month') {
+        title = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+      } else if (view === 'year') {
+        title = String(date.getFullYear());
+      }
+
+      let View = CalendarMonth;
+      if (view === 'day') View = CalendarDay;
+      else if (view === 'week') View = CalendarWeek;
+      else if (view === 'year') View = CalendarYear;
+
+      return React.createElement('div', null,
+        React.createElement('div', { className: 'toolbar' },
+          React.createElement('button', { onClick: () => navigate(-1) }, 'Prev'),
+          React.createElement('span', { className: 'spacer' }, title),
+          React.createElement('button', { onClick: () => navigate(1) }, 'Next'),
+          React.createElement('span', { className: 'spacer' }),
+          ['day','week','month','year'].map(v =>
+            React.createElement('button', {
+              key: v,
+              onClick: () => setView(v)
+            }, v.charAt(0).toUpperCase() + v.slice(1))
+          )
+        ),
+        React.createElement(View, { events, date })
+      );
     }
 
     function CalendarEvents(props) {
@@ -37,7 +202,7 @@
           try {
             const resp = await fetch(props.feedUrl);
             const text = await resp.text();
-            setEvents(parseICS(text).slice(0, 5));
+            setEvents(parseICS(text));
           } catch (err) {
             console.error('Failed to load calendar events', err);
           }
@@ -45,18 +210,16 @@
         load();
       }, [props.feedUrl]);
 
-      return React.createElement('div', null,
-        React.createElement('h2', null, 'Upcoming Events'),
-        React.createElement('ul', null,
-          events.map((ev, idx) => React.createElement('li', { key: idx }, `${ev.start} - ${ev.summary}`))
-        )
-      );
+      return React.createElement(Calendar, { events });
     }
 
     function App() {
-      return React.createElement(CalendarEvents, {
-        feedUrl: 'https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics'
-      });
+      return React.createElement('div', null,
+        React.createElement('h2', null, 'Calendar'),
+        React.createElement(CalendarEvents, {
+          feedUrl: 'https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics'
+        })
+      );
     }
 
     const rootElem = document.getElementById('root');

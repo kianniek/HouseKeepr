@@ -1,0 +1,55 @@
+body {
+  font-family: Arial, sans-serif;
+}
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.calendar .cell {
+  border: 1px solid #ddd;
+  padding: 4px;
+  min-height: 80px;
+  font-size: 0.8em;
+  overflow: hidden;
+}
+.calendar .header {
+  background: #f5f5f5;
+  font-weight: bold;
+  text-align: center;
+}
+.calendar .date {
+  font-size: 0.75em;
+  color: #666;
+}
+.calendar ul {
+  list-style: none;
+  padding-left: 4px;
+  margin: 2px 0 0 0;
+}
+.calendar li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolbar {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.toolbar .spacer {
+  flex: 1;
+}
+
+.year-view {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.year-view .month {
+  border: 1px solid #ddd;
+  padding: 4px;
+  text-align: center;
+}
