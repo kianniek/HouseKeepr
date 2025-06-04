@@ -42,6 +42,12 @@ npm start
 
 A window should appear listing upcoming calendar events.
 
+### Running in Visual Studio Code
+
+1. Open the folder in VS Code.
+2. Choose **Run Electron** in the Run and Debug panel.
+3. Start debugging; dependencies will install automatically.
+
 ## Project Structure
 
 ```
