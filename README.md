@@ -1,29 +1,61 @@
-# HouseKeepr
+# Smart Household Agenda
 
-HouseKeepr is an all-in-one household agenda and task manager designed to simplify daily home life. It helps track chores, schedule reminders, and coordinate tasks among family members or roommates.
+**Smart Household Agenda** is a desktop-based personal dashboard built with Electron and React. It runs on a Raspberry Pi or laptop, showing your household agenda with calendar events, weather, and news updates.
 
-## Project Overview
+## Scope and Vision
 
-This project aims to create a desktop-based dashboard that runs on Electron and React. The application will eventually display calendar events, track household chores, provide weather updates, and show quick reminders so that everyone in the home stays organized.
+The goal is to build a smart agenda for home use. Eventually the app will:
+- Display upcoming calendar events.
+- Show current weather and a forecast.
+- List the latest news headlines.
+- Run automatically on a Raspberry Pi connected to a display.
 
-## Setup
+Phase 1 sets up the project structure and a basic "Hello World" app.
 
-1. Install dependencies: `npm install`
-2. Run the app: `npm start`
+## Prioritized Feature Map
+
+1. **Calendar Events Display** – High priority.
+2. **Weather Forecast** – High priority.
+3. **News Headlines** – Medium priority.
+4. **Configuration UI** – Lower priority.
+5. **Startup/Autorefresh** – Medium priority.
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js and npm installed.
+
+### Installation
+
+```bash
+npm install
+```
+
+### Running the Application
+
+```bash
+npm start
+```
+
+A window should appear showing "Hello, Smart Household Agenda!".
 
 ## Project Structure
 
-- `electron/` - Electron main process code
-- `src/` - React frontend source code
-- `.gitignore` - Specifies files to ignore in git
-- `package.json` - Project metadata and dependencies
+```
+├── electron/
+│   ├── main.js
+│   └── preload.js
+├── src/
+│   ├── components/
+│   ├── pages/
+│   ├── index.html
+│   └── index.jsx
+├── .gitignore
+├── package.json
+└── README.md
+```
 
-## Project Planning
+## Deployment Notes
 
-The development will be completed in small phases:
-
-1. **Phase 1** – Boilerplate setup of Electron and React (current phase).
-2. **Phase 2** – Integrate calendar events, weather data, and news headlines.
-3. **Phase 3** – Add configuration options, polish the UI, and prepare for deployment on Raspberry Pi.
-
-Each phase builds on the previous one so the project remains functional throughout development.
+When deploying to a Raspberry Pi, you can use a systemd service to start the app on boot. Updates can be pulled from git and the service restarted.
