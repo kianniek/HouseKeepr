@@ -12,9 +12,55 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
 
   <script>
+    const { useState, useEffect } = React;
+
+    function parseICS(text) {
+      const events = [];
+      const blocks = text.split('BEGIN:VEVENT').slice(1);
+      for (const block of blocks) {
+        const body = block.split('END:VEVENT')[0];
+        const summary = (body.match(/SUMMARY:(.+)/) || [])[1];
+        const start = (body.match(/DTSTART(?:;[^:]+)?:([^\n\r]+)/) || [])[1];
+        const end = (body.match(/DTEND(?:;[^:]+)?:([^\n\r]+)/) || [])[1];
+        if (summary && start) {
+          events.push({ summary: summary.trim(), start: start.trim(), end: end ? end.trim() : '' });
+        }
+      }
+      return events;
+    }
+
+    function CalendarEvents(props) {
+      const [events, setEvents] = useState([]);
+
+      useEffect(() => {
+        async function load() {
+          try {
+            const resp = await fetch(props.feedUrl);
+            const text = await resp.text();
+            setEvents(parseICS(text).slice(0, 5));
+          } catch (err) {
+            console.error('Failed to load calendar events', err);
+          }
+        }
+        load();
+      }, [props.feedUrl]);
+
+      return React.createElement('div', null,
+        React.createElement('h2', null, 'Upcoming Events'),
+        React.createElement('ul', null,
+          events.map((ev, idx) => React.createElement('li', { key: idx }, `${ev.start} - ${ev.summary}`))
+        )
+      );
+    }
+
+    function App() {
+      return React.createElement(CalendarEvents, {
+        feedUrl: 'https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics'
+      });
+    }
+
     const rootElem = document.getElementById('root');
-    const reactElement = React.createElement('h1', null, 'Hello, Smart Household Agenda!');
-    ReactDOM.createRoot(rootElem).render(reactElement);
+    ReactDOM.createRoot(rootElem).render(React.createElement(App));
   </script>
 </body>
 </html>

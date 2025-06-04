@@ -10,7 +10,9 @@ The goal is to build a smart agenda for home use. Eventually the app will:
 - List the latest news headlines.
 - Run automatically on a Raspberry Pi connected to a display.
 
-Phase 1 sets up the project structure and a basic "Hello World" app.
+The initial phase set up the project structure with a simple "Hello World" app.
+The app now fetches events from a public calendar feed and lists upcoming
+entries in the main window.
 
 ## Prioritized Feature Map
 
@@ -38,7 +40,7 @@ npm install
 npm start
 ```
 
-A window should appear showing "Hello, Smart Household Agenda!".
+A window should appear listing upcoming calendar events.
 
 ## Project Structure
 
