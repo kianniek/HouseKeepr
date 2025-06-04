@@ -32,3 +32,24 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.toolbar {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.toolbar .spacer {
+  flex: 1;
+}
+
+.year-view {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.year-view .month {
+  border: 1px solid #ddd;
+  padding: 4px;
+  text-align: center;
+}
