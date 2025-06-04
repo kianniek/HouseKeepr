@@ -53,3 +53,43 @@ body {
   padding: 4px;
   text-align: center;
 }
+
+.day-grid,
+.week-grid {
+  position: relative;
+}
+
+.time-column,
+.day-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.time-slot {
+  height: 20px;
+  border-top: 1px solid #eee;
+  font-size: 0.7em;
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: 60px repeat(7, 1fr);
+}
+
+.day-grid {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+}
+
+.day-column {
+  border-left: 1px solid #ddd;
+}
+
+.current-time-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: red;
+  pointer-events: none;
+}
