@@ -15,6 +15,31 @@
   <script>
     const { useState, useEffect } = React;
 
+    function useCurrentTime() {
+      const [now, setNow] = useState(null);
+      useEffect(() => {
+        let offset = 0;
+        async function load() {
+          try {
+            const resp = await fetch('https://worldtimeapi.org/api/ip');
+            const data = await resp.json();
+            const apiTime = new Date(data.datetime);
+            offset = apiTime.getTime() - Date.now();
+            setNow(new Date(Date.now() + offset));
+          } catch (err) {
+            console.error('Failed to fetch time', err);
+            setNow(new Date());
+          }
+        }
+        load();
+        const timer = setInterval(() => {
+          setNow(new Date(Date.now() + offset));
+        }, 60000);
+        return () => clearInterval(timer);
+      }, []);
+      return now;
+    }
+
     function parseICSTime(s) {
       if (!s) return null;
       const m = s.match(/(\d{4})(\d{2})(\d{2})(T(\d{2})(\d{2})(\d{2})Z?)?/);
@@ -87,40 +112,64 @@
       );
     }
 
-    function CalendarWeek({ events, date }) {
+    function CalendarWeek({ events, date, currentTime }) {
       const eventsByDay = groupEventsByDay(events);
       const start = new Date(date);
       start.setDate(start.getDate() - start.getDay());
 
-      const cells = [];
+      const dayCols = [];
       for (let i = 0; i < 7; i++) {
         const d = new Date(start);
         d.setDate(start.getDate() + i);
         const key = d.toISOString().slice(0, 10);
         const dayEvents = eventsByDay[key] || [];
-        cells.push(React.createElement('div', { className: 'cell', key: key },
-          React.createElement('div', { className: 'date' }, d.getDate()),
+        const slots = [];
+        for (let s = 0; s < 48; s++) {
+          slots.push(React.createElement('div', { className: 'time-slot', key: s }));
+        }
+        const lineTop = currentTime && currentTime.toDateString() === d.toDateString()
+          ? ((currentTime.getHours() * 60 + currentTime.getMinutes()) / 30) * 20
+          : null;
+        dayCols.push(React.createElement('div', { className: 'day-column', key: key },
+          lineTop != null && React.createElement('div', { className: 'current-time-line', style: { top: lineTop + 'px' } }),
+          slots,
           React.createElement('ul', null,
             dayEvents.map((ev, idx) => React.createElement('li', { key: idx }, ev.summary))
           )
         ));
       }
 
-      const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d =>
-        React.createElement('div', { className: 'cell header', key: d }, d)
-      );
+      const timeSlots = [];
+      for (let i = 0; i < 48; i++) {
+        const label = `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`;
+        timeSlots.push(React.createElement('div', { className: 'time-slot', key: i }, label));
+      }
 
-      return React.createElement('div', { className: 'calendar' }, dayHeaders.concat(cells));
+      return React.createElement('div', { className: 'week-grid' },
+        React.createElement('div', { className: 'time-column' }, timeSlots),
+        dayCols
+      );
     }
 
-    function CalendarDay({ events, date }) {
+    function CalendarDay({ events, date, currentTime }) {
       const eventsByDay = groupEventsByDay(events);
       const key = date.toISOString().slice(0, 10);
       const dayEvents = eventsByDay[key] || [];
-      return React.createElement('div', null,
-        React.createElement('h3', null, date.toDateString()),
-        React.createElement('ul', null,
-          dayEvents.map((ev, idx) => React.createElement('li', { key: idx }, ev.summary))
+      const slots = [];
+      for (let i = 0; i < 48; i++) {
+        const label = `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`;
+        slots.push(React.createElement('div', { className: 'time-slot', key: i }, label));
+      }
+      const lineTop = currentTime && currentTime.toDateString() === date.toDateString()
+        ? ((currentTime.getHours() * 60 + currentTime.getMinutes()) / 30) * 20
+        : null;
+      return React.createElement('div', { className: 'day-grid' },
+        React.createElement('div', { className: 'time-column' }, slots),
+        React.createElement('div', { className: 'day-column' },
+          lineTop != null && React.createElement('div', { className: 'current-time-line', style: { top: lineTop + 'px' } }),
+          React.createElement('ul', null,
+            dayEvents.map((ev, idx) => React.createElement('li', { key: idx }, ev.summary))
+          )
         )
       );
     }
@@ -140,6 +189,7 @@
     function Calendar({ events }) {
       const [view, setView] = useState('month');
       const [date, setDate] = useState(new Date());
+      const currentTime = useCurrentTime();
 
       function navigate(delta) {
         setDate(prev => {
@@ -180,6 +230,7 @@
       return React.createElement('div', null,
         React.createElement('div', { className: 'toolbar' },
           React.createElement('button', { onClick: () => navigate(-1) }, 'Prev'),
+          React.createElement('button', { onClick: () => setDate(currentTime || new Date()) }, 'Today'),
           React.createElement('span', { className: 'spacer' }, title),
           React.createElement('button', { onClick: () => navigate(1) }, 'Next'),
           React.createElement('span', { className: 'spacer' }),
@@ -190,7 +241,7 @@
             }, v.charAt(0).toUpperCase() + v.slice(1))
           )
         ),
-        React.createElement(View, { events, date })
+        React.createElement(View, { events, date, currentTime })
       );
     }
 
