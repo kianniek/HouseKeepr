@@ -7,6 +7,9 @@ function createWindow() {
     height: 600,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      // Disable webSecurity so the renderer can fetch remote
+      // resources like calendar and time APIs without CORS issues.
+      webSecurity: false,
     }
   });
 
