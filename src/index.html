@@ -15,7 +15,6 @@
 
   <script>
     const { useState, useEffect } = React;
-    const { parseICSTime, parseICS, groupEventsByDay } = window;
 
     function useCurrentTime() {
       const [now, setNow] = useState(null);
@@ -47,7 +46,7 @@
       const year = date.getFullYear();
       const month = date.getMonth();
 
-      const eventsByDay = groupEventsByDay(events);
+      const eventsByDay = window.groupEventsByDay(events);
 
       const monthStart = new Date(year, month, 1);
       const monthEnd = new Date(year, month + 1, 0);
@@ -77,7 +76,7 @@
     }
 
     function CalendarWeek({ events, date, currentTime }) {
-      const eventsByDay = groupEventsByDay(events);
+      const eventsByDay = window.groupEventsByDay(events);
       const start = new Date(date);
       start.setDate(start.getDate() - start.getDay());
 
@@ -116,7 +115,7 @@
     }
 
     function CalendarDay({ events, date, currentTime }) {
-      const eventsByDay = groupEventsByDay(events);
+      const eventsByDay = window.groupEventsByDay(events);
       const key = date.toISOString().slice(0, 10);
       const dayEvents = eventsByDay[key] || [];
       const slots = [];
@@ -217,7 +216,7 @@
           try {
             const resp = await fetch(props.feedUrl);
             const text = await resp.text();
-            setEvents(parseICS(text));
+            setEvents(window.parseICS(text));
           } catch (err) {
             console.error('Failed to load calendar events', err);
           }
