@@ -18,6 +18,7 @@ jobs:
           flutter-version: '3.35.6'
 
       - name: Install dependencies
+        working-directory: housekeepr
         run: flutter pub get
 
       - name: Verify secrets
@@ -42,6 +43,7 @@ jobs:
           fi
 
       - name: Build web with dart-define
+        working-directory: housekeepr
         env:
           FIREBASE_WEB_API_KEY: ${{ secrets.FIREBASE_WEB_API_KEY }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
@@ -70,6 +72,7 @@ jobs:
           flutter-version: '3.35.6'
 
       - name: Install dependencies
+        working-directory: housekeepr
         run: flutter pub get
 
       - name: Verify secrets
@@ -92,6 +95,7 @@ jobs:
           fi
 
       - name: Build Android with dart-define
+        working-directory: housekeepr
         env:
           FIREBASE_ANDROID_API_KEY: ${{ secrets.FIREBASE_ANDROID_API_KEY }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
@@ -115,6 +119,7 @@ jobs:
           flutter-version: '3.35.6'
 
       - name: Install dependencies
+        working-directory: housekeepr
         run: flutter pub get
 
       - name: Verify secrets
@@ -137,6 +142,7 @@ jobs:
           fi
 
       - name: Build iOS with dart-define
+        working-directory: housekeepr
         env:
           FIREBASE_IOS_API_KEY: ${{ secrets.FIREBASE_IOS_API_KEY }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
