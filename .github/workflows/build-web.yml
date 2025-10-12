@@ -2,7 +2,7 @@ name: Build web
 
 on:
   push:
-    branches: [ main ]
+    branches: [ FlutterApp ]
   workflow_dispatch:
 
 jobs:
@@ -14,7 +14,8 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
+          channel: 'stable'
+          flutter-version: '3.22.0'
 
       - name: Install dependencies
         run: flutter pub get
@@ -44,7 +45,8 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
+          channel: 'stable'
+          flutter-version: '3.22.0'
 
       - name: Install dependencies
         run: flutter pub get
@@ -69,7 +71,8 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
+          channel: 'stable'
+          flutter-version: '3.22.0'
 
       - name: Install dependencies
         run: flutter pub get
