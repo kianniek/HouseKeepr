@@ -21,12 +21,17 @@ jobs:
         run: flutter pub get
 
       - name: Verify secrets
+        env:
+          FIREBASE_WEB_API_KEY: ${{ secrets.FIREBASE_WEB_API_KEY }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_AUTH_DOMAIN: ${{ secrets.FIREBASE_AUTH_DOMAIN }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_MEASUREMENT_ID: ${{ secrets.FIREBASE_MEASUREMENT_ID }}
         run: |
-          set -e
-          required=(FIREBASE_WEB_API_KEY FIREBASE_PROJECT_ID FIREBASE_AUTH_DOMAIN FIREBASE_APP_ID FIREBASE_MEASUREMENT_ID)
+          set -euo pipefail
           missing=()
-          for v in "${required[@]}"; do
-            if [ -z "${{ secrets["$v"] }}" ]; then
+          for v in FIREBASE_WEB_API_KEY FIREBASE_PROJECT_ID FIREBASE_AUTH_DOMAIN FIREBASE_APP_ID FIREBASE_MEASUREMENT_ID; do
+            if [ -z "${!v:-}" ]; then
               missing+=("$v")
             fi
           done
@@ -68,12 +73,15 @@ jobs:
         run: flutter pub get
 
       - name: Verify secrets
+        env:
+          FIREBASE_ANDROID_API_KEY: ${{ secrets.FIREBASE_ANDROID_API_KEY }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
         run: |
-          set -e
-          required=(FIREBASE_ANDROID_API_KEY FIREBASE_PROJECT_ID FIREBASE_ANDROID_APP_ID)
+          set -euo pipefail
           missing=()
-          for v in "${required[@]}"; do
-            if [ -z "${{ secrets["$v"] }}" ]; then
+          for v in FIREBASE_ANDROID_API_KEY FIREBASE_PROJECT_ID FIREBASE_ANDROID_APP_ID; do
+            if [ -z "${!v:-}" ]; then
               missing+=("$v")
             fi
           done
@@ -110,12 +118,15 @@ jobs:
         run: flutter pub get
 
       - name: Verify secrets
+        env:
+          FIREBASE_IOS_API_KEY: ${{ secrets.FIREBASE_IOS_API_KEY }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
         run: |
-          set -e
-          required=(FIREBASE_IOS_API_KEY FIREBASE_PROJECT_ID FIREBASE_IOS_APP_ID)
+          set -euo pipefail
           missing=()
-          for v in "${required[@]}"; do
-            if [ -z "${{ secrets["$v"] }}" ]; then
+          for v in FIREBASE_IOS_API_KEY FIREBASE_PROJECT_ID FIREBASE_IOS_APP_ID; do
+            if [ -z "${!v:-}" ]; then
               missing+=("$v")
             fi
           done
