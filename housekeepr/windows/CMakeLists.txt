@@ -39,7 +39,10 @@ add_definitions(-DUNICODE -D_UNICODE)
 # of modifying this function.
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
-  target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")
+  # /WX treats warnings as errors; keep that but explicitly disable the
+  # MSVC deprecation warning C4996 which some bundled native SDKs (e.g.
+  # firebase cpp) trigger and which would otherwise break the build.
+  target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100" /wd4996)
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")

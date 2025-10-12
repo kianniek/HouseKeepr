@@ -1,37 +1,129 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-void main() {
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:google_sign_in/google_sign_in.dart';
+import 'ui/login_page.dart';
+import 'ui/household_create_page.dart';
+import 'ui/household_dashboard_page.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'HouseKeepr',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color.fromARGB(255, 247, 136, 1),
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const AppRoot(),
     );
+  }
+}
+
+class AppRoot extends StatefulWidget {
+  const AppRoot({super.key});
+
+  @override
+  State<AppRoot> createState() => _AppRootState();
+}
+
+class _AppRootState extends State<AppRoot> {
+  fb.User? _user;
+  String? _householdId;
+  bool _checkingHousehold = false;
+
+  void _onSignedIn(fb.User user) async {
+    setState(() {
+      _user = user;
+      _checkingHousehold = true;
+    });
+    // Ensure user profile exists in Firestore and check household
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'displayName': user.displayName,
+        'email': user.email,
+        'photoURL': user.photoURL,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      // ignore write errors for now
+      print('Failed to write user profile: $e');
+    }
+    // Check if user has a household
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    final data = doc.data();
+    if (data != null && data['householdId'] != null) {
+      setState(() {
+        _householdId = data['householdId'] as String;
+        _checkingHousehold = false;
+      });
+    } else {
+      setState(() {
+        _householdId = null;
+        _checkingHousehold = false;
+      });
+    }
+  }
+
+  void _onHouseholdCreated(String householdId) {
+    setState(() {
+      _householdId = householdId;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_user == null) {
+      return LoginPage(
+        auth: fb.FirebaseAuth.instance,
+        googleSignIn: GoogleSignIn(),
+        onSignedIn: _onSignedIn,
+      );
+    }
+    if (_checkingHousehold) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_householdId == null) {
+      return HouseholdCreatePage(user: _user!, onCreated: _onHouseholdCreated);
+    }
+    // Household dashboard with invite/join and shared tasks
+    return HouseholdDashboardPage(householdId: _householdId!, user: _user!);
+  }
+}
+
+Future<void> addHousekeepingTask(
+  String taskName,
+  String assignedTo,
+  DateTime dueDate,
+) async {
+  try {
+    FirebaseFirestore firestore = FirebaseFirestore.instance;
+    CollectionReference tasks = firestore.collection('tasks');
+    Map<String, dynamic> newTaskData = {
+      'name': taskName,
+      'assigned_to': assignedTo,
+      'due_date': Timestamp.fromDate(dueDate),
+      'is_completed': false,
+      'created_at': FieldValue.serverTimestamp(),
+    };
+    DocumentReference documentReference = await tasks.add(newTaskData);
+    print('New task added with ID: \\${documentReference.id}');
+  } catch (e) {
+    print('Error adding task: \\${e}');
   }
 }
 

@@ -1,0 +1,25 @@
+{
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "housekeepr-51a2e",
+                    "appId": "1:480693965267:android:3223c47031045895db1f26",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "housekeepr-51a2e",
+                    "configurations": {
+                        "android": "1:480693965267:android:3223c47031045895db1f26",
+                        "ios": "1:480693965267:ios:174093ecd82343afdb1f26",
+                        "macos": "1:480693965267:ios:174093ecd82343afdb1f26",
+                        "web": "1:480693965267:web:4a5e4162c2d003ccdb1f26",
+                        "windows": "1:480693965267:web:05e2fd6bbdd7cabfdb1f26"
+                    }
+                }
+            }
+        }
+    }
+}
