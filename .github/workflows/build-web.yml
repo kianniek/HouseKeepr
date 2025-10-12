@@ -16,7 +16,7 @@ jobs:
         with:
           channel: 'stable'
           flutter-version: '3.35.6'
-          architecture: 'x64'
+          architecture: 'arm64'
 
       - name: Install dependencies
         working-directory: housekeepr
@@ -121,64 +121,70 @@ jobs:
             --dart-define=FIREBASE_PROJECT_ID=${{ env.FIREBASE_PROJECT_ID }} \
             --dart-define=FIREBASE_ANDROID_APP_ID=${{ env.FIREBASE_ANDROID_APP_ID }}
 
-  build-ios:
-    runs-on: macos-latest
-    needs: build
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v3
         with:
-          channel: 'stable'
-          flutter-version: '3.35.6'
+          name: app-release
+          path: housekeepr/build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Install dependencies
-        working-directory: housekeepr
-        run: flutter pub get
-
-      - name: Verify secrets
-        env:
-          FIREBASE_IOS_API_KEY: ${{ secrets.FIREBASE_IOS_API_KEY }}
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
-          FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
-        run: |
-          set -euo pipefail
-          missing=()
-          for v in FIREBASE_IOS_API_KEY FIREBASE_PROJECT_ID FIREBASE_IOS_APP_ID; do
-            if [ -z "${!v:-}" ]; then
-              missing+=("$v")
-            fi
-          done
-          if [ ${#missing[@]} -ne 0 ]; then
-            echo "Missing required secrets: ${missing[*]}"
-            echo "Please add them in Settings → Secrets and variables → Actions"
-            exit 1
-          fi
-
-      - name: Write GoogleService-Info.plist
-        working-directory: housekeepr
-        env:
-          FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST }}
-        run: |
-          set -euo pipefail
-          if [ -z "${FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST:-}" ]; then
-            echo "FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST is empty — set the secret to your GoogleService-Info.plist contents"
-            exit 1
-          fi
-          mkdir -p ios/Runner
-          printf '%s' "$FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST" > ios/Runner/GoogleService-Info.plist
-          echo "Wrote ios/Runner/GoogleService-Info.plist"
-
-      - name: Build iOS with dart-define
-        working-directory: housekeepr
-        env:
-          FIREBASE_IOS_API_KEY: ${{ secrets.FIREBASE_IOS_API_KEY }}
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
-          FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
-        run: |
-          flutter build ios --release \
-            --no-codesign \
-            --dart-define=FIREBASE_IOS_API_KEY=${{ env.FIREBASE_IOS_API_KEY }} \
-            --dart-define=FIREBASE_PROJECT_ID=${{ env.FIREBASE_PROJECT_ID }} \
-            --dart-define=FIREBASE_IOS_APP_ID=${{ env.FIREBASE_IOS_APP_ID }}
+  # build-ios:
+  #   runs-on: macos-latest
+  #   needs: build
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - name: Set up Flutter
+  #       uses: subosito/flutter-action@v2
+  #       with:
+  #         channel: 'stable'
+  #         flutter-version: '3.35.6'
+  #
+  #     - name: Install dependencies
+  #       working-directory: housekeepr
+  #       run: flutter pub get
+  #
+  #     - name: Verify secrets
+  #       env:
+  #         FIREBASE_IOS_API_KEY: ${{ secrets.FIREBASE_IOS_API_KEY }}
+  #         FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+  #         FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
+  #       run: |
+  #         set -euo pipefail
+  #         missing=()
+  #         for v in FIREBASE_IOS_API_KEY FIREBASE_PROJECT_ID FIREBASE_IOS_APP_ID; do
+  #           if [ -z "${!v:-}" ]; then
+  #             missing+=("$v")
+  #           fi
+  #         done
+  #         if [ ${#missing[@]} -ne 0 ]; then
+  #           echo "Missing required secrets: ${missing[*]}"
+  #           echo "Please add them in Settings → Secrets and variables → Actions"
+  #           exit 1
+  #         fi
+  #
+  #     - name: Write GoogleService-Info.plist
+  #       working-directory: housekeepr
+  #       env:
+  #         FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST }}
+  #       run: |
+  #         set -euo pipefail
+  #         if [ -z "${FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST:-}" ]; then
+  #           echo "FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST is empty — set the secret to your GoogleService-Info.plist contents"
+  #           exit 1
+  #         fi
+  #         mkdir -p ios/Runner
+  #         printf '%s' "$FIREBASE_IOS_GOOGLE_SERVICE_INFO_PLIST" > ios/Runner/GoogleService-Info.plist
+  #         echo "Wrote ios/Runner/GoogleService-Info.plist"
+  #
+  #     - name: Build iOS with dart-define
+  #       working-directory: housekeepr
+  #       env:
+  #         FIREBASE_IOS_API_KEY: ${{ secrets.FIREBASE_IOS_API_KEY }}
+  #         FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+  #         FIREBASE_IOS_APP_ID: ${{ secrets.FIREBASE_IOS_APP_ID }}
+  #       run: |
+  #         flutter build ios --release \
+  #           --no-codesign \
+  #           --dart-define=FIREBASE_IOS_API_KEY=${{ env.FIREBASE_IOS_API_KEY }} \
+  #           --dart-define=FIREBASE_PROJECT_ID=${{ env.FIREBASE_PROJECT_ID }} \
+  #           --dart-define=FIREBASE_IOS_APP_ID=${{ env.FIREBASE_IOS_APP_ID }}
