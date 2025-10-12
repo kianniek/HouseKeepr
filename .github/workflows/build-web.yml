@@ -15,10 +15,26 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.22.0'
+          flutter-version: '3.35.6'
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Verify secrets
+        run: |
+          set -e
+          required=(FIREBASE_WEB_API_KEY FIREBASE_PROJECT_ID FIREBASE_AUTH_DOMAIN FIREBASE_APP_ID FIREBASE_MEASUREMENT_ID)
+          missing=()
+          for v in "${required[@]}"; do
+            if [ -z "${{ secrets["$v"] }}" ]; then
+              missing+=("$v")
+            fi
+          done
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "Missing required secrets: ${missing[*]}"
+            echo "Please add them in Settings → Secrets and variables → Actions"
+            exit 1
+          fi
 
       - name: Build web with dart-define
         env:
@@ -46,10 +62,26 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.22.0'
+          flutter-version: '3.35.6'
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Verify secrets
+        run: |
+          set -e
+          required=(FIREBASE_ANDROID_API_KEY FIREBASE_PROJECT_ID FIREBASE_ANDROID_APP_ID)
+          missing=()
+          for v in "${required[@]}"; do
+            if [ -z "${{ secrets["$v"] }}" ]; then
+              missing+=("$v")
+            fi
+          done
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "Missing required secrets: ${missing[*]}"
+            echo "Please add them in Settings → Secrets and variables → Actions"
+            exit 1
+          fi
 
       - name: Build Android with dart-define
         env:
@@ -72,10 +104,26 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          flutter-version: '3.22.0'
+          flutter-version: '3.35.6'
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Verify secrets
+        run: |
+          set -e
+          required=(FIREBASE_IOS_API_KEY FIREBASE_PROJECT_ID FIREBASE_IOS_APP_ID)
+          missing=()
+          for v in "${required[@]}"; do
+            if [ -z "${{ secrets["$v"] }}" ]; then
+              missing+=("$v")
+            fi
+          done
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "Missing required secrets: ${missing[*]}"
+            echo "Please add them in Settings → Secrets and variables → Actions"
+            exit 1
+          fi
 
       - name: Build iOS with dart-define
         env:
