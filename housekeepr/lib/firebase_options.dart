@@ -41,48 +41,138 @@ class DefaultFirebaseOptions {
   }
 
   static final FirebaseOptions web = FirebaseOptions(
-    apiKey: const String.fromEnvironment('FIREBASE_WEB_API_KEY', defaultValue: ''),
-    authDomain: const String.fromEnvironment('FIREBASE_AUTH_DOMAIN', defaultValue: ''),
-    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: ''),
-    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: ''),
-    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: ''),
+    apiKey: const String.fromEnvironment(
+      'FIREBASE_WEB_API_KEY',
+      defaultValue: '',
+    ),
+    authDomain: const String.fromEnvironment(
+      'FIREBASE_AUTH_DOMAIN',
+      defaultValue: '',
+    ),
+    projectId: const String.fromEnvironment(
+      'FIREBASE_PROJECT_ID',
+      defaultValue: '',
+    ),
+    storageBucket: const String.fromEnvironment(
+      'FIREBASE_STORAGE_BUCKET',
+      defaultValue: '',
+    ),
+    messagingSenderId: const String.fromEnvironment(
+      'FIREBASE_MESSAGING_SENDER_ID',
+      defaultValue: '',
+    ),
     appId: const String.fromEnvironment('FIREBASE_APP_ID', defaultValue: ''),
-    measurementId: const String.fromEnvironment('FIREBASE_MEASUREMENT_ID', defaultValue: ''),
+    measurementId: const String.fromEnvironment(
+      'FIREBASE_MEASUREMENT_ID',
+      defaultValue: '',
+    ),
   );
 
   static final FirebaseOptions android = FirebaseOptions(
-    apiKey: const String.fromEnvironment('FIREBASE_ANDROID_API_KEY', defaultValue: ''),
-    appId: const String.fromEnvironment('FIREBASE_ANDROID_APP_ID', defaultValue: ''),
-    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: ''),
-    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: ''),
-    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: ''),
+    apiKey: const String.fromEnvironment(
+      'FIREBASE_ANDROID_API_KEY',
+      defaultValue: '',
+    ),
+    appId: const String.fromEnvironment(
+      'FIREBASE_ANDROID_APP_ID',
+      defaultValue: '',
+    ),
+    messagingSenderId: const String.fromEnvironment(
+      'FIREBASE_MESSAGING_SENDER_ID',
+      defaultValue: '',
+    ),
+    projectId: const String.fromEnvironment(
+      'FIREBASE_PROJECT_ID',
+      defaultValue: '',
+    ),
+    storageBucket: const String.fromEnvironment(
+      'FIREBASE_STORAGE_BUCKET',
+      defaultValue: '',
+    ),
   );
 
   static final FirebaseOptions ios = FirebaseOptions(
-    apiKey: const String.fromEnvironment('FIREBASE_IOS_API_KEY', defaultValue: ''),
-    appId: const String.fromEnvironment('FIREBASE_IOS_APP_ID', defaultValue: ''),
-    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: ''),
-    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: ''),
-    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: ''),
-    iosBundleId: const String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID', defaultValue: ''),
+    apiKey: const String.fromEnvironment(
+      'FIREBASE_IOS_API_KEY',
+      defaultValue: '',
+    ),
+    appId: const String.fromEnvironment(
+      'FIREBASE_IOS_APP_ID',
+      defaultValue: '',
+    ),
+    messagingSenderId: const String.fromEnvironment(
+      'FIREBASE_MESSAGING_SENDER_ID',
+      defaultValue: '',
+    ),
+    projectId: const String.fromEnvironment(
+      'FIREBASE_PROJECT_ID',
+      defaultValue: '',
+    ),
+    storageBucket: const String.fromEnvironment(
+      'FIREBASE_STORAGE_BUCKET',
+      defaultValue: '',
+    ),
+    iosBundleId: const String.fromEnvironment(
+      'FIREBASE_IOS_BUNDLE_ID',
+      defaultValue: '',
+    ),
   );
 
   static final FirebaseOptions macos = FirebaseOptions(
-    apiKey: const String.fromEnvironment('FIREBASE_MACOS_API_KEY', defaultValue: ''),
-    appId: const String.fromEnvironment('FIREBASE_MACOS_APP_ID', defaultValue: ''),
-    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: ''),
-    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: ''),
-    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: ''),
-    iosBundleId: const String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID', defaultValue: ''),
+    apiKey: const String.fromEnvironment(
+      'FIREBASE_MACOS_API_KEY',
+      defaultValue: '',
+    ),
+    appId: const String.fromEnvironment(
+      'FIREBASE_MACOS_APP_ID',
+      defaultValue: '',
+    ),
+    messagingSenderId: const String.fromEnvironment(
+      'FIREBASE_MESSAGING_SENDER_ID',
+      defaultValue: '',
+    ),
+    projectId: const String.fromEnvironment(
+      'FIREBASE_PROJECT_ID',
+      defaultValue: '',
+    ),
+    storageBucket: const String.fromEnvironment(
+      'FIREBASE_STORAGE_BUCKET',
+      defaultValue: '',
+    ),
+    iosBundleId: const String.fromEnvironment(
+      'FIREBASE_IOS_BUNDLE_ID',
+      defaultValue: '',
+    ),
   );
 
   static final FirebaseOptions windows = FirebaseOptions(
-    apiKey: const String.fromEnvironment('FIREBASE_WINDOWS_API_KEY', defaultValue: ''),
-    appId: const String.fromEnvironment('FIREBASE_WINDOWS_APP_ID', defaultValue: ''),
-    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: ''),
-    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: ''),
-    authDomain: const String.fromEnvironment('FIREBASE_AUTH_DOMAIN', defaultValue: ''),
-    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: ''),
-    measurementId: const String.fromEnvironment('FIREBASE_MEASUREMENT_ID', defaultValue: ''),
+    apiKey: const String.fromEnvironment(
+      'FIREBASE_WINDOWS_API_KEY',
+      defaultValue: '',
+    ),
+    appId: const String.fromEnvironment(
+      'FIREBASE_WINDOWS_APP_ID',
+      defaultValue: '',
+    ),
+    messagingSenderId: const String.fromEnvironment(
+      'FIREBASE_MESSAGING_SENDER_ID',
+      defaultValue: '',
+    ),
+    projectId: const String.fromEnvironment(
+      'FIREBASE_PROJECT_ID',
+      defaultValue: '',
+    ),
+    authDomain: const String.fromEnvironment(
+      'FIREBASE_AUTH_DOMAIN',
+      defaultValue: '',
+    ),
+    storageBucket: const String.fromEnvironment(
+      'FIREBASE_STORAGE_BUCKET',
+      defaultValue: '',
+    ),
+    measurementId: const String.fromEnvironment(
+      'FIREBASE_MEASUREMENT_ID',
+      defaultValue: '',
+    ),
   );
 }
