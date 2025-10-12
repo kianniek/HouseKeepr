@@ -11,6 +11,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache Pub packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            housekeepr/.dart_tool
+          key: ${{ runner.os }}-pub-${{ hashFiles('housekeepr/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -66,6 +76,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache Pub packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            housekeepr/.dart_tool
+          key: ${{ runner.os }}-pub-${{ hashFiles('housekeepr/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          # Use wrapper and gradle.properties as part of the key so cache invalidates when Gradle changes
+          key: ${{ runner.os }}-gradle-${{ hashFiles('housekeepr/android/gradle/wrapper/gradle-wrapper.properties') }}-${{ hashFiles('housekeepr/android/gradle.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -116,16 +147,17 @@ jobs:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
         run: |
-          flutter build apk --release \
+          # Build split-per-ABI APKs to create smaller, cache-friendly artifacts
+          flutter build apk --split-per-abi --release \
             --dart-define=FIREBASE_ANDROID_API_KEY=${{ env.FIREBASE_ANDROID_API_KEY }} \
             --dart-define=FIREBASE_PROJECT_ID=${{ env.FIREBASE_PROJECT_ID }} \
             --dart-define=FIREBASE_ANDROID_APP_ID=${{ env.FIREBASE_ANDROID_APP_ID }}
 
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v3
+      - name: Upload Release APKs
+        uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: housekeepr/build/app/outputs/flutter-apk/app-release.apk
+          name: app-release-apks
+          path: housekeepr/build/app/outputs/flutter-apk/*.apk
 
   # build-ios:
   #   runs-on: macos-latest
