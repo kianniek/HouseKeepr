@@ -41,48 +41,48 @@ class DefaultFirebaseOptions {
   }
 
   static final FirebaseOptions web = FirebaseOptions(
-    apiKey: const String.fromEnvironment('FIREBASE_WEB_API_KEY', defaultValue: 'AIzaSyBuivCVQhLHrzdXV4-YIfThRFeZZqwLHO8'),
-    authDomain: const String.fromEnvironment('FIREBASE_AUTH_DOMAIN', defaultValue: 'housekeepr-51a2e.firebaseapp.com'),
-    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: 'housekeepr-51a2e'),
-    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: 'housekeepr-51a2e.firebasestorage.app'),
-    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: '480693965267'),
-    appId: const String.fromEnvironment('FIREBASE_APP_ID', defaultValue: '1:480693965267:web:4a5e4162c2d003ccdb1f26'),
-    measurementId: const String.fromEnvironment('FIREBASE_MEASUREMENT_ID', defaultValue: 'G-H5LTCWWLWL'),
+    apiKey: const String.fromEnvironment('FIREBASE_WEB_API_KEY', defaultValue: ''),
+    authDomain: const String.fromEnvironment('FIREBASE_AUTH_DOMAIN', defaultValue: ''),
+    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: ''),
+    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: ''),
+    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: ''),
+    appId: const String.fromEnvironment('FIREBASE_APP_ID', defaultValue: ''),
+    measurementId: const String.fromEnvironment('FIREBASE_MEASUREMENT_ID', defaultValue: ''),
   );
 
   static final FirebaseOptions android = FirebaseOptions(
-    apiKey: const String.fromEnvironment('FIREBASE_ANDROID_API_KEY', defaultValue: 'AIzaSyBL9xBhDYhRqTvEVNounPVrV3tuhkCLddw'),
-    appId: const String.fromEnvironment('FIREBASE_ANDROID_APP_ID', defaultValue: '1:480693965267:android:3223c47031045895db1f26'),
-    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: '480693965267'),
-    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: 'housekeepr-51a2e'),
-    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: 'housekeepr-51a2e.firebasestorage.app'),
+    apiKey: const String.fromEnvironment('FIREBASE_ANDROID_API_KEY', defaultValue: ''),
+    appId: const String.fromEnvironment('FIREBASE_ANDROID_APP_ID', defaultValue: ''),
+    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: ''),
+    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: ''),
+    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: ''),
   );
 
   static final FirebaseOptions ios = FirebaseOptions(
-    apiKey: const String.fromEnvironment('FIREBASE_IOS_API_KEY', defaultValue: 'AIzaSyBdoeztekgTlhnpUSvWYnGtkoRseXFWJn8'),
-    appId: const String.fromEnvironment('FIREBASE_IOS_APP_ID', defaultValue: '1:480693965267:ios:174093ecd82343afdb1f26'),
-    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: '480693965267'),
-    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: 'housekeepr-51a2e'),
-    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: 'housekeepr-51a2e.firebasestorage.app'),
-    iosBundleId: const String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID', defaultValue: 'com.example.housekeepr'),
+    apiKey: const String.fromEnvironment('FIREBASE_IOS_API_KEY', defaultValue: ''),
+    appId: const String.fromEnvironment('FIREBASE_IOS_APP_ID', defaultValue: ''),
+    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: ''),
+    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: ''),
+    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: ''),
+    iosBundleId: const String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID', defaultValue: ''),
   );
 
   static final FirebaseOptions macos = FirebaseOptions(
-    apiKey: const String.fromEnvironment('FIREBASE_MACOS_API_KEY', defaultValue: 'AIzaSyBdoeztekgTlhnpUSvWYnGtkoRseXFWJn8'),
-    appId: const String.fromEnvironment('FIREBASE_MACOS_APP_ID', defaultValue: '1:480693965267:ios:174093ecd82343afdb1f26'),
-    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: '480693965267'),
-    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: 'housekeepr-51a2e'),
-    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: 'housekeepr-51a2e.firebasestorage.app'),
-    iosBundleId: const String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID', defaultValue: 'com.example.housekeepr'),
+    apiKey: const String.fromEnvironment('FIREBASE_MACOS_API_KEY', defaultValue: ''),
+    appId: const String.fromEnvironment('FIREBASE_MACOS_APP_ID', defaultValue: ''),
+    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: ''),
+    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: ''),
+    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: ''),
+    iosBundleId: const String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID', defaultValue: ''),
   );
 
   static final FirebaseOptions windows = FirebaseOptions(
-    apiKey: const String.fromEnvironment('FIREBASE_WINDOWS_API_KEY', defaultValue: 'AIzaSyBuivCVQhLHrzdXV4-YIfThRFeZZqwLHO8'),
-    appId: const String.fromEnvironment('FIREBASE_WINDOWS_APP_ID', defaultValue: '1:480693965267:web:05e2fd6bbdd7cabfdb1f26'),
-    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: '480693965267'),
-    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: 'housekeepr-51a2e'),
-    authDomain: const String.fromEnvironment('FIREBASE_AUTH_DOMAIN', defaultValue: 'housekeepr-51a2e.firebaseapp.com'),
-    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: 'housekeepr-51a2e.firebasestorage.app'),
-    measurementId: const String.fromEnvironment('FIREBASE_MEASUREMENT_ID', defaultValue: 'G-689BCCEXN9'),
+    apiKey: const String.fromEnvironment('FIREBASE_WINDOWS_API_KEY', defaultValue: ''),
+    appId: const String.fromEnvironment('FIREBASE_WINDOWS_APP_ID', defaultValue: ''),
+    messagingSenderId: const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID', defaultValue: ''),
+    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: ''),
+    authDomain: const String.fromEnvironment('FIREBASE_AUTH_DOMAIN', defaultValue: ''),
+    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET', defaultValue: ''),
+    measurementId: const String.fromEnvironment('FIREBASE_MEASUREMENT_ID', defaultValue: ''),
   );
 }
