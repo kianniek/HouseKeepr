@@ -37,6 +37,9 @@ class AuthRepository {
     final account = await _googleSignIn.signIn();
     if (account == null) return null;
     final auth = await account.authentication;
+    // If tokens are null here it's typically a configuration issue
+    // (for example: missing SHA-1/SHA-256 in Firebase project settings).
+    // Do NOT log tokens or other sensitive authentication material here.
     final credential = fb.GoogleAuthProvider.credential(
       idToken: auth.idToken,
       accessToken: auth.accessToken,

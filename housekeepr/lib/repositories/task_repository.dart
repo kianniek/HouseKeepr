@@ -12,7 +12,16 @@ class TaskRepository {
 
   List<Task> loadTasks() {
     final raw = prefs.getStringList(_kTasksKey) ?? [];
-    return raw.map((e) => Task.fromJson(e)).toList();
+    final List<Task> out = [];
+    for (final e in raw) {
+      try {
+        final t = Task.fromJson(e);
+        if (t.id.isNotEmpty && t.title.isNotEmpty) out.add(t);
+      } catch (_) {
+        // skip malformed entry
+      }
+    }
+    return out;
   }
 
   Future<void> saveTasks(List<Task> tasks) async {

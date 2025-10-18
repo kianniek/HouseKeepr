@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:uuid/uuid.dart';
+import '../cubits/task_cubit.dart';
+import '../cubits/shopping_cubit.dart';
+import '../models/task.dart';
+import '../models/shopping_item.dart';
+import 'profile_menu.dart';
 
 class HouseholdDashboardPage extends StatefulWidget {
   final String householdId;
@@ -15,118 +22,59 @@ class HouseholdDashboardPage extends StatefulWidget {
   State<HouseholdDashboardPage> createState() => _HouseholdDashboardPageState();
 }
 
-class _HouseholdDashboardPageState extends State<HouseholdDashboardPage> {
-  String? _inviteCode;
-  TextEditingController _joinController = TextEditingController();
-  TextEditingController _taskController = TextEditingController();
+class _HouseholdDashboardPageState extends State<HouseholdDashboardPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+  final TextEditingController _taskController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _inviteCode = widget.householdId;
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _taskController.dispose();
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _addTask() async {
-    if (_taskController.text.isEmpty) return;
-    await FirebaseFirestore.instance
-        .collection('households')
-        .doc(widget.householdId)
-        .collection('tasks')
-        .add({
-          'name': _taskController.text,
-          'assigned_to': widget.user.displayName ?? widget.user.email,
-          'due_date': null,
-          'is_completed': false,
-          'created_at': FieldValue.serverTimestamp(),
-        });
+    final text = _taskController.text.trim();
+    if (text.isEmpty) return;
+    final id = const Uuid().v4();
+    final task = Task(id: id, title: text);
+    // add via cubit so write-queue and sync flow are used
+    context.read<TaskCubit>().addTask(task);
     _taskController.clear();
-  }
-
-  Future<void> _addShoppingItem(String name, {String? category}) async {
-    if (name.isEmpty) return;
-    await FirebaseFirestore.instance
-        .collection('households')
-        .doc(widget.householdId)
-        .collection('shopping')
-        .add({
-          'name': name,
-          'category': category,
-          'in_cart': false,
-          'created_at': FieldValue.serverTimestamp(),
-        });
-  }
-
-  Future<void> _joinHousehold() async {
-    final code = _joinController.text.trim();
-    if (code.isEmpty) return;
-    final doc = await FirebaseFirestore.instance
-        .collection('households')
-        .doc(code)
-        .get();
-    if (doc.exists) {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.user.uid)
-          .update({'householdId': code});
-      setState(() {
-        _inviteCode = code;
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Joined household!')));
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid code')));
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Household Dashboard'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Overview'),
-              Tab(text: 'Tasks'),
-              Tab(text: 'Shopping'),
-            ],
-          ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Household'),
+        actions: const [ProfileMenu()],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Overview'),
+            Tab(text: 'Tasks'),
+            Tab(text: 'Shopping'),
+          ],
         ),
-        body: TabBarView(
-          children: [
-            // Overview tab
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ListView(
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // Overview
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Household ID: ${widget.householdId}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Invite code: $_inviteCode'),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _joinController,
-                          decoration: const InputDecoration(
-                            labelText: 'Enter invite code to join',
-                          ),
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: _joinHousehold,
-                        child: const Text('Join'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
                   const Text(
                     'Members:',
                     style: TextStyle(fontWeight: FontWeight.bold),
@@ -138,9 +86,13 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage> {
                         .where('householdId', isEqualTo: widget.householdId)
                         .snapshots(),
                     builder: (context, snapshot) {
-                      if (!snapshot.hasData)
+                      if (!snapshot.hasData) {
                         return const CircularProgressIndicator();
+                      }
                       final members = snapshot.data!.docs;
+                      if (members.isEmpty) {
+                        return const Text('No members');
+                      }
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: members.map((doc) {
@@ -155,136 +107,184 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage> {
                 ],
               ),
             ),
+          ),
 
-            // Tasks tab
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _taskController,
-                          decoration: const InputDecoration(
-                            labelText: 'Add new task',
-                          ),
+          // Tasks tab
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _taskController,
+                        decoration: const InputDecoration(
+                          labelText: 'Add new task',
                         ),
                       ),
-                      ElevatedButton(
-                        onPressed: _addTask,
-                        child: const Text('Add'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('households')
-                          .doc(widget.householdId)
-                          .collection('tasks')
-                          .orderBy('created_at', descending: true)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData)
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        final tasks = snapshot.data!.docs;
-                        if (tasks.isEmpty) return const Text('No tasks yet.');
-                        return ListView(
-                          children: tasks.map((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            return ListTile(
-                              title: Text(data['name'] ?? ''),
-                              subtitle: Text(
-                                'Assigned to: ${data['assigned_to'] ?? ''}',
-                              ),
-                              trailing: Checkbox(
-                                value: data['is_completed'] ?? false,
-                                onChanged: (val) {
-                                  doc.reference.update({
-                                    'is_completed': val,
-                                    'completed_at': val == true
-                                        ? FieldValue.serverTimestamp()
-                                        : null,
-                                  });
-                                },
-                              ),
-                            );
-                          }).toList(),
+                    ),
+                    const SizedBox(width: 8),
+                    ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _taskController,
+                      builder: (context, value, child) {
+                        final canAdd = value.text.trim().isNotEmpty;
+                        return ElevatedButton(
+                          onPressed: canAdd ? _addTask : null,
+                          child: const Text('Add'),
                         );
                       },
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Shopping tab
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  _ShoppingAddRow(
-                    onAdd: (name, category) async {
-                      await _addShoppingItem(name, category: category);
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: BlocBuilder<TaskCubit, TaskState>(
+                    builder: (context, state) {
+                      final tasks = state.tasks;
+                      if (tasks.isEmpty) return const Text('No tasks yet.');
+                      return ListView.builder(
+                        itemCount: tasks.length,
+                        itemBuilder: (context, idx) {
+                          final t = tasks[idx];
+                          return Dismissible(
+                            key: ValueKey(t.id),
+                            direction: DismissDirection.endToStart,
+                            background: Container(
+                              color: Theme.of(context).colorScheme.error,
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              child: const Icon(
+                                Icons.delete,
+                                color: Colors.white,
+                              ),
+                            ),
+                            onDismissed: (_) {
+                              context.read<TaskCubit>().deleteTask(t.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Deleted "${t.title}"'),
+                                  action: SnackBarAction(
+                                    label: 'Undo',
+                                    onPressed: () {
+                                      context.read<TaskCubit>().addTask(t);
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
+                            child: ListTile(
+                              title: Text(t.title),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (t.assignedToName != null)
+                                    Text('Assigned to: ${t.assignedToName}'),
+                                  if (t.description != null)
+                                    Text(t.description!),
+                                ],
+                              ),
+                              trailing: Checkbox(
+                                value: t.completed,
+                                onChanged: (val) =>
+                                    context.read<TaskCubit>().updateTask(
+                                      t.copyWith(completed: val ?? false),
+                                    ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
                     },
                   ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('households')
-                          .doc(widget.householdId)
-                          .collection('shopping')
-                          .orderBy('created_at', descending: true)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData)
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        final items = snapshot.data!.docs;
-                        if (items.isEmpty)
-                          return const Text('No shopping items');
-                        return ListView(
-                          children: items.map((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            return ListTile(
-                              title: Text(data['name'] ?? ''),
-                              subtitle: data['category'] != null
-                                  ? Text(data['category'])
+                ),
+              ],
+            ),
+          ),
+
+          // Shopping tab
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                const _ShoppingAddRow(),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: BlocBuilder<ShoppingCubit, ShoppingState>(
+                    builder: (context, state) {
+                      final items = state.items;
+                      if (items.isEmpty) return const Text('No shopping items');
+                      return ListView.builder(
+                        itemCount: items.length,
+                        itemBuilder: (context, idx) {
+                          final it = items[idx];
+                          return Dismissible(
+                            key: ValueKey(it.id),
+                            direction: DismissDirection.endToStart,
+                            background: Container(
+                              color: Theme.of(context).colorScheme.error,
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              child: const Icon(
+                                Icons.delete,
+                                color: Colors.white,
+                              ),
+                            ),
+                            onDismissed: (_) {
+                              context.read<ShoppingCubit>().deleteItem(it.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Deleted "${it.name}"'),
+                                  action: SnackBarAction(
+                                    label: 'Undo',
+                                    onPressed: () {
+                                      context.read<ShoppingCubit>().addItem(it);
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
+                            child: ListTile(
+                              title: Text(it.name),
+                              subtitle: it.category != null
+                                  ? Text(it.category!)
                                   : null,
                               leading: Checkbox(
-                                value: data['in_cart'] ?? false,
+                                value: it.inCart,
                                 onChanged: (v) =>
-                                    doc.reference.update({'in_cart': v}),
+                                    context.read<ShoppingCubit>().updateItem(
+                                      it.copyWith(inCart: v ?? false),
+                                    ),
                               ),
                               trailing: IconButton(
                                 icon: const Icon(Icons.delete),
-                                onPressed: () => doc.reference.delete(),
+                                onPressed: () => context
+                                    .read<ShoppingCubit>()
+                                    .deleteItem(it.id),
                               ),
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
+                            ),
+                          );
+                        },
+                      );
+                    },
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _ShoppingAddRow extends StatefulWidget {
-  final Future<void> Function(String name, String? category) onAdd;
-  const _ShoppingAddRow({required this.onAdd});
+  const _ShoppingAddRow();
 
   @override
   State<_ShoppingAddRow> createState() => _ShoppingAddRowState();
@@ -313,17 +313,31 @@ class _ShoppingAddRowState extends State<_ShoppingAddRow> {
           ),
         ),
         const SizedBox(width: 8),
-        ElevatedButton(
-          onPressed: () {
-            final name = _name.text.trim();
-            final cat = _cat.text.trim().isEmpty ? null : _cat.text.trim();
-            if (name.isNotEmpty) {
-              widget.onAdd(name, cat);
-              _name.clear();
-              _cat.clear();
-            }
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _name,
+          builder: (context, value, child) {
+            final canAdd = value.text.trim().isNotEmpty;
+            return ElevatedButton(
+              onPressed: canAdd
+                  ? () {
+                      final name = _name.text.trim();
+                      final cat = _cat.text.trim().isEmpty
+                          ? null
+                          : _cat.text.trim();
+                      final id = const Uuid().v4();
+                      final item = ShoppingItem(
+                        id: id,
+                        name: name,
+                        category: cat,
+                      );
+                      context.read<ShoppingCubit>().addItem(item);
+                      _name.clear();
+                      _cat.clear();
+                    }
+                  : null,
+              child: const Text('Add'),
+            );
           },
-          child: const Text('Add'),
         ),
       ],
     );

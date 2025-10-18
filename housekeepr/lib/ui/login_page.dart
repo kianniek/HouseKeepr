@@ -9,11 +9,11 @@ class LoginPage extends StatelessWidget {
   final void Function(fb.User user) onSignedIn;
 
   const LoginPage({
-    Key? key,
+    super.key,
     required this.auth,
     required this.googleSignIn,
     required this.onSignedIn,
-  }) : super(key: key);
+  });
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -21,10 +21,7 @@ class LoginPage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              'Welcome to HouseKeepr',
-              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-            ),
+            Text('Welcome to HouseKeepr'),
             SizedBox(height: 32),
             ElevatedButton.icon(
               icon: Icon(Icons.login),
@@ -40,20 +37,29 @@ class LoginPage extends StatelessWidget {
                 elevation: 4,
               ),
               onPressed: () async {
+                final messenger = ScaffoldMessenger.maybeOf(context);
                 try {
                   if (kIsWeb) {
                     // Use FirebaseAuth web popup
                     final provider = fb.GoogleAuthProvider();
                     final result = await fb.FirebaseAuth.instance
                         .signInWithPopup(provider);
-                    if (result.user != null) {
-                      onSignedIn(result.user!);
+                    final webUser = result.user;
+                    if (webUser != null) {
+                      onSignedIn(webUser);
                     }
                   } else {
                     // Mobile/Desktop flow: use google_sign_in package
-                    final GoogleSignInAccount? account = await GoogleSignIn()
-                        .signIn();
-                    if (account == null) return; // user cancelled
+                    // higher-level wiring can provide a mock or configured
+                    // instance.
+                    final GoogleSignInAccount? account =
+                        await (googleSignIn is GoogleSignIn
+                                ? googleSignIn as GoogleSignIn
+                                : GoogleSignIn())
+                            .signIn();
+                    if (account == null) {
+                      return;
+                    } // user cancelled
                     final auth = await account.authentication;
                     final credential = fb.GoogleAuthProvider.credential(
                       accessToken: auth.accessToken,
@@ -61,12 +67,23 @@ class LoginPage extends StatelessWidget {
                     );
                     final userCredential = await fb.FirebaseAuth.instance
                         .signInWithCredential(credential);
-                    if (userCredential.user != null)
-                      onSignedIn(userCredential.user!);
+                    final mobileUser = userCredential.user;
+                    if (mobileUser != null) {
+                      onSignedIn(mobileUser);
+                    }
                   }
                 } catch (e) {
-                  // ignore errors for now; consider showing a snackbar
-                  print('Sign-in error: $e');
+                  // Show a concise, user-facing error and log only a short
+                  // message locally. Avoid printing stack traces or tokens
+                  // in production logs.
+                  debugPrint('Sign-in failed: ${e.toString()}');
+                  if (messenger != null) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Sign-in failed. Please try again.'),
+                      ),
+                    );
+                  }
                 }
               },
             ),

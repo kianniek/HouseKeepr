@@ -12,7 +12,16 @@ class ShoppingRepository {
 
   List<ShoppingItem> loadItems() {
     final raw = prefs.getStringList(_kKey) ?? [];
-    return raw.map((e) => ShoppingItem.fromJson(e)).toList();
+    final List<ShoppingItem> out = [];
+    for (final e in raw) {
+      try {
+        final it = ShoppingItem.fromJson(e);
+        if (it.id.isNotEmpty && it.name.isNotEmpty) out.add(it);
+      } catch (_) {
+        // skip malformed
+      }
+    }
+    return out;
   }
 
   Future<void> saveItems(List<ShoppingItem> items) async {

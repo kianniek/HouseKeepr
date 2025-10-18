@@ -2,7 +2,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../models/shopping_item.dart';
 import '../repositories/shopping_repository.dart';
-import '../firestore/firestore_shopping_repository.dart';
+// firestore_shopping_repository import removed — remote interface used instead
+import '../firestore/remote_shopping_repository.dart';
 import '../core/settings_repository.dart';
 import '../core/sync_mode.dart';
 import '../services/write_queue.dart';
@@ -11,7 +12,7 @@ part 'shopping_state.dart';
 
 class ShoppingCubit extends Cubit<ShoppingState> {
   final ShoppingRepository repo;
-  FirestoreShoppingRepository? remoteRepo;
+  RemoteShoppingRepository? remoteRepo;
   final SettingsRepository? settings;
   final WriteQueue? writeQueue;
 
@@ -96,7 +97,7 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     emit(state.copyWith(items: list));
   }
 
-  void setRemoteRepository(FirestoreShoppingRepository? r) {
+  void setRemoteRepository(RemoteShoppingRepository? r) {
     remoteRepo = r;
   }
 }

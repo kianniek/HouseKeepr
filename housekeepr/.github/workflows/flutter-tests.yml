@@ -1,0 +1,41 @@
+name: Flutter tests
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  test:
+    name: Run flutter tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.pub-cache/bin
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.yaml') }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Enable flutter cache (optional)
+        run: flutter precache
+
+      - name: Install dependencies
+        working-directory: ./
+        run: |
+          cd housekeepr
+          flutter pub get
+
+      - name: Run tests
+        working-directory: ./housekeepr
+        run: flutter test --coverage

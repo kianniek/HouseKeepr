@@ -20,6 +20,7 @@ class _HouseholdCreatePageState extends State<HouseholdCreatePage> {
   bool _loading = false;
 
   Future<void> _createHousehold() async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
     setState(() => _loading = true);
     try {
       final firestore = FirebaseFirestore.instance;
@@ -35,9 +36,11 @@ class _HouseholdCreatePageState extends State<HouseholdCreatePage> {
       }, SetOptions(merge: true));
       widget.onCreated(doc.id);
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to create household: $e')));
+      if (mounted && messenger != null) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Failed to create household: $e')),
+        );
+      }
     } finally {
       setState(() => _loading = false);
     }

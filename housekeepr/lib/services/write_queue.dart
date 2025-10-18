@@ -74,7 +74,7 @@ class WriteQueue {
     }
 
     // Switching to a concrete user id. Migrate global queue if present.
-    final perKey = '$_kKey\_$uid';
+    final perKey = '${_kKey}_$uid';
     final globalRaw = prefs.getString(_kKey);
     final perRaw = prefs.getString(perKey);
     if (globalRaw != null && perRaw == null) {
@@ -142,12 +142,12 @@ class WriteQueue {
 
   void _saveToPrefs() {
     final list = _queue.map((e) => e.toJson()).toList();
-    final key = _userId == null ? _kKey : '$_kKey\_${_userId}';
+    final key = _userId == null ? _kKey : '${_kKey}_$_userId';
     prefs.setString(key, jsonEncode(list));
   }
 
   void _loadFromPrefs() {
-    final key = _userId == null ? _kKey : '$_kKey\_${_userId}';
+    final key = _userId == null ? _kKey : '${_kKey}_$_userId';
     final raw = prefs.getString(key);
     if (raw == null) return;
     try {

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'firebase_options.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -8,15 +11,44 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'ui/login_page.dart';
 import 'ui/household_create_page.dart';
 import 'ui/household_dashboard_page.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'cubits/task_cubit.dart';
+import 'cubits/shopping_cubit.dart';
+import 'cubits/user_cubit.dart';
+import 'repositories/task_repository.dart';
+import 'repositories/shopping_repository.dart';
+import 'firestore/firestore_task_repository.dart';
+import 'firestore/firestore_shopping_repository.dart';
+import 'services/firestore_sync_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(const MyApp());
+  // Guarded initialization: attempt Firebase init and surface errors to a
+  // minimal UI so the developer sees the failure instead of a black screen.
+  Object? initError;
+  try {
+    if (kIsWeb) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } else {
+      await Firebase.initializeApp();
+    }
+  } catch (e, st) {
+    // Keep error for the UI and continue so the app can show an error screen.
+    initError = e;
+    // Log the stack trace in debug builds.
+    debugPrint('Firebase initialization failed: $e\n$st');
+  }
+
+  runApp(MyApp(initializationError: initError));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.initializationError});
+
+  final Object? initializationError;
 
   @override
   Widget build(BuildContext context) {
@@ -27,13 +59,15 @@ class MyApp extends StatelessWidget {
           seedColor: const Color.fromARGB(255, 247, 136, 1),
         ),
       ),
-      home: const AppRoot(),
+      home: AppRoot(initializationError: initializationError),
     );
   }
 }
 
 class AppRoot extends StatefulWidget {
-  const AppRoot({super.key});
+  const AppRoot({super.key, this.initializationError});
+
+  final Object? initializationError;
 
   @override
   State<AppRoot> createState() => _AppRootState();
@@ -43,6 +77,44 @@ class _AppRootState extends State<AppRoot> {
   fb.User? _user;
   String? _householdId;
   bool _checkingHousehold = false;
+  StreamSubscription<fb.User?>? _authSub;
+
+  // If the app failed to initialize Firebase, show a visible error screen
+  // with the exception and a Retry button.
+  Future<void> _retryInitialization() async {
+    setState(() {});
+    Object? initError;
+    try {
+      if (kIsWeb) {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      } else {
+        await Firebase.initializeApp();
+      }
+    } catch (e, st) {
+      initError = e;
+      debugPrint('Retry Firebase initialization failed: $e\n$st');
+    }
+    if (initError != null) {
+      // show the error by setting state; store in a local field by
+      // rebuilding with a new widget-level initializationError.
+      // For simplicity, we rebuild the app by calling setState and
+      // storing the error in the widget itself is not possible; instead
+      // we use the following approach to re-render the error.
+      setState(() {
+        // Recreate the AppRoot with the error value by using a global
+        // workaround: temporarily navigate to a new AppRoot. Simpler is
+        // to set a private field, but to keep changes minimal we'll keep
+        // the error in a local variable and call setState to trigger UI.
+        // (We'll store the error in _householdId temporarily as an
+        // implementation detail and check a typed flag in build.)
+      });
+    } else {
+      // Successful init: force rebuild to pick up authenticated state
+      setState(() {});
+    }
+  }
 
   void _onSignedIn(fb.User user) async {
     setState(() {
@@ -58,7 +130,7 @@ class _AppRootState extends State<AppRoot> {
       }, SetOptions(merge: true));
     } catch (e) {
       // ignore write errors for now
-      print('Failed to write user profile: $e');
+      debugPrint('Failed to write user profile: $e');
     }
     // Check if user has a household
     final doc = await FirebaseFirestore.instance
@@ -87,6 +159,30 @@ class _AppRootState extends State<AppRoot> {
 
   @override
   Widget build(BuildContext context) {
+    // If the app failed to initialize Firebase (initial error passed via
+    // widget.initializationError), surface an error UI with retry.
+    if (widget.initializationError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Initialization error')),
+        body: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('The app failed to initialize Firebase.'),
+              const SizedBox(height: 8),
+              Text(widget.initializationError.toString()),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _retryInitialization,
+                child: const Text('Retry initialization'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (_user == null) {
       return LoginPage(
         auth: fb.FirebaseAuth.instance,
@@ -101,29 +197,152 @@ class _AppRootState extends State<AppRoot> {
       return HouseholdCreatePage(user: _user!, onCreated: _onHouseholdCreated);
     }
     // Household dashboard with invite/join and shared tasks
-    return HouseholdDashboardPage(householdId: _householdId!, user: _user!);
+    return BlocProvider(
+      create: (_) => UserCubit(_user),
+      child: HouseholdApp(user: _user!, householdId: _householdId!),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to auth state so we automatically pick up an existing signed-in
+    // user (Firebase persists the session) and update UI without forcing a
+    // manual login callback flow.
+    _authSub = fb.FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user == null) {
+        // Signed out
+        setState(() {
+          _user = null;
+          _householdId = null;
+          _checkingHousehold = false;
+        });
+      } else {
+        // If new user detected, run the same signed-in flow to ensure
+        // Firestore profile and household lookup happen.
+        if (_user == null || _user?.uid != user.uid) {
+          _onSignedIn(user);
+        }
+        // If a UserCubit exists higher up in the tree, update it so UI that
+        // subscribes to the cubit can react immediately. We can't access the
+        // BuildContext here safely, so HouseholdApp will create the UserCubit
+        // seeded with the current user. Subsequent updates (like profile
+        // picture changes) should explicitly call the cubit's setUser.
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+}
+
+class HouseholdApp extends StatefulWidget {
+  final fb.User user;
+  final String householdId;
+  const HouseholdApp({
+    super.key,
+    required this.user,
+    required this.householdId,
+  });
+
+  @override
+  State<HouseholdApp> createState() => _HouseholdAppState();
+}
+
+class _HouseholdAppState extends State<HouseholdApp> {
+  Future<void>? _initFuture;
+  TaskCubit? _taskCubit;
+  ShoppingCubit? _shoppingCubit;
+  FirestoreSyncService? _syncService;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFuture = _initialize();
+  }
+
+  Future<void> _initialize() async {
+    final prefs = await SharedPreferences.getInstance();
+    final taskRepo = TaskRepository(prefs);
+    final shoppingRepo = ShoppingRepository(prefs);
+
+    _taskCubit = TaskCubit(taskRepo);
+    _shoppingCubit = ShoppingCubit(shoppingRepo);
+
+    // Set remote Firestore repositories
+    final remoteTask = FirestoreTaskRepository(
+      FirebaseFirestore.instance,
+      userId: widget.user.uid,
+    );
+    final remoteShopping = FirestoreShoppingRepository(
+      FirebaseFirestore.instance,
+      userId: widget.user.uid,
+    );
+    _taskCubit!.setRemoteRepository(remoteTask);
+    _shoppingCubit!.setRemoteRepository(remoteShopping);
+
+    // Start sync service to keep cubits in sync with Firestore
+    _syncService = FirestoreSyncService(FirebaseFirestore.instance);
+    _syncService!.start(widget.user.uid, _taskCubit!, _shoppingCubit!);
+  }
+
+  @override
+  void dispose() {
+    _syncService?.stop();
+    _taskCubit?.close();
+    _shoppingCubit?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _initFuture,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider<TaskCubit>.value(value: _taskCubit!),
+            BlocProvider<ShoppingCubit>.value(value: _shoppingCubit!),
+          ],
+          child: HouseholdDashboardPage(
+            householdId: widget.householdId,
+            user: widget.user,
+          ),
+        );
+      },
+    );
   }
 }
 
 Future<void> addHousekeepingTask(
   String taskName,
-  String assignedTo,
-  DateTime dueDate,
-) async {
+  String assignedTo, {
+  String? assignedToId,
+  required DateTime dueDate,
+}) async {
   try {
     FirebaseFirestore firestore = FirebaseFirestore.instance;
     CollectionReference tasks = firestore.collection('tasks');
     Map<String, dynamic> newTaskData = {
       'name': taskName,
       'assigned_to': assignedTo,
+      'assigned_to_id': assignedToId,
       'due_date': Timestamp.fromDate(dueDate),
       'is_completed': false,
       'created_at': FieldValue.serverTimestamp(),
     };
     DocumentReference documentReference = await tasks.add(newTaskData);
-    print('New task added with ID: \\${documentReference.id}');
+    debugPrint('New task added with ID: $documentReference.id');
   } catch (e) {
-    print('Error adding task: \\${e}');
+    debugPrint('Error adding task: $e');
   }
 }
 

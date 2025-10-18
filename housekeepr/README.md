@@ -15,6 +15,76 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+## Tests
+
+This repository includes a suite of unit and widget tests. Run them with:
+
+```powershell
+flutter test --reporter expanded
+```
+
+Included test files:
+
+- `test/task_model_test.dart` — model roundtrip tests for `Task` and `SubTask`.
+- `test/write_queue_test.dart` — tests for `WriteQueue` migration, retry and resume behavior.
+- `test/widget_test.dart` — Flutter default widget smoke test (basic app build).
+- `test/test_utils.dart` — test utilities (in-memory SharedPreferences) used by other tests.
+- `test/repositories_test.dart` — repository CRUD tests for `TaskRepository` and `ShoppingRepository`.
+- `test/cubits_test.dart` — cubit unit tests for `TaskCubit`, `ShoppingCubit`, and `UserCubit`.
+- `test/widgets/task_add_dialog_test.dart` — widget test for the Add task dialog and cubit interaction.
+- `test/widgets/member_picker_test.dart` — widget smoke test for the `MemberPicker` component.
+
+All tests passed in the local environment when run during development.
+
+## Architecture & Integrations (Mermaid)
+
+The diagram below shows the major app components, state flow (Cubits), local storage, and external integrations (Firebase and Google Sign-In).
+
+```mermaid
+flowchart LR
+	subgraph App[HouseKeepr Flutter App]
+		UI[UI Widgets\n(ProfileMenu, ProfilePage, Dashboard, Tasks, Shopping)]
+		Cubits[State Layer\n(TaskCubit, ShoppingCubit, UserCubit)]
+		Repos[Local Repos\n(TaskRepository, ShoppingRepository)]
+		WriteQ[WriteQueue]
+		Cropper[SimpleCropper]
+	end
+
+	subgraph Firebase[Firebase Services]
+		Auth[Firebase Auth]
+		Firestore[Cloud Firestore]
+		Storage[Firebase Storage]
+	end
+
+	Google[Google Sign-In]
+
+	UI --> Cubits
+	Cubits --> Repos
+	Cubits -->|enqueue remote ops| WriteQ
+	WriteQ -->|executes| Firestore
+	Repos -. local cache .-> Shared[SharedPreferences]
+	Shared --- Repos
+	ProfilePage --> Cropper
+	Cropper --> ProfilePage
+
+	Cubits -->|sync service| Firestore
+	UI -->|sign in/out| Auth
+	Auth -->|user profile| Firestore
+	ProfilePage -->|upload image| Storage
+	UI -->|Google sign in| Google
+	Google -->|credential| Auth
+
+	classDef ext fill:#f9f,stroke:#333,stroke-width:1px;
+	class Firebase,Google ext;
+```
+
+Notes:
+- Cubits are the single source of truth for UI state; FirestoreSyncService keeps Cubits synced with remote Firestore documents for the signed-in user.
+- `WriteQueue` persists operations locally (via SharedPreferences) and retries them when a remote repository or network is available.
+- `ProfilePage` uses `SimpleCropper` to crop/rotate images client-side, resizes/compresses using the `image` package, then uploads JPEGs to `users/{uid}/profile.jpg` in Firebase Storage and updates both Firebase Auth profile and the Firestore `users/{uid}` document.
+- Google Sign-In is used on non-web platforms to obtain credentials for Firebase Auth; on web the FirebaseAuth popup flow is used.
+
+
 ## Build-time Firebase configuration
 
 This project reads Firebase configuration from Dart environment defines so you can avoid hard-coding values into source files. You can provide these at build time using `--dart-define`.

@@ -2,7 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../models/task.dart';
 import '../repositories/task_repository.dart';
-import '../firestore/firestore_task_repository.dart';
+import '../firestore/remote_task_repository.dart';
 import '../core/settings_repository.dart';
 import '../core/sync_mode.dart';
 import '../services/write_queue.dart';
@@ -11,7 +11,7 @@ part 'task_state.dart';
 
 class TaskCubit extends Cubit<TaskState> {
   final TaskRepository repo;
-  FirestoreTaskRepository? remoteRepo;
+  RemoteTaskRepository? remoteRepo;
   final SettingsRepository? settings;
   final WriteQueue? writeQueue;
 
@@ -94,7 +94,7 @@ class TaskCubit extends Cubit<TaskState> {
     emit(state.copyWith(tasks: list));
   }
 
-  void setRemoteRepository(FirestoreTaskRepository? r) {
+  void setRemoteRepository(RemoteTaskRepository? r) {
     remoteRepo = r;
   }
 }

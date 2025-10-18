@@ -18,19 +18,45 @@ class ShoppingPage extends StatelessWidget {
                   itemCount: state.items.length,
                   itemBuilder: (context, idx) {
                     final it = state.items[idx];
-                    return ListTile(
-                      title: Text(it.name),
-                      subtitle: it.category != null ? Text(it.category!) : null,
-                      leading: Checkbox(
-                        value: it.inCart,
-                        onChanged: (v) => context
-                            .read<ShoppingCubit>()
-                            .updateItem(it.copyWith(inCart: v ?? false)),
+                    return Dismissible(
+                      key: ValueKey(it.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        color: Theme.of(context).colorScheme.error,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: const Icon(Icons.delete, color: Colors.white),
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () =>
-                            context.read<ShoppingCubit>().deleteItem(it.id),
+                      onDismissed: (_) {
+                        context.read<ShoppingCubit>().deleteItem(it.id);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Deleted "${it.name}"'),
+                            action: SnackBarAction(
+                              label: 'Undo',
+                              onPressed: () {
+                                context.read<ShoppingCubit>().addItem(it);
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                      child: ListTile(
+                        title: Text(it.name),
+                        subtitle: it.category != null
+                            ? Text(it.category!)
+                            : null,
+                        leading: Checkbox(
+                          value: it.inCart,
+                          onChanged: (v) => context
+                              .read<ShoppingCubit>()
+                              .updateItem(it.copyWith(inCart: v ?? false)),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () =>
+                              context.read<ShoppingCubit>().deleteItem(it.id),
+                        ),
                       ),
                     );
                   },
@@ -49,43 +75,59 @@ class ShoppingPage extends StatelessWidget {
     final catCtl = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('New Item'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtl,
-                decoration: const InputDecoration(labelText: 'Name'),
+      // Use a different name for the builder context so we don't shadow the
+      // outer `context` parameter. The outer context contains the
+      // BlocProvider<ShoppingCubit>, so we must keep it available when
+      // calling `context.read<ShoppingCubit>()`.
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            bool canAdd() => nameCtl.text.trim().isNotEmpty;
+            nameCtl.addListener(() => setState(() {}));
+            return AlertDialog(
+              title: const Text('New Item'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtl,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                  ),
+                  TextField(
+                    controller: catCtl,
+                    decoration: const InputDecoration(
+                      labelText: 'Category (optional)',
+                    ),
+                  ),
+                ],
               ),
-              TextField(
-                controller: catCtl,
-                decoration: const InputDecoration(
-                  labelText: 'Category (optional)',
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final id = const Uuid().v4();
-                final item = ShoppingItem(
-                  id: id,
-                  name: nameCtl.text,
-                  category: catCtl.text.isEmpty ? null : catCtl.text,
-                );
-                context.read<ShoppingCubit>().addItem(item);
-                Navigator.pop(context);
-              },
-              child: const Text('Add'),
-            ),
-          ],
+                ElevatedButton(
+                  onPressed: canAdd()
+                      ? () {
+                          final id = const Uuid().v4();
+                          final item = ShoppingItem(
+                            id: id,
+                            name: nameCtl.text.trim(),
+                            category: catCtl.text.isEmpty ? null : catCtl.text,
+                          );
+                          // Use the outer `context` (the page's context) to access
+                          // the ShoppingCubit provider that was provided above
+                          // the page. The dialog's context does not include the
+                          // provider and would throw ProviderNotFoundException.
+                          context.read<ShoppingCubit>().addItem(item);
+                          Navigator.pop(dialogContext);
+                        }
+                      : null,
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
         );
       },
     );

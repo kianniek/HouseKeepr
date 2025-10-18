@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/task.dart';
+import 'remote_task_repository.dart';
 
-class FirestoreTaskRepository {
+class FirestoreTaskRepository implements RemoteTaskRepository {
   final FirebaseFirestore firestore;
   final String userId;
 
