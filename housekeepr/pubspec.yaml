@@ -50,6 +50,7 @@ dependencies:
   js: ^0.7.2
   flutter_launcher_icons: ^0.14.4
   share_plus: ^12.0.0
+  dynamic_color: ^1.8.1
 
 dev_dependencies:
   flutter_test:

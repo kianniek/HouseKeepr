@@ -30,6 +30,7 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  Color? _selectedColor;
   final TextEditingController _nameCtrl = TextEditingController();
   bool _saving = false;
 
@@ -37,6 +38,7 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _nameCtrl.text = widget.user.displayName ?? '';
+    // Try to load color from Firestore if available (not implemented here, but could be added)
   }
 
   Future<void> _pickAndUploadPhoto() async {
@@ -175,6 +177,7 @@ class _ProfilePageState extends State<ProfilePage> {
       );
       await widget.apis.firestore.collection('users').doc(widget.user.uid).set({
         'displayName': name,
+        if (_selectedColor != null) 'personalColor': _selectedColor!.value,
       }, merge: true);
       await widget.user.reload();
     } catch (e) {
@@ -226,6 +229,28 @@ class _ProfilePageState extends State<ProfilePage> {
               controller: _nameCtrl,
               decoration: const InputDecoration(labelText: 'Display name'),
             ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Personal color:'),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _saving ? null : _pickColor,
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: _selectedColor ?? Colors.grey[300],
+                    child: _selectedColor == null
+                        ? const Icon(
+                            Icons.color_lens,
+                            color: Colors.black54,
+                            size: 18,
+                          )
+                        : null,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             Text(user.email ?? 'No email'),
             const SizedBox(height: 16),
@@ -239,5 +264,57 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickColor() async {
+    final colors = [
+      Colors.red,
+      Colors.pink,
+      Colors.purple,
+      Colors.deepPurple,
+      Colors.indigo,
+      Colors.blue,
+      Colors.lightBlue,
+      Colors.cyan,
+      Colors.teal,
+      Colors.green,
+      Colors.lightGreen,
+      Colors.lime,
+      Colors.yellow,
+      Colors.amber,
+      Colors.orange,
+      Colors.deepOrange,
+      Colors.brown,
+      Colors.grey,
+      Colors.blueGrey,
+      Colors.black,
+    ];
+    final selected = await showDialog<Color>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select your personal color'),
+        content: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: colors
+              .map(
+                (color) => GestureDetector(
+                  onTap: () => Navigator.of(context).pop(color),
+                  child: CircleAvatar(
+                    backgroundColor: color,
+                    radius: 18,
+                    child: _selectedColor == color
+                        ? const Icon(Icons.check, color: Colors.white)
+                        : null,
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+    if (selected != null) {
+      setState(() => _selectedColor = selected);
+    }
   }
 }

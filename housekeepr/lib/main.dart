@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'firebase_options.dart';
@@ -50,16 +51,56 @@ class MyApp extends StatelessWidget {
 
   final Object? initializationError;
 
+  static const Color fallbackSeed = Color.fromARGB(255, 247, 136, 1);
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'HouseKeepr',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color.fromARGB(255, 247, 136, 1),
-        ),
-      ),
-      home: AppRoot(initializationError: initializationError),
+    return DynamicColorBuilder(
+      builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+        final ColorScheme lightScheme =
+            lightDynamic ??
+            ColorScheme.fromSeed(
+              seedColor: fallbackSeed,
+              brightness: Brightness.light,
+            );
+        final ColorScheme darkScheme =
+            darkDynamic ??
+            ColorScheme.fromSeed(
+              seedColor: fallbackSeed,
+              brightness: Brightness.dark,
+            );
+        return MaterialApp(
+          title: 'HouseKeepr',
+          theme: ThemeData(
+            colorScheme: lightScheme,
+            useMaterial3: true,
+            appBarTheme: AppBarTheme(
+              backgroundColor: lightScheme.surface,
+              foregroundColor: lightScheme.onSurface,
+              elevation: 0,
+            ),
+            floatingActionButtonTheme: FloatingActionButtonThemeData(
+              backgroundColor: lightScheme.primary,
+              foregroundColor: lightScheme.onPrimary,
+            ),
+          ),
+          darkTheme: ThemeData(
+            colorScheme: darkScheme,
+            useMaterial3: true,
+            appBarTheme: AppBarTheme(
+              backgroundColor: darkScheme.surface,
+              foregroundColor: darkScheme.onSurface,
+              elevation: 0,
+            ),
+            floatingActionButtonTheme: FloatingActionButtonThemeData(
+              backgroundColor: darkScheme.primary,
+              foregroundColor: darkScheme.onPrimary,
+            ),
+          ),
+          themeMode: ThemeMode.system,
+          home: AppRoot(initializationError: initializationError),
+        );
+      },
     );
   }
 }
