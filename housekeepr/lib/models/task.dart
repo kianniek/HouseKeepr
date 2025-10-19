@@ -60,6 +60,12 @@ class Task extends Equatable {
   final TaskPriority priority;
   final bool completed;
   final String? photoPath;
+  final DateTime? deadline;
+  final bool isRepeating;
+  final String? repeatRule; // e.g. 'daily', 'weekly', 'custom', or cron-like
+  final List<int>?
+  repeatDays; // for weekly repeats: DateTime.weekday values (1=Mon..7=Sun)
+  final bool isHouseholdTask;
 
   const Task({
     required this.id,
@@ -71,6 +77,11 @@ class Task extends Equatable {
     this.priority = TaskPriority.medium,
     this.completed = false,
     this.photoPath,
+    this.deadline,
+    this.isRepeating = false,
+    this.repeatRule,
+    this.repeatDays,
+    this.isHouseholdTask = false,
   });
 
   Task copyWith({
@@ -83,6 +94,11 @@ class Task extends Equatable {
     TaskPriority? priority,
     bool? completed,
     String? photoPath,
+    DateTime? deadline,
+    bool? isRepeating,
+    String? repeatRule,
+    List<int>? repeatDays,
+    bool? isHouseholdTask,
   }) => Task(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -93,6 +109,11 @@ class Task extends Equatable {
     priority: priority ?? this.priority,
     completed: completed ?? this.completed,
     photoPath: photoPath ?? this.photoPath,
+    deadline: deadline ?? this.deadline,
+    isRepeating: isRepeating ?? this.isRepeating,
+    repeatRule: repeatRule ?? this.repeatRule,
+    repeatDays: repeatDays ?? this.repeatDays,
+    isHouseholdTask: isHouseholdTask ?? this.isHouseholdTask,
   );
 
   Map<String, dynamic> toMap() => {
@@ -105,6 +126,11 @@ class Task extends Equatable {
     'priority': priority.index,
     'completed': completed,
     'photoPath': photoPath,
+    'deadline': deadline?.toUtc().toIso8601String(),
+    'isRepeating': isRepeating,
+    'repeatRule': repeatRule,
+    'repeatDays': repeatDays,
+    'isHouseholdTask': isHouseholdTask,
   };
 
   factory Task.fromMap(Map<String, dynamic> map) => Task(
@@ -168,6 +194,42 @@ class Task extends Equatable {
     photoPath: map['photoPath'] is String
         ? map['photoPath'] as String
         : (map['photoPath']?.toString()),
+    deadline: () {
+      final v = map['deadline'];
+      if (v is DateTime) return v;
+      if (v is String && v.isNotEmpty) {
+        try {
+          return DateTime.parse(v).toUtc();
+        } catch (_) {}
+      }
+      return null;
+    }(),
+    isRepeating: map['isRepeating'] is bool
+        ? map['isRepeating'] as bool
+        : (map['isRepeating'] is String
+              ? (map['isRepeating'].toLowerCase() == 'true')
+              : false),
+    repeatRule: map['repeatRule'] is String
+        ? map['repeatRule'] as String
+        : (map['repeatRule']?.toString()),
+    repeatDays: () {
+      final rd = map['repeatDays'];
+      if (rd is List) {
+        return rd.whereType<int>().toList();
+      }
+      if (rd is String && rd.isNotEmpty) {
+        try {
+          final parsed = json.decode(rd);
+          if (parsed is List) return parsed.whereType<int>().toList();
+        } catch (_) {}
+      }
+      return null;
+    }(),
+    isHouseholdTask: map['isHouseholdTask'] is bool
+        ? map['isHouseholdTask'] as bool
+        : (map['isHouseholdTask'] is String
+              ? (map['isHouseholdTask'].toLowerCase() == 'true')
+              : false),
   );
 
   String toJson() => json.encode(toMap());
@@ -185,5 +247,10 @@ class Task extends Equatable {
     priority,
     completed,
     photoPath,
+    deadline,
+    isRepeating,
+    repeatRule,
+    repeatDays,
+    isHouseholdTask,
   ];
 }

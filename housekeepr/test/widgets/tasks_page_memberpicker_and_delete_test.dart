@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:housekeepr/ui/tasks_page.dart';
+import 'package:housekeepr/ui/task_add_dialog.dart';
 import 'package:housekeepr/cubits/task_cubit.dart';
 import 'package:housekeepr/repositories/task_repository.dart';
 import 'package:housekeepr/core/settings_repository.dart';
@@ -25,7 +26,15 @@ void main() {
       MaterialApp(
         home: BlocProvider<TaskCubit>.value(
           value: cubit,
-          child: const TasksPage(),
+          child: Scaffold(
+            body: const TasksPage(),
+            floatingActionButton: Builder(
+              builder: (ctx) => FloatingActionButton(
+                onPressed: () => showTaskAddEditDialog(ctx, currentUser: null),
+                child: const Icon(Icons.add),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -57,7 +66,19 @@ void main() {
         home: BlocProvider<TaskCubit>.value(
           value: cubit,
           // provide a householdId so TasksPage renders MemberPicker branch
-          child: const TasksPage(householdId: 'hhouse'),
+          child: Scaffold(
+            body: const TasksPage(householdId: 'hhouse'),
+            floatingActionButton: Builder(
+              builder: (ctx) => FloatingActionButton(
+                onPressed: () => showTaskAddEditDialog(
+                  ctx,
+                  householdId: 'hhouse',
+                  currentUser: null,
+                ),
+                child: const Icon(Icons.add),
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -11,6 +11,8 @@ import '../cubits/shopping_cubit.dart';
 import '../firestore/firestore_home_repository.dart';
 import 'profile_menu.dart';
 import 'household_dashboard_page.dart' show TaskListTile, ShoppingAddRow;
+import 'tasks_page.dart';
+import 'task_add_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   final fb.User user;
@@ -21,7 +23,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _bottomNavIndex = 0; // 0 = Home, 1 = Chores, 2 = Shopping
+  int _bottomNavIndex = 0; // 0 = Home, 1 = Tasks, 2 = Shopping
   int _feedIndex = 0; // 0 = For You, 1 = Everyone
 
   @override
@@ -63,8 +65,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       );
     } else if (_bottomNavIndex == 1) {
-      // Chores tab: use the Tasks tab widget from HouseholdDashboardPage
-      body = Padding(padding: const EdgeInsets.all(16.0), child: TasksTab());
+      // Tasks tab: use the TasksPage with FAB/modal and pass current user
+      body = TasksPage(currentUser: widget.user);
     } else {
       // Shopping tab: use the Shopping tab widget from HouseholdDashboardPage
       body = Padding(padding: const EdgeInsets.all(16.0), child: ShoppingTab());
@@ -76,6 +78,16 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [ProfileMenu(user: widget.user)],
       ),
       body: body,
+      floatingActionButton: _bottomNavIndex == 1
+          ? FloatingActionButton(
+              onPressed: () => showTaskAddEditDialog(
+                context,
+                householdId: null,
+                currentUser: widget.user,
+              ),
+              child: const Icon(Icons.add),
+            )
+          : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _bottomNavIndex,
         onDestinationSelected: (idx) => setState(() => _bottomNavIndex = idx),
@@ -88,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(
             icon: Icon(Icons.checklist_outlined),
             selectedIcon: Icon(Icons.checklist),
-            label: 'Chores',
+            label: 'Tasks',
           ),
           NavigationDestination(
             icon: Icon(Icons.shopping_cart_outlined),

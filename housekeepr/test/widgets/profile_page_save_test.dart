@@ -1,3 +1,5 @@
+// import 'package:firebase_core/firebase_core.dart';
+// import 'package:firebase_core_platform_interface/firebase_core_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -5,6 +7,10 @@ import 'package:housekeepr/ui/profile_page.dart';
 import 'package:housekeepr/cubits/user_cubit.dart';
 import 'package:housekeepr/services/profile_apis.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+
+void setupFirebaseMocks() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+}
 
 // Minimal fake fb.User
 class _FakeFbUser implements fb.User {
@@ -55,6 +61,9 @@ class _FakeDoc implements FirestoreDocument {
   Future<void> set(Map<String, dynamic> data, {bool merge = false}) async {
     storage[id] = {...?storage[id], ...data};
   }
+
+  @override
+  Future<Map<String, dynamic>?> get() async => storage[id];
 }
 
 class FakeAuthApi implements AuthApi {
@@ -65,6 +74,7 @@ class FakeAuthApi implements AuthApi {
 }
 
 void main() {
+  setupFirebaseMocks();
   testWidgets('ProfilePage save updates firestore and user profile', (
     tester,
   ) async {

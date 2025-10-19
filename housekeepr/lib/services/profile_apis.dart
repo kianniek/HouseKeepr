@@ -57,6 +57,9 @@ abstract class FirestoreCollection {
 
 abstract class FirestoreDocument {
   Future<void> set(Map<String, dynamic> data, {bool merge});
+
+  /// Return the document data (or null if not present)
+  Future<Map<String, dynamic>?> get();
 }
 
 class _FirebaseFirestoreCollection implements FirestoreCollection {
@@ -73,6 +76,13 @@ class _FirebaseFirestoreDocument implements FirestoreDocument {
   @override
   Future<void> set(Map<String, dynamic> data, {bool merge = false}) =>
       _inner.set(data, SetOptions(merge: merge));
+
+  @override
+  Future<Map<String, dynamic>?> get() async {
+    final snap = await _inner.get();
+    final data = snap.data();
+    return data == null ? null : Map<String, dynamic>.from(data as Map);
+  }
 }
 
 /// Storage wrapper

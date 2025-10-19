@@ -6,6 +6,7 @@ import 'package:housekeepr/cubits/task_cubit.dart';
 import 'package:housekeepr/repositories/task_repository.dart';
 import 'package:housekeepr/core/settings_repository.dart';
 import 'package:housekeepr/core/sync_mode.dart';
+import 'package:housekeepr/ui/task_add_dialog.dart';
 
 import '../test_utils.dart';
 
@@ -24,7 +25,15 @@ void main() {
       MaterialApp(
         home: BlocProvider<TaskCubit>.value(
           value: cubit,
-          child: const TasksPage(),
+          child: Scaffold(
+            body: const TasksPage(),
+            floatingActionButton: Builder(
+              builder: (ctx) => FloatingActionButton(
+                onPressed: () => showTaskAddEditDialog(ctx, currentUser: null),
+                child: const Icon(Icons.add),
+              ),
+            ),
+          ),
         ),
       ),
     );

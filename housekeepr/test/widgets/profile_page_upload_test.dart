@@ -1,5 +1,6 @@
+// import 'package:firebase_core/firebase_core.dart';
+// import 'package:firebase_core_platform_interface/firebase_core_platform_interface.dart';
 import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -7,6 +8,10 @@ import 'package:housekeepr/ui/profile_page.dart';
 import 'package:housekeepr/cubits/user_cubit.dart';
 import 'package:housekeepr/services/profile_apis.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+
+void setupFirebaseMocks() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+}
 
 // Fake implementations
 class FakeXFile {
@@ -88,9 +93,13 @@ class _FakeDoc implements FirestoreDocument {
   Future<void> set(Map<String, dynamic> data, {bool merge = false}) async {
     storage[id] = {...?storage[id], ...data};
   }
+
+  @override
+  Future<Map<String, dynamic>?> get() async => storage[id];
 }
 
 void main() {
+  setupFirebaseMocks();
   testWidgets('ProfilePage upload flow uses injected apis', (tester) async {
     // Provide a fake user object with minimal API used by ProfilePage
     final fakeUser = _FakeFbUser(

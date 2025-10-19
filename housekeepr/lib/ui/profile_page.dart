@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:typed_data';
 import 'simple_cropper.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -40,18 +39,15 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _nameCtrl.text = widget.user.displayName ?? '';
     // Load color from Firestore if available
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.user.uid)
-        .get()
-        .then((doc) {
-          final data = doc.data();
-          if (data != null && data['personalColor'] != null) {
-            setState(() {
-              _selectedColor = Color(data['personalColor'] as int);
-            });
-          }
+    widget.apis.firestore.collection('users').doc(widget.user.uid).get().then((
+      data,
+    ) {
+      if (data != null && data['personalColor'] != null) {
+        setState(() {
+          _selectedColor = Color(data['personalColor'] as int);
         });
+      }
+    });
   }
 
   Future<void> _pickAndUploadPhoto() async {
@@ -215,113 +211,134 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     final user = widget.apis.auth.currentUser ?? widget.user;
     final color = _selectedColor;
+    final onColor = color != null
+        ? (ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+              ? Colors.white
+              : Colors.black)
+        : Theme.of(context).colorScheme.onSurface;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
         backgroundColor: color,
-        foregroundColor: color != null
-            ? ThemeData.estimateBrightnessForColor(color) == Brightness.dark
-                  ? Colors.white
-                  : Colors.black
-            : null,
+        foregroundColor: onColor,
         elevation: 0,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            if (user.photoURL != null)
-              CircleAvatar(
-                radius: 48,
-                backgroundImage: NetworkImage(user.photoURL!),
-                backgroundColor: color,
+      body: Container(
+        decoration: color != null
+            ? BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [color.withOpacity(0.10), color.withOpacity(0.03)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
               )
-            else
-              CircleAvatar(
-                radius: 48,
-                backgroundColor: color ?? Colors.grey[300],
-                child: const Icon(Icons.person, size: 48),
-              ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: color != null
-                    ? ThemeData.estimateBrightnessForColor(color) ==
-                              Brightness.dark
-                          ? Colors.white
-                          : Colors.black
-                    : null,
-              ),
-              onPressed: _saving ? null : _pickAndUploadPhoto,
-              icon: const Icon(Icons.photo_camera),
-              label: const Text('Change photo'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _nameCtrl,
-              decoration: InputDecoration(
-                labelText: 'Display name',
-                labelStyle: TextStyle(color: color),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: color ?? Colors.grey),
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (user.photoURL != null)
+                CircleAvatar(
+                  radius: 48,
+                  backgroundImage: NetworkImage(user.photoURL!),
+                  backgroundColor: color?.withOpacity(0.7),
+                )
+              else
+                CircleAvatar(
+                  radius: 48,
+                  backgroundColor: color?.withOpacity(0.7) ?? Colors.grey[300],
+                  child: const Icon(Icons.person, size: 48),
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: color ?? Colors.blue, width: 2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('Personal color:', style: TextStyle(color: color)),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _saving ? null : _pickColor,
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: color ?? Colors.grey[300],
-                    child: color == null
-                        ? const Icon(
-                            Icons.color_lens,
-                            color: Colors.black54,
-                            size: 18,
-                          )
-                        : null,
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: color,
+                  foregroundColor: onColor,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(user.email ?? 'No email', style: TextStyle(color: color)),
-            // Debug: Show current user UID only in debug mode
-            if (kDebugMode)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: SelectableText(
-                  'UID: ${user.uid}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                onPressed: _saving ? null : _pickAndUploadPhoto,
+                icon: const Icon(Icons.photo_camera),
+                label: const Text('Change photo'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _nameCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Display name',
+                  labelStyle: TextStyle(color: color),
+                  filled: color != null,
+                  fillColor: color?.withOpacity(0.08),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: color ?? Colors.grey),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(
+                      color: color ?? Colors.blue,
+                      width: 2,
+                    ),
+                  ),
                 ),
               ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: color != null
-                    ? ThemeData.estimateBrightnessForColor(color) ==
-                              Brightness.dark
-                          ? Colors.white
-                          : Colors.black
-                    : null,
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Personal color:',
+                    style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _saving ? null : _pickColor,
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: color ?? Colors.grey[300],
+                      child: color == null
+                          ? const Icon(
+                              Icons.color_lens,
+                              color: Colors.black54,
+                              size: 18,
+                            )
+                          : null,
+                    ),
+                  ),
+                ],
               ),
-              onPressed: _saving ? null : _saveProfile,
-              child: _saving
-                  ? const CircularProgressIndicator()
-                  : const Text('Save'),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                user.email ?? 'No email',
+                style: TextStyle(color: color, fontWeight: FontWeight.w500),
+              ),
+              // Debug: Show current user UID only in debug mode
+              if (kDebugMode)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: SelectableText(
+                    'UID: ${user.uid}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  ),
+                ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: color,
+                  foregroundColor: onColor,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                onPressed: _saving ? null : _saveProfile,
+                child: _saving
+                    ? const CircularProgressIndicator()
+                    : const Text('Save'),
+              ),
+            ],
+          ),
         ),
       ),
     );
