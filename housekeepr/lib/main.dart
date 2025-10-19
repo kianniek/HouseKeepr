@@ -12,6 +12,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'ui/login_page.dart';
 import 'ui/household_create_page.dart';
 import 'ui/household_dashboard_page.dart';
+import 'ui/home_screen.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'cubits/task_cubit.dart';
@@ -353,10 +354,7 @@ class _HouseholdAppState extends State<HouseholdApp> {
             BlocProvider<TaskCubit>.value(value: _taskCubit!),
             BlocProvider<ShoppingCubit>.value(value: _shoppingCubit!),
           ],
-          child: HouseholdDashboardPage(
-            householdId: widget.householdId,
-            user: widget.user,
-          ),
+          child: HomeScreen(user: widget.user),
         );
       },
     );

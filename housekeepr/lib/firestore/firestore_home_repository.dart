@@ -3,23 +3,47 @@ import '../models/home.dart';
 import 'remote_home_repository.dart';
 
 class FirestoreHomeRepository implements RemoteHomeRepository {
+  /// Stream the home for a given user (assumes user is member of at most one home)
+  Stream<Home?> userHome(String userId) {
+    return _households
+        .where('members', arrayContains: userId)
+        .limit(1)
+        .snapshots()
+        .map(
+          (snap) => snap.docs.isNotEmpty
+              ? Home.fromMap(
+                  (snap.docs.first.data()..['id'] = snap.docs.first.id),
+                )
+              : null,
+        );
+  }
+
+  /// Stream all homes (for 'Everyone' feed)
+  Stream<List<Home>> allHomes() {
+    return _households.snapshots().map(
+      (snap) => snap.docs
+          .map((d) => Home.fromMap((d.data()..['id'] = d.id)))
+          .toList(),
+    );
+  }
+
   final FirebaseFirestore firestore;
 
   FirestoreHomeRepository(this.firestore);
 
-  CollectionReference<Map<String, dynamic>> get _homes =>
-      firestore.collection('homes');
+  CollectionReference<Map<String, dynamic>> get _households =>
+      firestore.collection('households');
 
   @override
   Future<void> createHome(Home home) async {
     final data = home.toMap();
     final id = home.id;
-    await _homes.doc(id).set(data);
+    await _households.doc(id).set(data);
   }
 
   @override
   Future<Home?> getHome(String id) async {
-    final doc = await _homes.doc(id).get();
+    final doc = await _households.doc(id).get();
     if (!doc.exists) return null;
     final map = doc.data()!..['id'] = doc.id;
     return Home.fromMap(map);
@@ -27,7 +51,7 @@ class FirestoreHomeRepository implements RemoteHomeRepository {
 
   @override
   Future<Home?> getHomeByInviteCode(String inviteCode) async {
-    final q = await _homes
+    final q = await _households
         .where('inviteCode', isEqualTo: inviteCode)
         .limit(1)
         .get();
@@ -42,7 +66,7 @@ class FirestoreHomeRepository implements RemoteHomeRepository {
     final home = await getHomeByInviteCode(inviteCode);
     if (home == null) throw StateError('Invite code not found');
 
-    final docRef = _homes.doc(home.id);
+    final docRef = _households.doc(home.id);
     await firestore.runTransaction((tx) async {
       final snapshot = await tx.get(docRef);
       if (!snapshot.exists) throw StateError('Home disappeared');
@@ -63,6 +87,6 @@ class FirestoreHomeRepository implements RemoteHomeRepository {
   @override
   Future<void> updateHome(Home home) async {
     final data = home.toMap();
-    await _homes.doc(home.id).set(data, SetOptions(merge: true));
+    await _households.doc(home.id).set(data, SetOptions(merge: true));
   }
 }

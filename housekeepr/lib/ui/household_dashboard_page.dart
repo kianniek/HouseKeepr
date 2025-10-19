@@ -9,10 +9,10 @@ import '../models/task.dart';
 import '../models/shopping_item.dart';
 import 'profile_menu.dart';
 
-class _TaskListTile extends StatelessWidget {
+class TaskListTile extends StatelessWidget {
   final Task task;
   final Color? tileColor;
-  const _TaskListTile({required this.task, this.tileColor});
+  const TaskListTile({required this.task, this.tileColor});
 
   @override
   Widget build(BuildContext context) {
@@ -205,7 +205,7 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage>
                               );
                             },
                             child: t.assignedToId == null
-                                ? _TaskListTile(task: t)
+                                ? TaskListTile(task: t)
                                 : FutureBuilder<DocumentSnapshot>(
                                     future: FirebaseFirestore.instance
                                         .collection('users')
@@ -224,7 +224,7 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage>
                                           );
                                         }
                                       }
-                                      return _TaskListTile(
+                                      return TaskListTile(
                                         task: t,
                                         tileColor: userColor,
                                       );
@@ -245,7 +245,7 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage>
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                const _ShoppingAddRow(),
+                const ShoppingAddRow(),
                 const SizedBox(height: 12),
                 Expanded(
                   child: BlocBuilder<ShoppingCubit, ShoppingState>(
@@ -318,14 +318,14 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage>
   }
 }
 
-class _ShoppingAddRow extends StatefulWidget {
-  const _ShoppingAddRow();
+class ShoppingAddRow extends StatefulWidget {
+  const ShoppingAddRow();
 
   @override
-  State<_ShoppingAddRow> createState() => _ShoppingAddRowState();
+  State<ShoppingAddRow> createState() => ShoppingAddRowState();
 }
 
-class _ShoppingAddRowState extends State<_ShoppingAddRow> {
+class ShoppingAddRowState extends State<ShoppingAddRow> {
   final TextEditingController _name = TextEditingController();
   final TextEditingController _cat = TextEditingController();
 

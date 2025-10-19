@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -296,6 +296,15 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const SizedBox(height: 8),
             Text(user.email ?? 'No email', style: TextStyle(color: color)),
+            // Debug: Show current user UID only in debug mode
+            if (kDebugMode)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: SelectableText(
+                  'UID: ${user.uid}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                ),
+              ),
             const SizedBox(height: 16),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
