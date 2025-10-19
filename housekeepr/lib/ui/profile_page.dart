@@ -40,14 +40,18 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _nameCtrl.text = widget.user.displayName ?? '';
     // Load color from Firestore if available
-    FirebaseFirestore.instance.collection('users').doc(widget.user.uid).get().then((doc) {
-      final data = doc.data();
-      if (data != null && data['personalColor'] != null) {
-        setState(() {
-          _selectedColor = Color(data['personalColor'] as int);
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.user.uid)
+        .get()
+        .then((doc) {
+          final data = doc.data();
+          if (data != null && data['personalColor'] != null) {
+            setState(() {
+              _selectedColor = Color(data['personalColor'] as int);
+            });
+          }
         });
-      }
-    });
   }
 
   Future<void> _pickAndUploadPhoto() async {
