@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../models/home.dart';
 import '../firestore/remote_home_repository.dart';
+import 'invite_share.dart';
 
 /// Minimal page to create a Home. Expects a [RemoteHomeRepository] to be
 /// provided so it can persist the new Home.
@@ -23,6 +24,7 @@ class _CreateHomePageState extends State<CreateHomePage> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   var _loading = false;
+  Home? _createdHome;
 
   @override
   void dispose() {
@@ -44,7 +46,11 @@ class _CreateHomePageState extends State<CreateHomePage> {
     );
     try {
       await widget.repository.createHome(home);
-      if (mounted) Navigator.of(context).pop(home);
+      if (mounted) {
+        setState(() {
+          _createdHome = home;
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -62,30 +68,45 @@ class _CreateHomePageState extends State<CreateHomePage> {
       appBar: AppBar(title: const Text('Create Home')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextFormField(
-                controller: _nameCtrl,
-                decoration: const InputDecoration(labelText: 'Home name'),
-                validator: (v) => (v == null || v.trim().isEmpty)
-                    ? 'Please enter a name'
-                    : null,
-                textInputAction: TextInputAction.done,
-                onFieldSubmitted: (_) => _create(),
+        child: _createdHome == null
+            ? Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextFormField(
+                      controller: _nameCtrl,
+                      decoration: const InputDecoration(labelText: 'Home name'),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Please enter a name'
+                          : null,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _create(),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _loading ? null : _create,
+                      child: _loading
+                          ? const CircularProgressIndicator()
+                          : const Text('Create'),
+                    ),
+                  ],
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text('Home created!'),
+                  const SizedBox(height: 16),
+                  // Show invite share widget
+                  InviteShare(home: _createdHome!),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(_createdHome),
+                    child: const Text('Done'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _loading ? null : _create,
-                child: _loading
-                    ? const CircularProgressIndicator()
-                    : const Text('Create'),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

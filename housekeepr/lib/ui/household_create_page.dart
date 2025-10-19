@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import './join_household_page.dart';
 
 class HouseholdCreatePage extends StatefulWidget {
   final User user;
@@ -66,6 +67,25 @@ class _HouseholdCreatePageState extends State<HouseholdCreatePage> {
                     onPressed: _createHousehold,
                     child: const Text('Create'),
                   ),
+            const SizedBox(height: 16),
+            Text('or', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: () async {
+                final joinedId = await Navigator.of(context).push<String>(
+                  MaterialPageRoute(
+                    builder: (_) => JoinHouseholdPage(
+                      user: widget.user,
+                      onJoined: (id) => Navigator.of(context).pop(id),
+                    ),
+                  ),
+                );
+                if (joinedId != null) {
+                  widget.onCreated(joinedId);
+                }
+              },
+              child: const Text('Join with invite code'),
+            ),
           ],
         ),
       ),
