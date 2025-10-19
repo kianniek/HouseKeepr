@@ -11,6 +11,10 @@ class ShoppingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<ShoppingCubit, ShoppingState>(
       builder: (context, state) {
+        // Capture the page-level context so callbacks (like SnackBar actions)
+        // don't try to look up inherited widgets from a deactivated item
+        // context inside the ListView itemBuilder.
+        final pageContext = context;
         return Scaffold(
           body: state.items.isEmpty
               ? const Center(child: Text('No shopping items'))
@@ -28,14 +32,18 @@ class ShoppingPage extends StatelessWidget {
                         child: const Icon(Icons.delete, color: Colors.white),
                       ),
                       onDismissed: (_) {
-                        context.read<ShoppingCubit>().deleteItem(it.id);
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        // Use the captured pageContext for cubit operations and
+                        // showing SnackBars so we don't reference a deactivated
+                        // element's context when the user taps Undo.
+                        final cubit = pageContext.read<ShoppingCubit>();
+                        cubit.deleteItem(it.id);
+                        ScaffoldMessenger.of(pageContext).showSnackBar(
                           SnackBar(
                             content: Text('Deleted "${it.name}"'),
                             action: SnackBarAction(
                               label: 'Undo',
                               onPressed: () {
-                                context.read<ShoppingCubit>().addItem(it);
+                                cubit.addItem(it);
                               },
                             ),
                           ),
@@ -48,14 +56,15 @@ class ShoppingPage extends StatelessWidget {
                             : null,
                         leading: Checkbox(
                           value: it.inCart,
-                          onChanged: (v) => context
+                          onChanged: (v) => pageContext
                               .read<ShoppingCubit>()
                               .updateItem(it.copyWith(inCart: v ?? false)),
                         ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete),
-                          onPressed: () =>
-                              context.read<ShoppingCubit>().deleteItem(it.id),
+                          onPressed: () => pageContext
+                              .read<ShoppingCubit>()
+                              .deleteItem(it.id),
                         ),
                       ),
                     );

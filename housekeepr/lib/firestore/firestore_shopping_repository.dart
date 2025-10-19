@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/shopping_item.dart';
+import 'remote_shopping_repository.dart';
 
-class FirestoreShoppingRepository {
+class FirestoreShoppingRepository implements RemoteShoppingRepository {
   final FirebaseFirestore firestore;
   final String userId;
 
@@ -17,12 +18,14 @@ class FirestoreShoppingRepository {
         .toList();
   }
 
+  @override
   Future<void> saveItem(ShoppingItem item) async {
     final data = item.toMap();
     final id = item.id;
     await _col.doc(id).set(data);
   }
 
+  @override
   Future<void> deleteItem(String id) async {
     await _col.doc(id).delete();
   }

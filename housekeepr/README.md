@@ -115,3 +115,35 @@ Create repository secrets (Settings → Secrets) for the values you need (exampl
 The included workflow `.github/workflows/build-web.yml` demonstrates how to pass these secrets into the `flutter build web` command using `--dart-define`.
 
 Note: Client Firebase API keys are not secret in the sense that they are embedded in the client bundle for web/mobile; these measures are mostly for preventing accidental commits and for convenient build-time configuration.
+
+## Quick: PowerShell local env vars
+
+If you prefer to set environment variables in PowerShell (instead of using `--dart-define`) you can export the platform keys before running the app. Replace the placeholder values with the values from your Firebase project.
+
+Example (Android):
+
+```powershell
+$env:FIREBASE_ANDROID_API_KEY = 'AIza...'
+$env:FIREBASE_ANDROID_APP_ID = '1:1234567890:android:abcdef'
+$env:FIREBASE_PROJECT_ID = 'your-firebase-project-id'
+$env:FIREBASE_MESSAGING_SENDER_ID = '1234567890'
+$env:FIREBASE_STORAGE_BUCKET = 'your-firebase-project-id.appspot.com'
+
+flutter run
+```
+
+Example (Web):
+
+```powershell
+$env:FIREBASE_WEB_API_KEY = 'AIza...'
+$env:FIREBASE_WEB_APP_ID = '1:1234567890:web:abcdef'
+$env:FIREBASE_PROJECT_ID = 'your-firebase-project-id'
+$env:FIREBASE_AUTH_DOMAIN = 'your-app.firebaseapp.com'
+$env:FIREBASE_MEASUREMENT_ID = 'G-XXXX'
+
+flutter run -d chrome
+```
+
+Notes:
+- These environment variables are only present in the current PowerShell session. Opening a new terminal will require re-setting them.
+- For CI, prefer using `--dart-define` or repository secrets as shown above.

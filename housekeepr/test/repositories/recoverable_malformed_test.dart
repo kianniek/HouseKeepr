@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:housekeepr/repositories/task_repository.dart';
 import 'package:housekeepr/repositories/shopping_repository.dart';
 import 'package:housekeepr/models/task.dart';
-import 'package:housekeepr/models/shopping_item.dart';
+// removed unused import
 
 import '../test_utils.dart';
 

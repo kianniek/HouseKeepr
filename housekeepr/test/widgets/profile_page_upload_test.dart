@@ -61,7 +61,7 @@ class FakeStorageApi implements StorageApi {
 }
 
 class FakeAuthApi implements AuthApi {
-  fb.User? _user;
+  final fb.User? _user;
   FakeAuthApi(this._user);
   @override
   fb.User? get currentUser => _user;
@@ -236,5 +236,6 @@ class _FakeFbUser implements fb.User {
   Future<void> reload() async {}
 
   // The rest of fb.User is unimplemented; use noSuchMethod to avoid large surface.
+  @override
   noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

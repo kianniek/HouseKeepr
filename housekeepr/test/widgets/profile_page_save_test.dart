@@ -29,6 +29,7 @@ class _FakeFbUser implements fb.User {
   @override
   Future<void> reload() async {}
 
+  @override
   noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -57,7 +58,7 @@ class _FakeDoc implements FirestoreDocument {
 }
 
 class FakeAuthApi implements AuthApi {
-  fb.User? _user;
+  final fb.User? _user;
   FakeAuthApi(this._user);
   @override
   fb.User? get currentUser => _user;

@@ -15,18 +15,20 @@ class FakeRemoteShoppingRepo implements RemoteShoppingRepository {
   int deleteCalls = 0;
   final List<ShoppingItem> saved = [];
 
+  @override
   Future<void> saveItem(ShoppingItem t) async {
     saveCalls++;
     saved.add(t);
   }
 
+  @override
   Future<void> deleteItem(String id) async {
     deleteCalls++;
   }
 }
 
 class CapturingWriteQueue extends wq.WriteQueue {
-  CapturingWriteQueue(prefs) : super(prefs);
+  CapturingWriteQueue(super.prefs);
   wq.QueueOp? lastOp;
   @override
   void enqueueOp(wq.QueueOp op) {

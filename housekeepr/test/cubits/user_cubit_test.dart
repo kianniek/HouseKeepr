@@ -19,6 +19,7 @@ class _FakeUser implements fb.User {
   Future<void> reload() async {}
 
   // Delegate other members to noSuchMethod
+  @override
   noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

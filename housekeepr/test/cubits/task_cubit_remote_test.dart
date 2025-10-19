@@ -15,18 +15,20 @@ class FakeRemoteTaskRepo implements RemoteTaskRepository {
   int deleteCalls = 0;
   final List<Task> saved = [];
 
+  @override
   Future<void> saveTask(Task t) async {
     saveCalls++;
     saved.add(t);
   }
 
+  @override
   Future<void> deleteTask(String id) async {
     deleteCalls++;
   }
 }
 
 class CapturingWriteQueue extends wq.WriteQueue {
-  CapturingWriteQueue(prefs) : super(prefs);
+  CapturingWriteQueue(super.prefs);
   wq.QueueOp? lastOp;
   @override
   void enqueueOp(wq.QueueOp op) {

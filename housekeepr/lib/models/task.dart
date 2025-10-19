@@ -127,12 +127,14 @@ class Task extends Equatable {
         ? (map['subTasks'] as List<dynamic>)
               .map((e) {
                 try {
-                  if (e is Map<String, dynamic>)
+                  if (e is Map<String, dynamic>) {
                     return SubTask.fromMap(Map<String, dynamic>.from(e));
-                  if (e is String)
+                  }
+                  if (e is String) {
                     return SubTask.fromMap(
                       Map<String, dynamic>.from(json.decode(e) as Map),
                     );
+                  }
                 } catch (_) {}
                 return null;
               })
@@ -141,12 +143,14 @@ class Task extends Equatable {
         : [],
     priority: () {
       final p = map['priority'];
-      if (p is int && p >= 0 && p < TaskPriority.values.length)
+      if (p is int && p >= 0 && p < TaskPriority.values.length) {
         return TaskPriority.values[p];
+      }
       if (p is String) {
         final idx = int.tryParse(p);
-        if (idx != null && idx >= 0 && idx < TaskPriority.values.length)
+        if (idx != null && idx >= 0 && idx < TaskPriority.values.length) {
           return TaskPriority.values[idx];
+        }
         // try matching by name
         final byName = TaskPriority.values.firstWhere(
           (v) => v.toString().split('.').last.toLowerCase() == p.toLowerCase(),
