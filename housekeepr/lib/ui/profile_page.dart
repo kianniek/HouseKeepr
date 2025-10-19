@@ -214,8 +214,18 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final user = widget.apis.auth.currentUser ?? widget.user;
+    final color = _selectedColor;
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+      appBar: AppBar(
+        title: const Text('Profile'),
+        backgroundColor: color,
+        foregroundColor: color != null
+            ? ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+                  ? Colors.white
+                  : Colors.black
+            : null,
+        elevation: 0,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -225,16 +235,25 @@ class _ProfilePageState extends State<ProfilePage> {
               CircleAvatar(
                 radius: 48,
                 backgroundImage: NetworkImage(user.photoURL!),
-                backgroundColor: _selectedColor,
+                backgroundColor: color,
               )
             else
               CircleAvatar(
                 radius: 48,
-                backgroundColor: _selectedColor ?? Colors.grey[300],
+                backgroundColor: color ?? Colors.grey[300],
                 child: const Icon(Icons.person, size: 48),
               ),
             const SizedBox(height: 8),
             ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color,
+                foregroundColor: color != null
+                    ? ThemeData.estimateBrightnessForColor(color) ==
+                              Brightness.dark
+                          ? Colors.white
+                          : Colors.black
+                    : null,
+              ),
               onPressed: _saving ? null : _pickAndUploadPhoto,
               icon: const Icon(Icons.photo_camera),
               label: const Text('Change photo'),
@@ -242,20 +261,29 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(height: 16),
             TextField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: 'Display name'),
+              decoration: InputDecoration(
+                labelText: 'Display name',
+                labelStyle: TextStyle(color: color),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: color ?? Colors.grey),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: color ?? Colors.blue, width: 2),
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Personal color:'),
+                Text('Personal color:', style: TextStyle(color: color)),
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: _saving ? null : _pickColor,
                   child: CircleAvatar(
                     radius: 16,
-                    backgroundColor: _selectedColor ?? Colors.grey[300],
-                    child: _selectedColor == null
+                    backgroundColor: color ?? Colors.grey[300],
+                    child: color == null
                         ? const Icon(
                             Icons.color_lens,
                             color: Colors.black54,
@@ -267,9 +295,18 @@ class _ProfilePageState extends State<ProfilePage> {
               ],
             ),
             const SizedBox(height: 8),
-            Text(user.email ?? 'No email'),
+            Text(user.email ?? 'No email', style: TextStyle(color: color)),
             const SizedBox(height: 16),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color,
+                foregroundColor: color != null
+                    ? ThemeData.estimateBrightnessForColor(color) ==
+                              Brightness.dark
+                          ? Colors.white
+                          : Colors.black
+                    : null,
+              ),
               onPressed: _saving ? null : _saveProfile,
               child: _saving
                   ? const CircularProgressIndicator()
