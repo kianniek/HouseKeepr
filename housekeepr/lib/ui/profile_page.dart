@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:typed_data';
 import 'simple_cropper.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -38,7 +39,15 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _nameCtrl.text = widget.user.displayName ?? '';
-    // Try to load color from Firestore if available (not implemented here, but could be added)
+    // Load color from Firestore if available
+    FirebaseFirestore.instance.collection('users').doc(widget.user.uid).get().then((doc) {
+      final data = doc.data();
+      if (data != null && data['personalColor'] != null) {
+        setState(() {
+          _selectedColor = Color(data['personalColor'] as int);
+        });
+      }
+    });
   }
 
   Future<void> _pickAndUploadPhoto() async {
@@ -212,11 +221,13 @@ class _ProfilePageState extends State<ProfilePage> {
               CircleAvatar(
                 radius: 48,
                 backgroundImage: NetworkImage(user.photoURL!),
+                backgroundColor: _selectedColor,
               )
             else
-              const CircleAvatar(
+              CircleAvatar(
                 radius: 48,
-                child: Icon(Icons.person, size: 48),
+                backgroundColor: _selectedColor ?? Colors.grey[300],
+                child: const Icon(Icons.person, size: 48),
               ),
             const SizedBox(height: 8),
             ElevatedButton.icon(

@@ -70,15 +70,50 @@ class ProfileMenu extends StatelessWidget {
             PopupMenuItem(value: 'settings', child: Text('Settings')),
             PopupMenuItem(value: 'signout', child: Text('Sign out')),
           ],
-          icon: CircleAvatar(
-            backgroundImage:
-                (displayUser != null && displayUser.photoURL != null)
-                ? NetworkImage(displayUser.photoURL!)
-                : null,
-            child: (displayUser == null || displayUser.photoURL == null)
-                ? const Icon(Icons.person)
-                : null,
-          ),
+      icon: _ProfileMenuAvatar(user: displayUser),
+// Avatar widget that tints with user's personal color if available
+class _ProfileMenuAvatar extends StatefulWidget {
+  final fb.User? user;
+  const _ProfileMenuAvatar({this.user});
+
+  @override
+  State<_ProfileMenuAvatar> createState() => _ProfileMenuAvatarState();
+}
+
+class _ProfileMenuAvatarState extends State<_ProfileMenuAvatar> {
+  Color? _color;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = widget.user;
+    if (user != null) {
+      FirebaseFirestore.instance.collection('users').doc(user.uid).get().then((doc) {
+        final data = doc.data();
+        if (data != null && data['personalColor'] != null) {
+          setState(() {
+            _color = Color(data['personalColor'] as int);
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = widget.user;
+    if (user != null && user.photoURL != null) {
+      return CircleAvatar(
+        backgroundImage: NetworkImage(user.photoURL!),
+        backgroundColor: _color,
+      );
+    }
+    return CircleAvatar(
+      backgroundColor: _color ?? Colors.grey[300],
+      child: const Icon(Icons.person),
+    );
+  }
+}
         );
       },
     );
