@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
@@ -9,7 +8,6 @@ import '../cubits/shopping_cubit.dart';
 import '../models/task.dart';
 import '../models/shopping_item.dart';
 import 'profile_menu.dart';
-
 
 class _TaskListTile extends StatelessWidget {
   final Task task;
@@ -27,16 +25,14 @@ class _TaskListTile extends StatelessWidget {
         children: [
           if (task.assignedToName != null)
             Text('Assigned to: ${task.assignedToName}'),
-          if (task.description != null)
-            Text(task.description!),
+          if (task.description != null) Text(task.description!),
         ],
       ),
       trailing: Checkbox(
         value: task.completed,
-        onChanged: (val) =>
-            context.read<TaskCubit>().updateTask(
-              task.copyWith(completed: val ?? false),
-            ),
+        onChanged: (val) => context.read<TaskCubit>().updateTask(
+          task.copyWith(completed: val ?? false),
+        ),
       ),
     );
   }
@@ -218,9 +214,14 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage>
                                     builder: (context, snap) {
                                       Color? userColor;
                                       if (snap.hasData && snap.data != null) {
-                                        final data = snap.data!.data() as Map<String, dynamic>?;
-                                        if (data != null && data['personalColor'] != null) {
-                                          userColor = Color(data['personalColor'] as int);
+                                        final data =
+                                            snap.data!.data()
+                                                as Map<String, dynamic>?;
+                                        if (data != null &&
+                                            data['personalColor'] != null) {
+                                          userColor = Color(
+                                            data['personalColor'] as int,
+                                          );
                                         }
                                       }
                                       return _TaskListTile(
@@ -230,7 +231,6 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage>
                                     },
                                   ),
                           );
-
                         },
                       );
                     },

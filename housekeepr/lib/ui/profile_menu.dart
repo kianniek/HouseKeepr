@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,8 +7,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'profile_page.dart';
 import 'switch_household_page.dart';
 import 'settings_page.dart';
-
-
 
 class ProfileMenu extends StatelessWidget {
   final fb.User? user;
@@ -98,7 +95,9 @@ class _ProfileMenuAvatarState extends State<_ProfileMenuAvatar> {
     super.initState();
     final user = widget.user;
     if (user != null) {
-      FirebaseFirestore.instance.collection('users').doc(user.uid).get().then((doc) {
+      FirebaseFirestore.instance.collection('users').doc(user.uid).get().then((
+        doc,
+      ) {
         final data = doc.data();
         if (data != null && data['personalColor'] != null) {
           setState(() {
