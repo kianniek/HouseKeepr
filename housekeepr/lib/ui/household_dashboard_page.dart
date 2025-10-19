@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
@@ -8,6 +9,38 @@ import '../cubits/shopping_cubit.dart';
 import '../models/task.dart';
 import '../models/shopping_item.dart';
 import 'profile_menu.dart';
+
+
+class _TaskListTile extends StatelessWidget {
+  final Task task;
+  final Color? tileColor;
+  const _TaskListTile({required this.task, this.tileColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      tileColor: tileColor?.withOpacity(0.18),
+      title: Text(task.title),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (task.assignedToName != null)
+            Text('Assigned to: ${task.assignedToName}'),
+          if (task.description != null)
+            Text(task.description!),
+        ],
+      ),
+      trailing: Checkbox(
+        value: task.completed,
+        onChanged: (val) =>
+            context.read<TaskCubit>().updateTask(
+              task.copyWith(completed: val ?? false),
+            ),
+      ),
+    );
+  }
+}
 
 class HouseholdDashboardPage extends StatefulWidget {
   final String householdId;
@@ -175,27 +208,29 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage>
                                 ),
                               );
                             },
-                            child: ListTile(
-                              title: Text(t.title),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (t.assignedToName != null)
-                                    Text('Assigned to: ${t.assignedToName}'),
-                                  if (t.description != null)
-                                    Text(t.description!),
-                                ],
-                              ),
-                              trailing: Checkbox(
-                                value: t.completed,
-                                onChanged: (val) =>
-                                    context.read<TaskCubit>().updateTask(
-                                      t.copyWith(completed: val ?? false),
-                                    ),
-                              ),
-                            ),
+                            child: t.assignedToId == null
+                                ? _TaskListTile(task: t)
+                                : FutureBuilder<DocumentSnapshot>(
+                                    future: FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(t.assignedToId)
+                                        .get(),
+                                    builder: (context, snap) {
+                                      Color? userColor;
+                                      if (snap.hasData && snap.data != null) {
+                                        final data = snap.data!.data() as Map<String, dynamic>?;
+                                        if (data != null && data['personalColor'] != null) {
+                                          userColor = Color(data['personalColor'] as int);
+                                        }
+                                      }
+                                      return _TaskListTile(
+                                        task: t,
+                                        tileColor: userColor,
+                                      );
+                                    },
+                                  ),
                           );
+
                         },
                       );
                     },

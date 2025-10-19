@@ -1,11 +1,15 @@
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../cubits/user_cubit.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'profile_page.dart';
 import 'switch_household_page.dart';
 import 'settings_page.dart';
+
+
 
 class ProfileMenu extends StatelessWidget {
   final fb.User? user;
@@ -70,7 +74,13 @@ class ProfileMenu extends StatelessWidget {
             PopupMenuItem(value: 'settings', child: Text('Settings')),
             PopupMenuItem(value: 'signout', child: Text('Sign out')),
           ],
-      icon: _ProfileMenuAvatar(user: displayUser),
+          icon: _ProfileMenuAvatar(user: displayUser),
+        );
+      },
+    );
+  }
+}
+
 // Avatar widget that tints with user's personal color if available
 class _ProfileMenuAvatar extends StatefulWidget {
   final fb.User? user;
@@ -111,11 +121,6 @@ class _ProfileMenuAvatarState extends State<_ProfileMenuAvatar> {
     return CircleAvatar(
       backgroundColor: _color ?? Colors.grey[300],
       child: const Icon(Icons.person),
-    );
-  }
-}
-        );
-      },
     );
   }
 }
