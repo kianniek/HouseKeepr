@@ -36,6 +36,33 @@ Included test files:
 
 All tests passed in the local environment when run during development.
 
+## Running the Firestore emulator + integration tests (Windows PowerShell)
+
+This repository includes integration tests that exercise the Firestore emulator. A small helper PowerShell script is provided at `scripts/run_emulator_and_tests.ps1` to make running the emulator and tests easier on Windows.
+
+Prerequisites:
+- `firebase-tools` on PATH (install with `npm i -g firebase-tools`)
+- Java JRE/JDK for the emulator
+- `flutter` on PATH
+
+Basic usage (from the `housekeepr` project directory):
+
+```powershell
+# Run all integration tests (default: test/integration)
+Set-Location -LiteralPath 'c:\path\to\housekeepr\housekeepr'
+.\scripts\run_emulator_and_tests.ps1
+
+# Run a single integration test file
+.\scripts\run_emulator_and_tests.ps1 -TestPath 'test/integration/firestore_task_repository_emulator_rest_test.dart'
+```
+
+What the script does:
+- Reads `firebase.json` for configured emulator host/port (falls back to `127.0.0.1:8080`).
+- Tries `firebase emulators:exec` to start the emulator and run the tests (clean lifecycle).
+- If the port is already in use, it will attempt to run tests against the existing emulator by setting `FIRESTORE_EMULATOR_HOST`.
+
+If you run into a port conflict, stop the other process using the configured port (usually `8080`) or pass a different host/port in your `firebase.json`.
+
 ## Architecture & Integrations (Mermaid)
 
 The diagram below shows the major app components, state flow (Cubits), local storage, and external integrations (Firebase and Google Sign-In).

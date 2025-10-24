@@ -1,79 +1,92 @@
-param()
+param(
+    [string]$TestPath = 'test/integration',
+    [string]$FirebaseJson = "$PSScriptRoot\..\firebase.json",
+    [switch]$VerboseMode
+)
 
-# Start the Firebase emulator and run Flutter tests on Windows PowerShell
-# Requires: firebase-tools installed and available on PATH, or set FIREBASE_CLI_TOKEN in CI
+# Robust helper to run Firestore emulator and execute Flutter tests against it.
+# Behavior:
+# 1. Read host/port from firebase.json under emulators.firestore (fallback to localhost:8080).
+# 2. Try `firebase emulators:exec --only firestore "flutter test <path>"` to manage lifecycle.
+# 3. If emulators:exec fails because port is in use, assume an emulator is already running and run tests
+#    with FIRESTORE_EMULATOR_HOST set to the configured host:port.
+# Prereqs: firebase-tools and flutter on PATH, Java for the emulator.
+
+Set-StrictMode -Version Latest
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-Write-Host "Starting Firestore emulator..."
+if ($VerboseMode) { Write-Host "Script root: $root" }
 
-# Write emulator output to a temp log via cmd redirection to avoid Start-Process redirect limitations
-$logFile = "$env:TEMP\firebase-emulator.log"
-if (Test-Path $logFile) { Remove-Item $logFile -ErrorAction SilentlyContinue }
-
-# Start the emulator in background using cmd so we can redirect both stdout and stderr to the log file
-$startArgs = "/c firebase emulators:start --only firestore --project=demo-project > `"$logFile`" 2>&1"
-$proc = Start-Process -FilePath "cmd" -ArgumentList $startArgs -WindowStyle Hidden -PassThru
-
-# Wait briefly for the emulator to produce log output
-Start-Sleep -Seconds 1
-
-$retry = 0
-$max = 60
-while (-not (Test-Path $logFile) -and $retry -lt $max) {
-    Start-Sleep -Seconds 1
-    $retry++
-}
-
-$retry = 0
-while ($retry -lt $max) {
-    if (Test-Path $logFile) {
+function Read-EmulatorHostPort {
+    param([string]$Path)
+    $host = '127.0.0.1'
+    $port = 8080
+    if (Test-Path $Path) {
         try {
-            if (Select-String -Pattern "All emulators ready" -Path $logFile -SimpleMatch -Quiet) {
-                Write-Host "Firestore emulator started."
-                break
+            $json = Get-Content $Path -Raw | ConvertFrom-Json -ErrorAction Stop
+            if ($json.emulators -and $json.emulators.firestore) {
+                if ($json.emulators.firestore.host) { $host = $json.emulators.firestore.host }
+                if ($json.emulators.firestore.port) { $port = [int]$json.emulators.firestore.port }
             }
-        } catch {
-            # ignore read race
+        }
+        catch {
+            Write-Warning "Failed to parse firebase.json at $Path: $_"
         }
     }
-    Start-Sleep -Seconds 1
-    $retry++
-}
-
-if (-not (Test-Path $logFile) -or -not (Select-String -Pattern "All emulators ready" -Path $logFile -SimpleMatch -Quiet)) {
-    Write-Error "Firestore emulator failed to start. Showing log if present:"
-    if (Test-Path $logFile) { Get-Content $logFile -TotalCount 200 | ForEach-Object { Write-Error $_ } }
-    # try to stop process if started
-    if ($proc -and -not $proc.HasExited) { $proc.Kill() | Out-Null }
-    Exit 1
-}
-
-# Set emulator env vars for tests
-$env:FIRESTORE_EMULATOR_HOST = "localhost:8080"
-$env:FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099"
-
-# Run flutter test in the current project root
-Write-Host "Running flutter test in $root"
-$devices = flutter devices --machine | Out-String
-if ($devices -match '"platformType"\W*:\W*"(android|ios)"') {
-    Write-Host "Device found — running integration tests."
-    flutter test integration_test
-} else {
-    Write-Host "No Android/iOS device found — running unit/widget tests only."
-    flutter test
-}
-$exit = $LASTEXITCODE
-
-# Teardown emulator
-if ($proc -and -not $proc.HasExited) {
-    try {
-        Write-Host "Stopping emulator (pid $($proc.Id))"
-        $proc | Stop-Process -Force -ErrorAction SilentlyContinue
-    } catch {
-        Write-Warning "Failed to stop emulator process: $_"
+    else {
+        Write-Verbose "firebase.json not found at $Path; using defaults"
     }
+    return @{ Host = $host; Port = $port }
 }
+
+$ep = Read-EmulatorHostPort -Path $FirebaseJson
+$host = $ep.Host
+$port = $ep.Port
+
+Write-Host "Using Firestore emulator host: $host`:$port"
+
+# Preferred path: use firebase emulators:exec to manage lifecycle cleanly
+$execCmd = "firebase emulators:exec --only firestore \"flutter test $TestPath\""
+Write-Host "Running: $execCmd"
+try {
+    # Run directly so we stream output to the console and inherit environment
+    iex $execCmd
+    $exit = $LASTEXITCODE
+    if ($exit -eq 0) { Exit 0 }
+    Write-Warning "firebase emulators:exec exited with code $exit"
+}
+catch {
+    Write-Warning "firebase emulators:exec failed: $_"
+}
+
+# If we reach here, emulators:exec didn't work (likely port conflict). Try running tests against an existing emulator.
+Write-Host "Attempting to run tests against an already-running emulator at $host:$port"
+
+# Wait briefly for port to be reachable
+$maxWait = 30
+$i = 0
+while (-not (Test-NetConnection -ComputerName $host -Port $port -InformationLevel Quiet) -and $i -lt $maxWait) {
+    Start-Sleep -Seconds 1
+    $i++
+}
+
+if (-not (Test-NetConnection -ComputerName $host -Port $port -InformationLevel Quiet)) {
+    Write-Error "Emulator not reachable at $host:$port after waiting $maxWait seconds. Aborting."
+    Exit 2
+}
+
+# Export emulator env var for Flutter tests
+$env:FIRESTORE_EMULATOR_HOST = "$host`:$port"
+if ($json -and $json.emulators -and $json.emulators.auth) {
+    $authHost = $json.emulators.auth.host
+    $authPort = $json.emulators.auth.port
+    if ($authHost -and $authPort) { $env:FIREBASE_AUTH_EMULATOR_HOST = "$authHost`:$authPort" }
+}
+
+Write-Host "Running flutter test $TestPath (FIRESTORE_EMULATOR_HOST=$env:FIRESTORE_EMULATOR_HOST)"
+flutter test $TestPath
+$exit = $LASTEXITCODE
 
 Exit $exit
