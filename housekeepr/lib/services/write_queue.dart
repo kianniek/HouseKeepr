@@ -51,6 +51,9 @@ class WriteQueue {
 
   // optional attached repositories (set when user signs in)
   AsyncOp Function(QueueOp op)? _opBuilder;
+  // Optional failure handler called when a persistent QueueOp fails after
+  // exhausting retry attempts. Signature: (op, lastError)
+  void Function(QueueOp op, Object? lastError)? _failureHandler;
 
   WriteQueue(this.prefs) {
     _loadFromPrefs();
@@ -62,6 +65,13 @@ class WriteQueue {
     _opBuilder = builder;
     // try to resume running if there are ops
     _run();
+  }
+
+  /// Attach a failure handler which will be called when a persisted QueueOp
+  /// cannot be completed after all retry attempts. The handler receives the
+  /// original [QueueOp] and the last thrown error (if any).
+  void attachFailureHandler(void Function(QueueOp op, Object? lastError)? h) {
+    _failureHandler = h;
   }
 
   // Set the active user id for queue scoping. When a user signs in, call
@@ -130,18 +140,25 @@ class WriteQueue {
     while (_queue.isNotEmpty) {
       final op = _queue.removeAt(0);
       var success = false;
+      Object? lastError;
       while (!success && op.attempts < 5) {
         try {
           final realOp = _opBuilder!(op);
           await realOp();
           success = true;
-        } catch (_) {
+        } catch (e) {
+          lastError = e;
           op.attempts++;
           final delay = Duration(milliseconds: 200 * (1 << op.attempts));
           await Future.delayed(delay);
         }
       }
-      // if still not success after attempts, drop it (could escalate/log)
+      // if still not success after attempts, call failure handler (if any)
+      if (!success) {
+        try {
+          _failureHandler?.call(op, lastError);
+        } catch (_) {}
+      }
       _saveToPrefs();
     }
     _running = false;

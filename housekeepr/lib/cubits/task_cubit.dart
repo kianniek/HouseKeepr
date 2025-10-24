@@ -29,7 +29,9 @@ class TaskCubit extends Cubit<TaskState> {
   }
 
   Future<void> addTask(Task task) async {
-    final list = List<Task>.from(state.tasks)..add(task);
+    // mark as pending locally so UI shows sync status
+    final pending = task.copyWith(syncStatus: SyncStatus.pending);
+    final list = List<Task>.from(state.tasks)..add(pending);
     await repo.saveTasks(list);
     final mode = settings?.getSyncMode() ?? SyncMode.sync;
     if (mode != SyncMode.localOnly) {
@@ -38,8 +40,8 @@ class TaskCubit extends Cubit<TaskState> {
           writeQueue!.enqueueOp(
             QueueOp(
               type: QueueOpType.saveTask,
-              id: task.id,
-              payload: task.toMap(),
+              id: pending.id,
+              payload: pending.toMap(),
             ),
           );
         } else {
@@ -52,7 +54,9 @@ class TaskCubit extends Cubit<TaskState> {
   }
 
   Future<void> updateTask(Task task) async {
-    final list = state.tasks.map((t) => t.id == task.id ? task : t).toList();
+    // When updating, mark local copy as pending until sync completes
+    final pending = task.copyWith(syncStatus: SyncStatus.pending);
+    final list = state.tasks.map((t) => t.id == task.id ? pending : t).toList();
     await repo.saveTasks(list);
     final mode = settings?.getSyncMode() ?? SyncMode.sync;
     if (mode != SyncMode.localOnly) {
@@ -61,8 +65,8 @@ class TaskCubit extends Cubit<TaskState> {
           writeQueue!.enqueueOp(
             QueueOp(
               type: QueueOpType.saveTask,
-              id: task.id,
-              payload: task.toMap(),
+              id: pending.id,
+              payload: pending.toMap(),
             ),
           );
         } else {
@@ -179,6 +183,112 @@ class TaskCubit extends Cubit<TaskState> {
     final current = List<String>.from(t.completedDates ?? <String>[]);
     current.remove(date);
     await updateTask(t.copyWith(completedDates: current));
+  }
+
+  /// Mark the local task with [taskId] as having a sync failure. This updates
+  /// the local repository and emits a new state so the UI can show a failed
+  /// sync badge without re-enqueueing the operation.
+  Future<void> markTaskSyncFailed(String taskId, String? error) async {
+    try {
+      final t = state.tasks.firstWhere((t) => t.id == taskId);
+      final updated = t.copyWith(
+        syncStatus: SyncStatus.failed,
+        lastSyncError: error,
+        isRetrying: false,
+      );
+      await repo.updateTask(updated);
+      final list = state.tasks
+          .map((x) => x.id == taskId ? updated : x)
+          .toList();
+      emit(state.copyWith(tasks: list));
+    } catch (_) {
+      // task not found or update failed: ignore silently
+    }
+  }
+
+  /// Retry syncing a task that previously failed. This updates the local
+  /// task status to `syncing` (persisted), emits the new state, and then
+  /// re-enqueues the save operation on the WriteQueue (or calls remoteRepo
+  /// directly if no queue is attached).
+  Future<bool> retryTask(String taskId) async {
+    try {
+      final t = state.tasks.firstWhere((t) => t.id == taskId);
+      final updating = t.copyWith(
+        syncStatus: SyncStatus.syncing,
+        lastSyncError: null,
+        isRetrying: true,
+      );
+      // persist updated local status
+      await repo.updateTask(updating);
+      final list = state.tasks
+          .map((x) => x.id == taskId ? updating : x)
+          .toList();
+      emit(state.copyWith(tasks: list));
+
+      final mode = settings?.getSyncMode() ?? SyncMode.sync;
+      if (mode == SyncMode.localOnly) return false;
+
+      if (writeQueue != null) {
+        // enqueue the operation again using the updated payload
+        writeQueue!.enqueueOp(
+          QueueOp(
+            type: QueueOpType.saveTask,
+            id: updating.id,
+            payload: updating.toMap(),
+          ),
+        );
+        // show pending until writeQueue processes it and clear isRetrying
+        final pending = updating.copyWith(
+          syncStatus: SyncStatus.pending,
+          isRetrying: false,
+        );
+        await repo.updateTask(pending);
+        final list2 = state.tasks
+            .map((x) => x.id == taskId ? pending : x)
+            .toList();
+        emit(state.copyWith(tasks: list2));
+        return true;
+      } else if (remoteRepo != null) {
+        try {
+          await remoteRepo!.saveTask(updating);
+          // remoteRepo will cause Firestore snapshot eventually which marks as synced
+          // clear isRetrying after direct save succeeded
+          final done = updating.copyWith(isRetrying: false);
+          await repo.updateTask(done);
+          final list3 = state.tasks
+              .map((x) => x.id == taskId ? done : x)
+              .toList();
+          emit(state.copyWith(tasks: list3));
+          return true;
+        } catch (e) {
+          // mark as failed if remote call failed
+          await markTaskSyncFailed(taskId, e.toString());
+          return false;
+        }
+      }
+    } catch (_) {
+      // ignore if task not found
+    }
+    return false;
+  }
+
+  /// Retry all tasks currently marked as failed. Returns the count of
+  /// tasks that were successfully started for retry.
+  Future<int> retryAllFailed() async {
+    final failed = state.tasks
+        .where((t) => t.syncStatus == SyncStatus.failed)
+        .toList();
+    if (failed.isEmpty) return 0;
+    var succeeded = 0;
+    for (final t in failed) {
+      try {
+        final ok = await retryTask(t.id);
+        if (ok) succeeded++;
+      } catch (_) {
+        // ignore per-task errors and continue
+      }
+    }
+    return succeeded;
   }
 }
 

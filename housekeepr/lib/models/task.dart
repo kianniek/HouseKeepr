@@ -6,6 +6,8 @@ import 'package:equatable/equatable.dart';
 
 enum TaskPriority { low, medium, high, urgent }
 
+enum SyncStatus { synced, pending, syncing, failed }
+
 class SubTask extends Equatable {
   final String id;
   final String title;
@@ -72,6 +74,13 @@ class Task extends Equatable {
   // strings (YYYY-MM-DD). This allows marking a repeating task done for a
   // specific day without mutating the repeating template's `completed` flag.
   final List<String>? completedDates;
+  // Sync metadata (local-only fields used to show per-item sync state)
+  final SyncStatus syncStatus;
+  final String? lastSyncError;
+  final DateTime? lastSyncedAt;
+  final int? localVersion;
+  final int? serverVersion;
+  final bool isRetrying;
 
   const Task({
     required this.id,
@@ -89,6 +98,12 @@ class Task extends Equatable {
     this.repeatDays,
     this.completedDates,
     this.isHouseholdTask = false,
+    this.syncStatus = SyncStatus.synced,
+    this.lastSyncError,
+    this.lastSyncedAt,
+    this.localVersion,
+    this.serverVersion,
+    this.isRetrying = false,
   });
 
   Task copyWith({
@@ -107,6 +122,12 @@ class Task extends Equatable {
     List<int>? repeatDays,
     List<String>? completedDates,
     bool? isHouseholdTask,
+    SyncStatus? syncStatus,
+    String? lastSyncError,
+    DateTime? lastSyncedAt,
+    int? localVersion,
+    int? serverVersion,
+    bool? isRetrying,
   }) => Task(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -123,6 +144,12 @@ class Task extends Equatable {
     repeatDays: repeatDays ?? this.repeatDays,
     completedDates: completedDates ?? this.completedDates,
     isHouseholdTask: isHouseholdTask ?? this.isHouseholdTask,
+    syncStatus: syncStatus ?? this.syncStatus,
+    lastSyncError: lastSyncError ?? this.lastSyncError,
+    lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+    localVersion: localVersion ?? this.localVersion,
+    serverVersion: serverVersion ?? this.serverVersion,
+    isRetrying: isRetrying ?? this.isRetrying,
   );
 
   Map<String, dynamic> toMap() => {
@@ -141,6 +168,12 @@ class Task extends Equatable {
     'repeatRule': repeatRule,
     'repeatDays': repeatDays,
     'isHouseholdTask': isHouseholdTask,
+    'syncStatus': syncStatus.toString().split('.').last,
+    'lastSyncError': lastSyncError,
+    'lastSyncedAt': lastSyncedAt?.toUtc().toIso8601String(),
+    'localVersion': localVersion,
+    'serverVersion': serverVersion,
+    'isRetrying': isRetrying,
   };
 
   factory Task.fromMap(Map<String, dynamic> map) => Task(
@@ -255,6 +288,50 @@ class Task extends Equatable {
         : (map['isHouseholdTask'] is String
               ? (map['isHouseholdTask'].toLowerCase() == 'true')
               : false),
+    syncStatus: () {
+      final s = map['syncStatus'];
+      if (s is String) {
+        final name = s.toLowerCase();
+        for (final v in SyncStatus.values) {
+          if (v.toString().split('.').last.toLowerCase() == name) return v;
+        }
+      }
+      return SyncStatus.synced;
+    }(),
+    lastSyncError: map['lastSyncError'] is String
+        ? map['lastSyncError'] as String
+        : (map['lastSyncError']?.toString()),
+    lastSyncedAt: () {
+      final v = map['lastSyncedAt'];
+      if (v is DateTime) return v;
+      // Firestore Timestamp
+      try {
+        if (v is fs.Timestamp) return v.toDate().toUtc();
+      } catch (_) {}
+      if (v is String && v.isNotEmpty) {
+        try {
+          return DateTime.parse(v).toUtc();
+        } catch (_) {}
+      }
+      return null;
+    }(),
+    localVersion: () {
+      final v = map['localVersion'];
+      if (v is int) return v;
+      if (v is String) return int.tryParse(v);
+      return null;
+    }(),
+    serverVersion: () {
+      final v = map['serverVersion'];
+      if (v is int) return v;
+      if (v is String) return int.tryParse(v);
+      return null;
+    }(),
+    isRetrying: map['isRetrying'] is bool
+        ? map['isRetrying'] as bool
+        : (map['isRetrying'] is String
+              ? (map['isRetrying'].toLowerCase() == 'true')
+              : false),
   );
 
   String toJson() => json.encode(toMap());
@@ -278,5 +355,11 @@ class Task extends Equatable {
     repeatDays,
     completedDates,
     isHouseholdTask,
+    syncStatus,
+    lastSyncError,
+    lastSyncedAt,
+    localVersion,
+    serverVersion,
+    isRetrying,
   ];
 }

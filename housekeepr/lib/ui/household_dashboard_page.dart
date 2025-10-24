@@ -9,16 +9,30 @@ import '../models/task.dart';
 import '../models/shopping_item.dart';
 import 'profile_menu.dart';
 
-class TaskListTile extends StatelessWidget {
+class TaskListTile extends StatefulWidget {
   final Task task;
   final Color? tileColor;
   const TaskListTile({super.key, required this.task, this.tileColor});
 
   @override
+  State<TaskListTile> createState() => _TaskListTileState();
+}
+
+class _TaskListTileState extends State<TaskListTile> {
+  bool _retrying = false;
+
+  @override
   Widget build(BuildContext context) {
+    final task = widget.task;
     return ListTile(
-      tileColor: tileColor?.withAlpha((0.18 * 255).round()),
-      title: Text(task.title),
+      tileColor: widget.tileColor?.withAlpha((0.18 * 255).round()),
+      title: Row(
+        children: [
+          Expanded(child: Text(task.title)),
+          // small sync status badge (pass lastSyncError so badge can show details)
+          _SyncBadge(status: task.syncStatus, error: task.lastSyncError),
+        ],
+      ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -28,13 +42,103 @@ class TaskListTile extends StatelessWidget {
           if (task.description != null) Text(task.description!),
         ],
       ),
-      trailing: Checkbox(
-        value: task.completed,
-        onChanged: (val) => context.read<TaskCubit>().updateTask(
-          task.copyWith(completed: val ?? false),
-        ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Checkbox(
+            value: task.completed,
+            onChanged: (val) => context.read<TaskCubit>().updateTask(
+              task.copyWith(completed: val ?? false),
+            ),
+          ),
+          if (task.syncStatus == SyncStatus.failed)
+            _retrying
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Retry sync',
+                    onPressed: () async {
+                      setState(() => _retrying = true);
+                      // Capture messenger before awaiting to avoid using BuildContext
+                      // across async gaps (analyzer: use_build_context_synchronously).
+                      final messenger = ScaffoldMessenger.of(context);
+                      final ok = await context.read<TaskCubit>().retryTask(
+                        task.id,
+                      );
+                      if (!mounted) return;
+                      setState(() => _retrying = false);
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            ok ? 'Retry started' : 'Retry failed to start',
+                          ),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+        ],
       ),
     );
+  }
+}
+
+class _SyncBadge extends StatelessWidget {
+  final SyncStatus status;
+  final String? error;
+  const _SyncBadge({required this.status, this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    IconData icon;
+    String label;
+    switch (status) {
+      case SyncStatus.pending:
+        color = Colors.orange;
+        icon = Icons.hourglass_top;
+        label = 'Pending sync';
+        break;
+      case SyncStatus.syncing:
+        color = Colors.blue;
+        icon = Icons.sync;
+        label = 'Syncing';
+        break;
+      case SyncStatus.failed:
+        color = Theme.of(context).colorScheme.error;
+        icon = Icons.error;
+        label = 'Sync failed';
+        break;
+      case SyncStatus.synced:
+        color = Colors.green;
+        icon = Icons.check_circle;
+        label = 'Synced';
+        break;
+    }
+    final badge = Semantics(
+      label: label,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 8.0),
+        child: Icon(icon, size: 16, color: color),
+      ),
+    );
+
+    if (status == SyncStatus.failed && (error != null && error!.isNotEmpty)) {
+      return InkWell(
+        onTap: () {
+          final msg = error ?? 'Unknown sync error';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), duration: const Duration(seconds: 3)),
+          );
+        },
+        child: Tooltip(message: error, child: badge),
+      );
+    }
+    return badge;
   }
 }
 
@@ -154,6 +258,39 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage>
                       ),
                     ),
                     const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Retry all failed tasks',
+                      icon: const Icon(Icons.refresh),
+                      onPressed: () async {
+                        final cubit = context.read<TaskCubit>();
+                        final failedCount = cubit.state.tasks
+                            .where((t) => t.syncStatus == SyncStatus.failed)
+                            .length;
+                        final messenger = ScaffoldMessenger.of(context);
+                        if (failedCount == 0) {
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('No failed tasks to retry'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          return;
+                        }
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text('Retrying $failedCount failed tasks'),
+                          ),
+                        );
+                        final succeeded = await cubit.retryAllFailed();
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Retried $succeeded of $failedCount tasks',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                     ValueListenableBuilder<TextEditingValue>(
                       valueListenable: _taskController,
                       builder: (context, value, child) {
@@ -178,7 +315,9 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage>
                           final t = tasks[idx];
                           return Dismissible(
                             key: ValueKey(t.id),
-                            direction: DismissDirection.endToStart,
+                            direction: t.isRetrying
+                                ? DismissDirection.none
+                                : DismissDirection.endToStart,
                             background: Container(
                               color: Theme.of(context).colorScheme.error,
                               alignment: Alignment.centerRight,

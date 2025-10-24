@@ -367,6 +367,21 @@ class _HouseholdAppState extends State<HouseholdApp> {
       };
     });
 
+    // Attach a failure handler so persistent queue failures can be surfaced
+    // to the UI by marking the local Task as failed.
+    writeQueue.attachFailureHandler((op, lastError) {
+      try {
+        switch (op.type) {
+          case QueueOpType.saveTask:
+          case QueueOpType.deleteTask:
+            _taskCubit?.markTaskSyncFailed(op.id, lastError?.toString());
+            break;
+          default:
+            break;
+        }
+      } catch (_) {}
+    });
+
     // Wire writeQueue to cubits and sync service by setting it where needed
     _taskCubit!.attachWriteQueueAndHistory(writeQueue, historyRepo);
 

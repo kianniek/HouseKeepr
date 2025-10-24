@@ -25,7 +25,12 @@ class FirestoreSyncService {
       final tasks = snap.docs.map((d) {
         final m = Map<String, dynamic>.from(d.data());
         m['id'] = d.id;
-        return Task.fromMap(m);
+        // mark server-origin tasks as synced locally
+        final t = Task.fromMap(m);
+        return t.copyWith(
+          syncStatus: SyncStatus.synced,
+          lastSyncedAt: DateTime.now().toUtc(),
+        );
       }).toList();
       taskCubit.replaceAll(tasks);
     });
