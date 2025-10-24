@@ -5,7 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 typedef AsyncOp = Future<void> Function();
 
-enum QueueOpType { saveTask, deleteTask, saveShopping, deleteShopping }
+enum QueueOpType {
+  saveTask,
+  deleteTask,
+  saveShopping,
+  deleteShopping,
+  saveHistory,
+  deleteHistory,
+}
 
 class QueueOp {
   final QueueOpType type;

@@ -99,9 +99,9 @@ class _ProfileMenuAvatarState extends State<_ProfileMenuAvatar> {
         doc,
       ) {
         final data = doc.data();
-        if (data != null && data['personalColor'] != null) {
+        if (data?['personalColor'] != null) {
           setState(() {
-            _color = Color(data['personalColor'] as int);
+            _color = Color(data!['personalColor'] as int);
           });
         }
       });

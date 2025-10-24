@@ -11,7 +11,6 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'ui/login_page.dart';
 import 'ui/household_create_page.dart';
-import 'ui/household_dashboard_page.dart';
 import 'ui/home_screen.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,6 +21,11 @@ import 'repositories/task_repository.dart';
 import 'repositories/shopping_repository.dart';
 import 'firestore/firestore_task_repository.dart';
 import 'firestore/firestore_shopping_repository.dart';
+import 'models/task.dart';
+import 'repositories/history_repository.dart';
+import 'firestore/firestore_history_repository.dart';
+import 'services/write_queue.dart';
+import 'models/completion_record.dart';
 import 'services/firestore_sync_service.dart';
 
 Future<void> main() async {
@@ -325,6 +329,46 @@ class _HouseholdAppState extends State<HouseholdApp> {
     );
     _taskCubit!.setRemoteRepository(remoteTask);
     _shoppingCubit!.setRemoteRepository(remoteShopping);
+
+    // History: local repo + remote
+    final historyRepo = HistoryRepository(prefs);
+    final remoteHistory = FirestoreHistoryRepository(
+      FirebaseFirestore.instance,
+      userId: widget.user.uid,
+    );
+    // Attach write queue and op builder so remote writes are queued when offline
+    final writeQueue = WriteQueue(prefs);
+    // set user id so queue persists per user
+    writeQueue.setUserId(widget.user.uid);
+    writeQueue.attachOpBuilder((op) {
+      return () async {
+        switch (op.type) {
+          case QueueOpType.saveTask:
+            // payload expected to be a serialized task map
+            await remoteTask.saveTask(Task.fromMap(op.payload!));
+            break;
+          case QueueOpType.deleteTask:
+            await remoteTask.deleteTask(op.id);
+            break;
+          case QueueOpType.saveShopping:
+            // handled elsewhere; ignore here
+            break;
+          case QueueOpType.deleteShopping:
+            break;
+          case QueueOpType.saveHistory:
+            await remoteHistory.saveRecord(
+              CompletionRecord.fromMap(op.payload!.cast<String, dynamic>()),
+            );
+            break;
+          case QueueOpType.deleteHistory:
+            await remoteHistory.deleteRecord(op.id);
+            break;
+        }
+      };
+    });
+
+    // Wire writeQueue to cubits and sync service by setting it where needed
+    _taskCubit!.attachWriteQueueAndHistory(writeQueue, historyRepo);
 
     // Start sync service to keep cubits in sync with Firestore
     _syncService = FirestoreSyncService(FirebaseFirestore.instance);

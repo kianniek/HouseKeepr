@@ -16,8 +16,26 @@ class TasksPage extends StatefulWidget {
   State<TasksPage> createState() => _TasksPageState();
 }
 
-class _TasksPageState extends State<TasksPage> {
+class _TasksPageState extends State<TasksPage>
+    with SingleTickerProviderStateMixin {
   int _tabIndex = 0; // 0 = Regular, 1 = Repeating
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      setState(() => _tabIndex = _tabController.index);
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,15 +47,11 @@ class _TasksPageState extends State<TasksPage> {
           appBar: AppBar(
             title: const Text('Tasks'),
             bottom: TabBar(
-              controller: TabController(
-                length: 2,
-                vsync: ScaffoldMessenger.of(context),
-              ),
+              controller: _tabController,
               tabs: const [
                 Tab(text: 'Regular'),
                 Tab(text: 'Repeating'),
               ],
-              onTap: (idx) => setState(() => _tabIndex = idx),
             ),
           ),
           body: _tabIndex == 0
@@ -151,6 +165,97 @@ class _TasksPageState extends State<TasksPage> {
     Task t, {
     bool isRepeating = false,
   }) {
+    DateTime? nextOccurrence(Task task) {
+      if (!task.isRepeating) return null;
+      final now = DateTime.now();
+      switch (task.repeatRule) {
+        case 'daily':
+          // Attach time-of-day from the task.deadline when available.
+          final hour = task.deadline?.toLocal().hour ?? 9;
+          final minute = task.deadline?.toLocal().minute ?? 0;
+          return DateTime(now.year, now.month, now.day, hour, minute);
+        case 'weekly':
+          final days = task.repeatDays ?? [];
+          if (days.isNotEmpty) {
+            for (int offset = 0; offset < 7; offset++) {
+              final check = now.add(Duration(days: offset));
+              if (days.contains(check.weekday)) {
+                final hour = task.deadline?.toLocal().hour ?? 9;
+                final minute = task.deadline?.toLocal().minute ?? 0;
+                return DateTime(
+                  check.year,
+                  check.month,
+                  check.day,
+                  hour,
+                  minute,
+                );
+              }
+            }
+            return null;
+          }
+          // fallback to deadline weekday
+          if (task.deadline != null) {
+            final targetWeekday = task.deadline!.weekday;
+            for (int offset = 0; offset < 7; offset++) {
+              final check = now.add(Duration(days: offset));
+              if (check.weekday == targetWeekday) {
+                final hour = task.deadline?.toLocal().hour ?? 9;
+                final minute = task.deadline?.toLocal().minute ?? 0;
+                return DateTime(
+                  check.year,
+                  check.month,
+                  check.day,
+                  hour,
+                  minute,
+                );
+              }
+            }
+          }
+          return null;
+        case 'monthly':
+          if (task.deadline != null) {
+            final day = task.deadline!.day;
+            final hour = task.deadline?.toLocal().hour ?? 9;
+            final minute = task.deadline?.toLocal().minute ?? 0;
+            final candidate = DateTime(now.year, now.month, day, hour, minute);
+            if (!candidate.isBefore(now)) return candidate;
+            // next month
+            final nextMonth = DateTime(
+              now.year,
+              now.month + 1,
+              day,
+              hour,
+              minute,
+            );
+            return nextMonth;
+          }
+          return null;
+        default:
+          return null;
+      }
+    }
+
+    String friendlyDate(DateTime d) {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final dt = DateTime(d.year, d.month, d.day);
+      final diff = dt.difference(today).inDays;
+      final local = d.toLocal();
+      String timePart() {
+        final hh = local.hour.toString().padLeft(2, '0');
+        final mm = local.minute.toString().padLeft(2, '0');
+        return ' at $hh:$mm';
+      }
+
+      if (diff == 0) return 'Today${timePart()}';
+      if (diff == 1) return 'Tomorrow${timePart()}';
+      if (diff > 1 && diff < 7) return 'In $diff days${timePart()}';
+      // otherwise return ISO date (YYYY-MM-DD) and time if present
+      final datePart =
+          '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+      return '$datePart${timePart()}';
+    }
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: ListTile(
@@ -177,6 +282,81 @@ class _TasksPageState extends State<TasksPage> {
                 )
               else
                 Text('Repeats: ${t.repeatRule}'),
+              // show next occurrence when repeating
+              if (t.isRepeating)
+                Builder(
+                  builder: (ctx) {
+                    final next = nextOccurrence(t);
+                    if (next != null) {
+                      return Text('Next: ${friendlyDate(next)}');
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              if (t.completedDates != null && t.completedDates!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Text('Last completed: ${t.completedDates!.last}'),
+                ),
+              // inline weekly weekday editor
+              if (t.repeatRule == 'weekly')
+                Padding(
+                  padding: const EdgeInsets.only(top: 6.0),
+                  child: Wrap(
+                    spacing: 6,
+                    children: List.generate(7, (idx) {
+                      final weekday = idx + 1;
+                      const names = [
+                        'Mon',
+                        'Tue',
+                        'Wed',
+                        'Thu',
+                        'Fri',
+                        'Sat',
+                        'Sun',
+                      ];
+                      final selected = t.repeatDays?.contains(weekday) ?? false;
+                      return FilterChip(
+                        label: Text(
+                          names[idx],
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        selected: selected,
+                        onSelected: (v) {
+                          final prev = List<int>.from(t.repeatDays ?? <int>[]);
+                          final current = Set<int>.from(
+                            t.repeatDays ?? <int>{},
+                          );
+                          if (v) {
+                            current.add(weekday);
+                          } else {
+                            current.remove(weekday);
+                          }
+                          final updated = t.copyWith(
+                            repeatDays: current.toList(),
+                          );
+                          context.read<TaskCubit>().updateTask(updated);
+                          // Show an inline snackbar with Undo to restore previous days
+                          ScaffoldMessenger.of(context).clearSnackBars();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Updated repeating days'),
+                              action: SnackBarAction(
+                                label: 'Undo',
+                                onPressed: () {
+                                  context.read<TaskCubit>().updateTask(
+                                    t.copyWith(repeatDays: prev),
+                                  );
+                                },
+                              ),
+                              duration: const Duration(seconds: 3),
+                            ),
+                          );
+                        },
+                      );
+                    }),
+                  ),
+                ),
             ],
           ],
         ),
@@ -184,11 +364,27 @@ class _TasksPageState extends State<TasksPage> {
             (t.assignedToName != null || t.isHouseholdTask) &&
             t.description != null,
         leading: Checkbox(
-          value: t.completed,
-          onChanged: (v) {
-            context.read<TaskCubit>().updateTask(
-              t.copyWith(completed: v ?? false),
-            );
+          value: t.isRepeating
+              ? (t.completedDates ?? []).contains(
+                  DateTime.now().toUtc().toIso8601String().split('T')[0],
+                )
+              : t.completed,
+          onChanged: (v) async {
+            if (t.isRepeating) {
+              final todayStr = DateTime.now().toUtc().toIso8601String().split(
+                'T',
+              )[0];
+              final cubit = context.read<TaskCubit>();
+              if (v == true) {
+                await cubit.completeOccurrence(t.id, todayStr);
+              } else {
+                await cubit.uncompleteOccurrence(t.id, todayStr);
+              }
+            } else {
+              context.read<TaskCubit>().updateTask(
+                t.copyWith(completed: v ?? false),
+              );
+            }
           },
         ),
         trailing: Row(
@@ -198,13 +394,152 @@ class _TasksPageState extends State<TasksPage> {
               icon: const Icon(Icons.edit),
               onPressed: () => _showAddDialog(context, t),
             ),
+            // Convert one-off task into repeating template
+            if (!t.isRepeating)
+              IconButton(
+                icon: const Icon(Icons.repeat),
+                tooltip: 'Make repeating',
+                onPressed: () async {
+                  final prevIsRepeating = t.isRepeating;
+                  final prevRule = t.repeatRule;
+                  final prevDays = t.repeatDays;
+                  // Capture cubit and messenger before awaiting so we don't use
+                  // BuildContext across async gaps.
+                  final taskCubit = context.read<TaskCubit>();
+                  final messenger = ScaffoldMessenger.of(context);
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Convert to repeating'),
+                      content: const Text(
+                        'Convert this task into a repeating template? You can adjust the rule in the next dialog.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Convert'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (!mounted) return;
+                  if (confirm != true) return;
+                  final now = DateTime.now();
+                  final edited = t.copyWith(
+                    isRepeating: true,
+                    repeatRule: 'weekly',
+                    repeatDays: [now.weekday],
+                  );
+                  // We're intentionally passing the current BuildContext into the
+                  // dialog helper. We captured context-derived objects (taskCubit
+                  // and messenger) above so it's safe to await here.
+                  // ignore: use_build_context_synchronously
+                  final saved = await _showAddDialog(context, edited);
+                  if (!mounted) return;
+                  if (saved == true) {
+                    // Show snackbar with Undo that will restore previous repeat state
+                    messenger.clearSnackBars();
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: const Text('Converted to repeating'),
+                        action: SnackBarAction(
+                          label: 'Undo',
+                          onPressed: () {
+                            // Restore previous repeat state
+                            taskCubit.updateTask(
+                              t.copyWith(
+                                isRepeating: prevIsRepeating,
+                                repeatRule: prevRule,
+                                repeatDays: prevDays,
+                              ),
+                            );
+                          },
+                        ),
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                  }
+                },
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.cancel),
+                tooltip: 'Stop repeating',
+                onPressed: () async {
+                  final prevRule = t.repeatRule;
+                  final prevDays = t.repeatDays;
+                  final prevIsRepeating = t.isRepeating;
+                  // Capture taskCubit and messenger before awaiting the dialog.
+                  final taskCubit = context.read<TaskCubit>();
+                  final messenger = ScaffoldMessenger.of(context);
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Stop repeating'),
+                      content: const Text(
+                        'Stop repeating this task? This will convert it to a one-off task.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Stop'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (!mounted) return;
+                  if (confirm != true) return;
+                  taskCubit.updateTask(
+                    t.copyWith(
+                      isRepeating: false,
+                      repeatRule: null,
+                      repeatDays: null,
+                    ),
+                  );
+                  messenger.clearSnackBars();
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: const Text('Stopped repeating'),
+                      action: SnackBarAction(
+                        label: 'Undo',
+                        onPressed: () {
+                          taskCubit.updateTask(
+                            t.copyWith(
+                              isRepeating: prevIsRepeating,
+                              repeatRule: prevRule,
+                              repeatDays: prevDays,
+                            ),
+                          );
+                        },
+                      ),
+                      duration: const Duration(seconds: 4),
+                    ),
+                  );
+                },
+              ),
             if (t.isHouseholdTask &&
                 (t.assignedToId == null || t.assignedToId!.isEmpty))
               ElevatedButton(
                 onPressed: () async {
-                  // Simulate picking up: assign to current user (replace with real user info)
-                  final userId = 'currentUserId';
-                  final userName = 'You';
+                  // Assign to the real current user when possible
+                  fb.User? user = widget.currentUser;
+                  if (user == null) {
+                    try {
+                      user = fb.FirebaseAuth.instance.currentUser;
+                    } catch (_) {
+                      user = null;
+                    }
+                  }
+                  final userId = user?.uid ?? 'currentUserId';
+                  final userName = user?.displayName ?? user?.email ?? 'You';
                   context.read<TaskCubit>().updateTask(
                     t.copyWith(
                       assignedToId: userId,
@@ -225,7 +560,7 @@ class _TasksPageState extends State<TasksPage> {
     );
   }
 
-  void _showAddDialog(BuildContext context, [Task? taskToEdit]) {
+  Future<bool?> _showAddDialog(BuildContext context, [Task? taskToEdit]) async {
     final titleCtl = TextEditingController(text: taskToEdit?.title ?? '');
     final descCtl = TextEditingController(text: taskToEdit?.description ?? '');
     final assignedCtl = TextEditingController();
@@ -267,7 +602,7 @@ class _TasksPageState extends State<TasksPage> {
       }
     }
 
-    showDialog(
+    final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         bool canAdd() => titleCtl.text.trim().isNotEmpty;
@@ -470,7 +805,7 @@ class _TasksPageState extends State<TasksPage> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => Navigator.pop(dialogContext, false),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -532,7 +867,7 @@ class _TasksPageState extends State<TasksPage> {
                             );
                             context.read<TaskCubit>().addTask(task);
                           }
-                          Navigator.pop(context);
+                          Navigator.pop(dialogContext, true);
                         }
                       : null,
                   child: Text(taskToEdit == null ? 'Add' : 'Save'),
@@ -543,5 +878,6 @@ class _TasksPageState extends State<TasksPage> {
         );
       },
     );
+    return result;
   }
 }

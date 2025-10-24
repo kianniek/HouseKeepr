@@ -1,0 +1,112 @@
+name: Firestore Integration Tests
+
+on:
+  push:
+    branches: [ FlutterApp, main, master ]
+  pull_request:
+    branches: [ FlutterApp, main, master ]
+
+jobs:
+  firestore-emulator-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java (required by Firebase emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Install Node.js (for firebase-tools)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Firebase CLI
+        run: |
+          npm install -g firebase-tools@latest
+
+      - name: Start Firestore emulator
+        run: |
+          firebase emulators:start --only firestore --project=demo-project > firebase-emulator.log 2>&1 &
+          EMULATOR_PID=$!
+          echo "emulator pid: $EMULATOR_PID"
+          # wait for "All emulators ready" or timeout
+          for i in {1..30}; do
+            if grep -q "All emulators ready" firebase-emulator.log; then
+              echo "Emulator ready"
+              break
+            fi
+            sleep 1
+          done
+          if ! grep -q "All emulators ready" firebase-emulator.log; then
+            echo "Emulator failed to start:" && tail -n +1 firebase-emulator.log
+            exit 1
+          fi
+        shell: bash
+
+      - name: Set emulator env vars
+        run: |
+          echo "FIRESTORE_EMULATOR_HOST=localhost:8080" >> $GITHUB_ENV
+
+      - name: Run VM REST Firestore emulator test
+        run: |
+          echo "Running VM-only REST test against Firestore emulator"
+          cd housekeepr
+          # Use dart test so flutter_test doesn't override HttpClient
+          dart pub get
+          dart test test/integration/firestore_task_repository_emulator_rest_test.dart --reporter expanded
+        shell: bash
+
+      - name: Set up Android SDK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: default
+          arch: x86_64
+          force-avd-creation: true
+          emulator-options: '-no-window -no-audio -no-boot-anim'
+          script: |
+            echo "noop (satisfy required input)"
+
+      - name: Wait for emulator
+        run: |
+          adb wait-for-device
+          adb shell getprop init.svc.bootanim || true
+          # wait until boot completed
+          for i in {1..60}; do
+            BOOT=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            if [ "$BOOT" = "1" ]; then
+              echo "Emulator booted"
+              break
+            fi
+            sleep 1
+          done
+        shell: bash
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+        working-directory: ./housekeepr
+
+      - name: Run integration tests on device
+        run: |
+          cd housekeepr
+          flutter test integration_test
+        shell: bash
+
+      - name: Stop emulator
+        if: always()
+        run: |
+          if [ -n "${EMULATOR_PID:-}" ]; then
+            kill $EMULATOR_PID || true
+          fi
+        shell: bash

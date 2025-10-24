@@ -42,9 +42,9 @@ class _ProfilePageState extends State<ProfilePage> {
     widget.apis.firestore.collection('users').doc(widget.user.uid).get().then((
       data,
     ) {
-      if (data != null && data['personalColor'] != null) {
+      if (data?['personalColor'] != null) {
         setState(() {
-          _selectedColor = Color(data['personalColor'] as int);
+          _selectedColor = Color(data!['personalColor'] as int);
         });
       }
     });
@@ -72,7 +72,7 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       );
       if (!mounted) return;
-      if (bytes != null && bytes is Uint8List) {
+      if (bytes is Uint8List) {
         croppedBytes = bytes;
       }
     }
@@ -147,7 +147,7 @@ class _ProfilePageState extends State<ProfilePage> {
           try {
             if (!mounted) return;
             final userCubit = context.read<UserCubit?>();
-            if (userCubit != null) userCubit.setUser(refreshed);
+            userCubit?.setUser(refreshed);
           } catch (_) {
             // no cubit provided; ignore
           }
@@ -186,6 +186,7 @@ class _ProfilePageState extends State<ProfilePage> {
       );
       await widget.apis.firestore.collection('users').doc(widget.user.uid).set({
         'displayName': name,
+        // ignore: deprecated_member_use
         if (_selectedColor != null) 'personalColor': _selectedColor!.value,
       }, merge: true);
       await widget.user.reload();
@@ -227,7 +228,10 @@ class _ProfilePageState extends State<ProfilePage> {
         decoration: color != null
             ? BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [color.withOpacity(0.10), color.withOpacity(0.03)],
+                  colors: [
+                    color.withAlpha((0.10 * 255).round()),
+                    color.withAlpha((0.03 * 255).round()),
+                  ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -242,12 +246,13 @@ class _ProfilePageState extends State<ProfilePage> {
                 CircleAvatar(
                   radius: 48,
                   backgroundImage: NetworkImage(user.photoURL!),
-                  backgroundColor: color?.withOpacity(0.7),
+                  backgroundColor: color?.withAlpha((0.7 * 255).round()),
                 )
               else
                 CircleAvatar(
                   radius: 48,
-                  backgroundColor: color?.withOpacity(0.7) ?? Colors.grey[300],
+                  backgroundColor:
+                      color?.withAlpha((0.7 * 255).round()) ?? Colors.grey[300],
                   child: const Icon(Icons.person, size: 48),
                 ),
               const SizedBox(height: 8),
@@ -271,7 +276,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   labelText: 'Display name',
                   labelStyle: TextStyle(color: color),
                   filled: color != null,
-                  fillColor: color?.withOpacity(0.08),
+                  fillColor: color?.withAlpha((0.08 * 255).round()),
                   enabledBorder: OutlineInputBorder(
                     borderSide: BorderSide(color: color ?? Colors.grey),
                   ),

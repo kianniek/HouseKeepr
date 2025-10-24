@@ -115,17 +115,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
 // Extracted from HouseholdDashboardPage for reuse
 class TasksTab extends StatelessWidget {
+  const TasksTab({super.key});
+
   @override
   Widget build(BuildContext context) {
     // Reuse the logic from HouseholdDashboardPage
-    final TextEditingController _taskController = TextEditingController();
-    Future<void> _addTask() async {
-      final text = _taskController.text.trim();
+    final TextEditingController taskController = TextEditingController();
+    Future<void> addTask() async {
+      final text = taskController.text.trim();
       if (text.isEmpty) return;
       final id = const Uuid().v4();
       final task = Task(id: id, title: text);
       context.read<TaskCubit>().addTask(task);
-      _taskController.clear();
+      taskController.clear();
     }
 
     return Column(
@@ -134,17 +136,17 @@ class TasksTab extends StatelessWidget {
           children: [
             Expanded(
               child: TextField(
-                controller: _taskController,
+                controller: taskController,
                 decoration: const InputDecoration(labelText: 'Add new task'),
               ),
             ),
             const SizedBox(width: 8),
             ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _taskController,
+              valueListenable: taskController,
               builder: (context, value, child) {
                 final canAdd = value.text.trim().isNotEmpty;
                 return ElevatedButton(
-                  onPressed: canAdd ? _addTask : null,
+                  onPressed: canAdd ? addTask : null,
                   child: const Text('Add'),
                 );
               },
@@ -221,6 +223,8 @@ class TasksTab extends StatelessWidget {
 }
 
 class ShoppingTab extends StatelessWidget {
+  const ShoppingTab({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -287,7 +291,7 @@ class ShoppingTab extends StatelessWidget {
 
 class ForYouFeed extends StatelessWidget {
   final fb.User user;
-  const ForYouFeed({Key? key, required this.user}) : super(key: key);
+  const ForYouFeed({super.key, required this.user});
 
   @override
   Widget build(BuildContext context) {
@@ -321,7 +325,7 @@ class ForYouFeed extends StatelessWidget {
 
 class EveryoneFeed extends StatelessWidget {
   final fb.User user;
-  const EveryoneFeed({Key? key, required this.user}) : super(key: key);
+  const EveryoneFeed({super.key, required this.user});
 
   @override
   Widget build(BuildContext context) {

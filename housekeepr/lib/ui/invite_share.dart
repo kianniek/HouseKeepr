@@ -16,9 +16,9 @@ class InviteShare extends StatelessWidget {
   void _share(BuildContext context) {
     final code = home.inviteCode ?? '';
     final link = '$baseUrl?code=$code&home=${home.id}';
-    Share.share(
-      'Join my HouseKeepr home "${home.name}" using this link: $link',
-    );
+    final message =
+        'Join my HouseKeepr home "${home.name}" using this link: $link';
+    SharePlus.instance.share(ShareParams(text: message));
   }
 
   @override

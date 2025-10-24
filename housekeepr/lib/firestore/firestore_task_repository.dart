@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart' as fs;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/task.dart';
 import 'remote_task_repository.dart';
@@ -18,7 +19,11 @@ class FirestoreTaskRepository implements RemoteTaskRepository {
 
   @override
   Future<void> saveTask(Task task) async {
-    final data = task.toMap();
+    final data = Map<String, dynamic>.from(task.toMap());
+    // Convert deadline to Firestore Timestamp when present
+    if (task.deadline != null) {
+      data['deadline'] = fs.Timestamp.fromDate(task.deadline!.toUtc());
+    }
     final id = task.id;
     await _col.doc(id).set(data);
   }

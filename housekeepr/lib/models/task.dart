@@ -1,4 +1,6 @@
 import 'dart:convert';
+// Optional import to detect Firestore Timestamp when reading remote docs.
+import 'package:cloud_firestore/cloud_firestore.dart' as fs;
 
 import 'package:equatable/equatable.dart';
 
@@ -66,6 +68,10 @@ class Task extends Equatable {
   final List<int>?
   repeatDays; // for weekly repeats: DateTime.weekday values (1=Mon..7=Sun)
   final bool isHouseholdTask;
+  // For repeating tasks we record per-occurrence completions as ISO date
+  // strings (YYYY-MM-DD). This allows marking a repeating task done for a
+  // specific day without mutating the repeating template's `completed` flag.
+  final List<String>? completedDates;
 
   const Task({
     required this.id,
@@ -81,6 +87,7 @@ class Task extends Equatable {
     this.isRepeating = false,
     this.repeatRule,
     this.repeatDays,
+    this.completedDates,
     this.isHouseholdTask = false,
   });
 
@@ -98,6 +105,7 @@ class Task extends Equatable {
     bool? isRepeating,
     String? repeatRule,
     List<int>? repeatDays,
+    List<String>? completedDates,
     bool? isHouseholdTask,
   }) => Task(
     id: id ?? this.id,
@@ -113,6 +121,7 @@ class Task extends Equatable {
     isRepeating: isRepeating ?? this.isRepeating,
     repeatRule: repeatRule ?? this.repeatRule,
     repeatDays: repeatDays ?? this.repeatDays,
+    completedDates: completedDates ?? this.completedDates,
     isHouseholdTask: isHouseholdTask ?? this.isHouseholdTask,
   );
 
@@ -128,6 +137,7 @@ class Task extends Equatable {
     'photoPath': photoPath,
     'deadline': deadline?.toUtc().toIso8601String(),
     'isRepeating': isRepeating,
+    'completedDates': completedDates,
     'repeatRule': repeatRule,
     'repeatDays': repeatDays,
     'isHouseholdTask': isHouseholdTask,
@@ -191,12 +201,27 @@ class Task extends Equatable {
         : (map['completed'] is String
               ? (map['completed'].toLowerCase() == 'true')
               : (map['completed'] is int ? (map['completed'] != 0) : false)),
+    completedDates: () {
+      final cd = map['completedDates'];
+      if (cd is List) return cd.whereType<String>().toList();
+      if (cd is String && cd.isNotEmpty) {
+        try {
+          final parsed = json.decode(cd);
+          if (parsed is List) return parsed.whereType<String>().toList();
+        } catch (_) {}
+      }
+      return null;
+    }(),
     photoPath: map['photoPath'] is String
         ? map['photoPath'] as String
         : (map['photoPath']?.toString()),
     deadline: () {
       final v = map['deadline'];
       if (v is DateTime) return v;
+      // Firestore Timestamp
+      try {
+        if (v is fs.Timestamp) return v.toDate().toUtc();
+      } catch (_) {}
       if (v is String && v.isNotEmpty) {
         try {
           return DateTime.parse(v).toUtc();
@@ -251,6 +276,7 @@ class Task extends Equatable {
     isRepeating,
     repeatRule,
     repeatDays,
+    completedDates,
     isHouseholdTask,
   ];
 }

@@ -37,6 +37,14 @@ class TaskRepository {
     return task;
   }
 
+  /// Persist a complete [Task] object. Useful when callers construct full
+  /// Task instances (with id), e.g. during imports or complex creation flows.
+  Future<void> createTaskObject(Task task) async {
+    final tasks = loadTasks();
+    tasks.add(task);
+    await saveTasks(tasks);
+  }
+
   Future<void> updateTask(Task task) async {
     final tasks = loadTasks();
     final idx = tasks.indexWhere((t) => t.id == task.id);

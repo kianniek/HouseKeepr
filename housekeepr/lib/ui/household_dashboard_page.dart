@@ -12,12 +12,12 @@ import 'profile_menu.dart';
 class TaskListTile extends StatelessWidget {
   final Task task;
   final Color? tileColor;
-  const TaskListTile({required this.task, this.tileColor});
+  const TaskListTile({super.key, required this.task, this.tileColor});
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      tileColor: tileColor?.withOpacity(0.18),
+      tileColor: tileColor?.withAlpha((0.18 * 255).round()),
       title: Text(task.title),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,7 +319,7 @@ class _HouseholdDashboardPageState extends State<HouseholdDashboardPage>
 }
 
 class ShoppingAddRow extends StatefulWidget {
-  const ShoppingAddRow();
+  const ShoppingAddRow({super.key});
 
   @override
   State<ShoppingAddRow> createState() => ShoppingAddRowState();
