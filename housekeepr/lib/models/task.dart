@@ -70,6 +70,7 @@ class Task extends Equatable {
   final List<int>?
   repeatDays; // for weekly repeats: DateTime.weekday values (1=Mon..7=Sun)
   final bool isHouseholdTask;
+  final bool archived;
   // For repeating tasks we record per-occurrence completions as ISO date
   // strings (YYYY-MM-DD). This allows marking a repeating task done for a
   // specific day without mutating the repeating template's `completed` flag.
@@ -98,6 +99,7 @@ class Task extends Equatable {
     this.repeatDays,
     this.completedDates,
     this.isHouseholdTask = false,
+    this.archived = false,
     this.syncStatus = SyncStatus.synced,
     this.lastSyncError,
     this.lastSyncedAt,
@@ -128,6 +130,7 @@ class Task extends Equatable {
     int? localVersion,
     int? serverVersion,
     bool? isRetrying,
+    bool? archived,
   }) => Task(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -150,6 +153,7 @@ class Task extends Equatable {
     localVersion: localVersion ?? this.localVersion,
     serverVersion: serverVersion ?? this.serverVersion,
     isRetrying: isRetrying ?? this.isRetrying,
+    archived: archived ?? this.archived,
   );
 
   Map<String, dynamic> toMap() => {
@@ -168,6 +172,7 @@ class Task extends Equatable {
     'repeatRule': repeatRule,
     'repeatDays': repeatDays,
     'isHouseholdTask': isHouseholdTask,
+    'archived': archived,
     'syncStatus': syncStatus.toString().split('.').last,
     'lastSyncError': lastSyncError,
     'lastSyncedAt': lastSyncedAt?.toUtc().toIso8601String(),
@@ -288,6 +293,11 @@ class Task extends Equatable {
         : (map['isHouseholdTask'] is String
               ? (map['isHouseholdTask'].toLowerCase() == 'true')
               : false),
+    archived: map['archived'] is bool
+        ? map['archived'] as bool
+        : (map['archived'] is String
+              ? (map['archived'].toLowerCase() == 'true')
+              : false),
     syncStatus: () {
       final s = map['syncStatus'];
       if (s is String) {
@@ -355,6 +365,7 @@ class Task extends Equatable {
     repeatDays,
     completedDates,
     isHouseholdTask,
+    archived,
     syncStatus,
     lastSyncError,
     lastSyncedAt,

@@ -24,8 +24,25 @@ class TaskCubit extends Cubit<TaskState> {
   }
 
   void load() {
-    final tasks = repo.loadTasks();
-    emit(state.copyWith(tasks: tasks));
+    // Load first page by default to support lazy-loading for long lists.
+    final tasks = repo.loadTasksPage(offset: 0, limit: 20);
+    // Keep track of whether more pages are available via a simple boolean
+    // exposed on the state (conservative: if total local tasks > page size).
+    final all = repo.loadTasks();
+    final hasMore = all.length > tasks.length;
+    emit(state.copyWith(tasks: tasks, hasMore: hasMore));
+  }
+
+  /// Load a subsequent page of tasks and append to current state.
+  Future<void> loadMore({int pageSize = 20}) async {
+    final current = state.tasks;
+    final next = repo.loadTasksPage(offset: current.length, limit: pageSize);
+    if (next.isEmpty) return;
+    final merged = List<Task>.from(current)..addAll(next);
+    final all = repo.loadTasks();
+    final hasMore = all.length > merged.length;
+    await repo.saveTasks(merged);
+    emit(state.copyWith(tasks: merged, hasMore: hasMore));
   }
 
   Future<void> addTask(Task task) async {
@@ -37,11 +54,13 @@ class TaskCubit extends Cubit<TaskState> {
     if (mode != SyncMode.localOnly) {
       if (remoteRepo != null) {
         if (writeQueue != null) {
+          // No previous task for new items; include payload only
+          final payload = pending.toMap();
           writeQueue!.enqueueOp(
             QueueOp(
               type: QueueOpType.saveTask,
               id: pending.id,
-              payload: pending.toMap(),
+              payload: payload,
             ),
           );
         } else {
@@ -56,17 +75,26 @@ class TaskCubit extends Cubit<TaskState> {
   Future<void> updateTask(Task task) async {
     // When updating, mark local copy as pending until sync completes
     final pending = task.copyWith(syncStatus: SyncStatus.pending);
+    final prev = state.tasks.firstWhere(
+      (t) => t.id == task.id,
+      orElse: () => task,
+    );
     final list = state.tasks.map((t) => t.id == task.id ? pending : t).toList();
     await repo.saveTasks(list);
     final mode = settings?.getSyncMode() ?? SyncMode.sync;
     if (mode != SyncMode.localOnly) {
       if (remoteRepo != null) {
         if (writeQueue != null) {
+          // Include previous state in payload to allow rollback on persistent failure
+          final payload = pending.toMap();
+          try {
+            payload['_previous'] = prev.toMap();
+          } catch (_) {}
           writeQueue!.enqueueOp(
             QueueOp(
               type: QueueOpType.saveTask,
               id: pending.id,
-              payload: pending.toMap(),
+              payload: payload,
             ),
           );
         } else {
@@ -85,17 +113,93 @@ class TaskCubit extends Cubit<TaskState> {
   }
 
   Future<void> deleteTask(String id) async {
+    final prev = state.tasks.firstWhere(
+      (t) => t.id == id,
+      orElse: () => throw StateError('task'),
+    );
     final list = List<Task>.from(state.tasks)..removeWhere((t) => t.id == id);
     await repo.saveTasks(list);
     final mode = settings?.getSyncMode() ?? SyncMode.sync;
     if (mode != SyncMode.localOnly) {
       if (remoteRepo != null) {
         if (writeQueue != null) {
-          writeQueue!.enqueueOp(QueueOp(type: QueueOpType.deleteTask, id: id));
+          // include previous item payload so failure handler can restore
+          final payload = <String, dynamic>{};
+          try {
+            payload['_previous'] = prev.toMap();
+          } catch (_) {}
+          writeQueue!.enqueueOp(
+            QueueOp(type: QueueOpType.deleteTask, id: id, payload: payload),
+          );
         } else {
           Future<void> op() => remoteRepo!.deleteTask(id);
           unawaited(op());
         }
+      }
+    }
+    emit(state.copyWith(tasks: list));
+  }
+
+  /// Restore a previously-backed-up task map into the local store without
+  /// re-enqueueing remote operations. This is used by the write-queue failure
+  /// handler to rollback optimistic updates when a persistent remote failure
+  /// occurs.
+  Future<void> restoreTaskFromMap(Map<String, dynamic> m) async {
+    try {
+      final t = Task.fromMap(Map<String, dynamic>.from(m));
+      final list = List<Task>.from(state.tasks);
+      final idx = list.indexWhere((x) => x.id == t.id);
+      if (idx != -1) {
+        list[idx] = t;
+      } else {
+        list.add(t);
+      }
+      await repo.saveTasks(list);
+      emit(state.copyWith(tasks: list));
+    } catch (_) {}
+  }
+
+  /// Mark a task archived locally and persist. This will enqueue a save
+  /// so the remote store receives the update when online.
+  Future<void> archiveTask(String id) async {
+    final t = state.tasks.firstWhere((t) => t.id == id);
+    final updated = t.copyWith(archived: true, syncStatus: SyncStatus.pending);
+    final list = state.tasks.map((x) => x.id == id ? updated : x).toList();
+    await repo.saveTasks(list);
+    if (writeQueue != null) {
+      final payload = updated.toMap();
+      try {
+        payload['_previous'] = t.toMap();
+      } catch (_) {}
+      writeQueue!.enqueueOp(
+        QueueOp(type: QueueOpType.saveTask, id: id, payload: payload),
+      );
+    } else if (remoteRepo != null) {
+      unawaited(remoteRepo!.saveTask(updated));
+    }
+    emit(state.copyWith(tasks: list));
+  }
+
+  /// Bulk-delete tasks locally and enqueue delete ops for each. This will
+  /// persist local state immediately and queue remote deletes.
+  Future<void> bulkDelete(List<String> ids) async {
+    final prevs = state.tasks.where((t) => ids.contains(t.id)).toList();
+    final list = List<Task>.from(state.tasks)
+      ..removeWhere((t) => ids.contains(t.id));
+    await repo.saveTasks(list);
+    if (writeQueue != null) {
+      for (final p in prevs) {
+        final payload = <String, dynamic>{};
+        try {
+          payload['_previous'] = p.toMap();
+        } catch (_) {}
+        writeQueue!.enqueueOp(
+          QueueOp(type: QueueOpType.deleteTask, id: p.id, payload: payload),
+        );
+      }
+    } else if (remoteRepo != null) {
+      for (final id in ids) {
+        unawaited(remoteRepo!.deleteTask(id));
       }
     }
     emit(state.copyWith(tasks: list));

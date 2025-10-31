@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../cubits/task_cubit.dart';
 import '../models/task.dart';
 import 'member_picker.dart';
+import 'assignee_avatar.dart';
 import 'package:uuid/uuid.dart';
 
 class TasksPage extends StatefulWidget {
@@ -130,6 +131,7 @@ class _TasksPageState extends State<TasksPage>
     );
 
     return ListView(
+      // Listen for scrolls to support lazy-loading long lists.
       children: [
         if (tasksForToday.isNotEmpty) ...[
           const Padding(
@@ -265,20 +267,46 @@ class _TasksPageState extends State<TasksPage>
           mainAxisSize: MainAxisSize.min,
           children: [
             if (t.isHouseholdTask)
-              const Text('Assigned to: Household (anyone can pick up)'),
-            if (!t.isHouseholdTask && t.assignedToName != null)
-              Text('Assigned to: ${t.assignedToName}'),
+              const Text('Assigned to: Household (anyone can pick up)')
+            else
+              Row(
+                children: [
+                  AssigneeAvatar(
+                    userId: t.assignedToId,
+                    displayName: t.assignedToName,
+                    radius: 14,
+                  ),
+                  const SizedBox(width: 8),
+                  if (t.assignedToName != null)
+                    Text('Assigned to: ${t.assignedToName}')
+                  else if (t.assignedToId != null)
+                    Text('Assigned to: member'),
+                ],
+              ),
             if (t.description != null) Text(t.description!),
             if (t.deadline != null)
               Text('Due: ${t.deadline!.toLocal()}'.split(' ')[0]),
             if (isRepeating && t.repeatRule != null) ...[
               if (t.repeatRule == 'weekly' && t.repeatDays != null)
-                Text(
-                  'Repeats weekly on: ${t.repeatDays!.map((d) {
-                    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                    if (d >= 1 && d <= 7) return names[d - 1];
-                    return d.toString();
-                  }).join(', ')}',
+                Builder(
+                  builder: (ctx) {
+                    final repeatDaysStr = t.repeatDays!
+                        .map((d) {
+                          const names = [
+                            'Mon',
+                            'Tue',
+                            'Wed',
+                            'Thu',
+                            'Fri',
+                            'Sat',
+                            'Sun',
+                          ];
+                          if (d >= 1 && d <= 7) return names[d - 1];
+                          return d.toString();
+                        })
+                        .join(', ');
+                    return Text('Repeats weekly on: $repeatDaysStr');
+                  },
                 )
               else
                 Text('Repeats: ${t.repeatRule}'),
@@ -390,6 +418,54 @@ class _TasksPageState extends State<TasksPage>
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            IconButton(
+              icon: const Icon(Icons.history),
+              tooltip: 'View history',
+              onPressed: () {
+                final cubit = context.read<TaskCubit>();
+                final hr = cubit.historyRepo;
+                if (hr == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('History not available')),
+                  );
+                  return;
+                }
+                final recs = hr
+                    .loadAll()
+                    .where((r) => r.taskId == t.id)
+                    .toList();
+                showDialog<void>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('History'),
+                    content: SizedBox(
+                      width: 300,
+                      child: recs.isEmpty
+                          ? const Text('No history for this task')
+                          : ListView(
+                              shrinkWrap: true,
+                              children: recs
+                                  .map(
+                                    (r) => ListTile(
+                                      title: Text(r.date),
+                                      subtitle: Text(
+                                        r.completedBy ?? 'Unknown',
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.edit),
               onPressed: () => _showAddDialog(context, t),

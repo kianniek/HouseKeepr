@@ -14,7 +14,20 @@ class FirestoreTaskRepository implements RemoteTaskRepository {
 
   Future<List<Task>> loadTasks() async {
     final snap = await _col.get();
-    return snap.docs.map((d) => Task.fromMap(d.data()..['id'] = d.id)).toList();
+    return snap.docs.map((d) {
+      final m = Map<String, dynamic>.from(d.data());
+      m['id'] = d.id;
+      // If serverUpdateTimestamp is present, surface it as lastSyncedAt so
+      // Task.fromMap can parse it into DateTime. Also provide a numeric
+      // serverVersion based on milliseconds since epoch for simple conflict
+      // resolution heuristics.
+      final ts = d.data()['serverUpdateTimestamp'];
+      if (ts is Timestamp) {
+        m['lastSyncedAt'] = ts;
+        m['serverVersion'] = ts.millisecondsSinceEpoch;
+      }
+      return Task.fromMap(m);
+    }).toList();
   }
 
   @override
@@ -25,7 +38,11 @@ class FirestoreTaskRepository implements RemoteTaskRepository {
       data['deadline'] = fs.Timestamp.fromDate(task.deadline!.toUtc());
     }
     final id = task.id;
-    await _col.doc(id).set(data);
+    // Add a server-side timestamp to help with conflict resolution and
+    // server version tracking. Firestore resolves FieldValue.serverTimestamp
+    // on the server; we'll read it back when loading.
+    data['serverUpdateTimestamp'] = FieldValue.serverTimestamp();
+    await _col.doc(id).set(data, SetOptions(merge: true));
   }
 
   @override

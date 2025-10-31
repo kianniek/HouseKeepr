@@ -24,6 +24,24 @@ class TaskRepository {
     return out;
   }
 
+  /// Load a page of tasks from local store. Useful for lazy-loading long
+  /// task lists. Returned list preserves the persisted order.
+  List<Task> loadTasksPage({
+    int offset = 0,
+    int limit = 20,
+    bool includeArchived = false,
+  }) {
+    final all = loadTasks();
+    final filtered = includeArchived
+        ? all
+        : all.where((t) => t.archived == false).toList();
+    if (offset >= filtered.length) return <Task>[];
+    final end = (offset + limit) < filtered.length
+        ? (offset + limit)
+        : filtered.length;
+    return filtered.sublist(offset, end);
+  }
+
   Future<void> saveTasks(List<Task> tasks) async {
     final raw = tasks.map((t) => t.toJson()).toList();
     await prefs.setStringList(_kTasksKey, raw);

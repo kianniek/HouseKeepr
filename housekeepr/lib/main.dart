@@ -371,13 +371,22 @@ class _HouseholdAppState extends State<HouseholdApp> {
     // to the UI by marking the local Task as failed.
     writeQueue.attachFailureHandler((op, lastError) {
       try {
-        switch (op.type) {
-          case QueueOpType.saveTask:
-          case QueueOpType.deleteTask:
-            _taskCubit?.markTaskSyncFailed(op.id, lastError?.toString());
-            break;
-          default:
-            break;
+        // If the op included a previous snapshot, attempt to restore the
+        // original local state (rollback optimistic updates). Otherwise
+        // mark the local task as failed so the user can retry.
+        final prev = op.payload == null ? null : (op.payload!['_previous']);
+        if (prev != null && prev is Map<String, dynamic>) {
+          // restore previous state without re-enqueueing
+          _taskCubit?.restoreTaskFromMap(prev);
+        } else {
+          switch (op.type) {
+            case QueueOpType.saveTask:
+            case QueueOpType.deleteTask:
+              _taskCubit?.markTaskSyncFailed(op.id, lastError?.toString());
+              break;
+            default:
+              break;
+          }
         }
       } catch (_) {}
     });
