@@ -1,4 +1,6 @@
 import 'dart:convert';
+// Optional import to detect Firestore Timestamp when reading remote docs.
+import 'package:cloud_firestore/cloud_firestore.dart' as fs;
 
 import 'package:equatable/equatable.dart';
 
@@ -9,6 +11,8 @@ class ShoppingItem extends Equatable {
   final int quantity;
   final String? category;
   final bool inCart;
+  final DateTime? lastSyncedAt;
+  final int? serverVersion;
 
   const ShoppingItem({
     required this.id,
@@ -17,6 +21,8 @@ class ShoppingItem extends Equatable {
     this.quantity = 1,
     this.category,
     this.inCart = false,
+    this.lastSyncedAt,
+    this.serverVersion,
   });
 
   ShoppingItem copyWith({
@@ -26,6 +32,8 @@ class ShoppingItem extends Equatable {
     int? quantity,
     String? category,
     bool? inCart,
+    DateTime? lastSyncedAt,
+    int? serverVersion,
   }) => ShoppingItem(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -33,6 +41,8 @@ class ShoppingItem extends Equatable {
     quantity: quantity ?? this.quantity,
     category: category ?? this.category,
     inCart: inCart ?? this.inCart,
+    lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+    serverVersion: serverVersion ?? this.serverVersion,
   );
 
   Map<String, dynamic> toMap() => {
@@ -42,6 +52,8 @@ class ShoppingItem extends Equatable {
     'quantity': quantity,
     'category': category,
     'inCart': inCart,
+    'lastSyncedAt': lastSyncedAt?.toUtc().toIso8601String(),
+    'serverVersion': serverVersion,
   };
 
   factory ShoppingItem.fromMap(Map<String, dynamic> map) => ShoppingItem(
@@ -65,6 +77,25 @@ class ShoppingItem extends Equatable {
         : (map['inCart'] is String
               ? (['1', 'true', 'yes'].contains(map['inCart'].toLowerCase()))
               : (map['inCart'] is int ? (map['inCart'] != 0) : false)),
+    lastSyncedAt: () {
+      final v = map['lastSyncedAt'];
+      if (v is DateTime) return v;
+      try {
+        if (v is fs.Timestamp) return v.toDate().toUtc();
+      } catch (_) {}
+      if (v is String && v.isNotEmpty) {
+        try {
+          return DateTime.parse(v).toUtc();
+        } catch (_) {}
+      }
+      return null;
+    }(),
+    serverVersion: () {
+      final v = map['serverVersion'];
+      if (v is int) return v;
+      if (v is String) return int.tryParse(v);
+      return null;
+    }(),
   );
 
   String toJson() => json.encode(toMap());
@@ -73,5 +104,14 @@ class ShoppingItem extends Equatable {
       ShoppingItem.fromMap(json.decode(source));
 
   @override
-  List<Object?> get props => [id, name, note, quantity, category, inCart];
+  List<Object?> get props => [
+    id,
+    name,
+    note,
+    quantity,
+    category,
+    inCart,
+    lastSyncedAt,
+    serverVersion,
+  ];
 }

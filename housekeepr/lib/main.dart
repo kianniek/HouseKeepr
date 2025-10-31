@@ -22,11 +22,17 @@ import 'repositories/shopping_repository.dart';
 import 'firestore/firestore_task_repository.dart';
 import 'firestore/firestore_shopping_repository.dart';
 import 'models/task.dart';
+import 'models/shopping_item.dart';
 import 'repositories/history_repository.dart';
 import 'firestore/firestore_history_repository.dart';
 import 'services/write_queue.dart';
 import 'models/completion_record.dart';
 import 'services/firestore_sync_service.dart';
+
+// Global messenger key so non-widget code (e.g. WriteQueue failure handler)
+// can show SnackBars to notify the user about rollbacks/failures.
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -75,6 +81,10 @@ class MyApp extends StatelessWidget {
               brightness: Brightness.dark,
             );
         return MaterialApp(
+          // provide a global ScaffoldMessengerKey so code outside of widget
+          // build context (for example, the write-queue failure handler)
+          // can show SnackBars to notify users of rollbacks or failures.
+          scaffoldMessengerKey: scaffoldMessengerKey,
           title: 'HouseKeepr',
           theme: ThemeData(
             colorScheme: lightScheme,
@@ -351,9 +361,14 @@ class _HouseholdAppState extends State<HouseholdApp> {
             await remoteTask.deleteTask(op.id);
             break;
           case QueueOpType.saveShopping:
-            // handled elsewhere; ignore here
+            if (op.payload != null) {
+              await remoteShopping.saveItem(
+                ShoppingItem.fromMap(op.payload!.cast<String, dynamic>()),
+              );
+            }
             break;
           case QueueOpType.deleteShopping:
+            await remoteShopping.deleteItem(op.id);
             break;
           case QueueOpType.saveHistory:
             await remoteHistory.saveRecord(
@@ -371,18 +386,77 @@ class _HouseholdAppState extends State<HouseholdApp> {
     // to the UI by marking the local Task as failed.
     writeQueue.attachFailureHandler((op, lastError) {
       try {
-        // If the op included a previous snapshot, attempt to restore the
-        // original local state (rollback optimistic updates). Otherwise
-        // mark the local task as failed so the user can retry.
+        // If a previous snapshot exists, restore it.
         final prev = op.payload == null ? null : (op.payload!['_previous']);
+        final isNew = op.payload == null
+            ? false
+            : (op.payload!['_isNew'] == true);
+
         if (prev != null && prev is Map<String, dynamic>) {
-          // restore previous state without re-enqueueing
-          _taskCubit?.restoreTaskFromMap(prev);
+          // If payload contains a previous state, determine whether it's a
+          // task or shopping item by checking for common keys and restore
+          // via the appropriate cubit.
+          if (prev.containsKey('title') || prev.containsKey('completed')) {
+            _taskCubit?.restoreTaskFromMap(prev);
+            scaffoldMessengerKey.currentState?.showSnackBar(
+              const SnackBar(
+                content: Text('Remote save failed — local task restored'),
+              ),
+            );
+          } else {
+            _shoppingCubit?.restoreItemFromMap(prev);
+            scaffoldMessengerKey.currentState?.showSnackBar(
+              const SnackBar(
+                content: Text('Remote delete failed — shopping item restored'),
+              ),
+            );
+          }
+        } else if (isNew && (op.type == QueueOpType.saveTask)) {
+          // Remove locally-created optimistic task that couldn't be
+          // persisted remotely and notify the user.
+          _taskCubit?.removeLocalTask(op.id);
+          scaffoldMessengerKey.currentState?.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Failed to save task — optimistic change rolled back',
+              ),
+            ),
+          );
+        } else if (isNew && (op.type == QueueOpType.saveShopping)) {
+          // Remove locally-created optimistic shopping item and notify.
+          _shoppingCubit?.removeLocalItem(op.id);
+          scaffoldMessengerKey.currentState?.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Failed to save item — optimistic change rolled back',
+              ),
+            ),
+          );
         } else {
           switch (op.type) {
             case QueueOpType.saveTask:
             case QueueOpType.deleteTask:
               _taskCubit?.markTaskSyncFailed(op.id, lastError?.toString());
+              scaffoldMessengerKey.currentState?.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Task sync failed: ${lastError?.toString() ?? 'unknown error'}',
+                  ),
+                ),
+              );
+              break;
+            case QueueOpType.saveShopping:
+            case QueueOpType.deleteShopping:
+              // We can't mark shopping items' sync status (model lacks sync
+              // metadata); simply notify the user and leave local state as-is
+              // or rely on '_previous' restoration above.
+              scaffoldMessengerKey.currentState?.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Shopping sync failed: ${lastError?.toString() ?? 'unknown error'}',
+                  ),
+                ),
+              );
               break;
             default:
               break;
@@ -393,6 +467,8 @@ class _HouseholdAppState extends State<HouseholdApp> {
 
     // Wire writeQueue to cubits and sync service by setting it where needed
     _taskCubit!.attachWriteQueueAndHistory(writeQueue, historyRepo);
+    // allow shopping cubit to enqueue ops and participate in failure handling
+    _shoppingCubit!.attachWriteQueue(writeQueue);
 
     // Start sync service to keep cubits in sync with Firestore
     _syncService = FirestoreSyncService(FirebaseFirestore.instance);

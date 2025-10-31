@@ -54,8 +54,13 @@ class TaskCubit extends Cubit<TaskState> {
     if (mode != SyncMode.localOnly) {
       if (remoteRepo != null) {
         if (writeQueue != null) {
-          // No previous task for new items; include payload only
+          // No previous task for new items; include payload only.
+          // Mark as newly-created so failure handler can rollback by
+          // removing the optimistic local item if the op persistently fails.
           final payload = pending.toMap();
+          try {
+            payload['_isNew'] = true;
+          } catch (_) {}
           writeQueue!.enqueueOp(
             QueueOp(
               type: QueueOpType.saveTask,
@@ -70,6 +75,19 @@ class TaskCubit extends Cubit<TaskState> {
       }
     }
     emit(state.copyWith(tasks: list));
+  }
+
+  /// Remove a task from the local store without enqueueing any remote
+  /// operation. This is used to rollback optimistic creates when the
+  /// remote save fails permanently.
+  Future<void> removeLocalTask(String id) async {
+    try {
+      final list = List<Task>.from(state.tasks)..removeWhere((t) => t.id == id);
+      await repo.saveTasks(list);
+      emit(state.copyWith(tasks: list));
+    } catch (_) {
+      // ignore failures when removing locally
+    }
   }
 
   Future<void> updateTask(Task task) async {
@@ -200,6 +218,42 @@ class TaskCubit extends Cubit<TaskState> {
     } else if (remoteRepo != null) {
       for (final id in ids) {
         unawaited(remoteRepo!.deleteTask(id));
+      }
+    }
+    emit(state.copyWith(tasks: list));
+  }
+
+  /// Archive multiple tasks locally and enqueue saves for each so the
+  /// remote store receives the archived flag. Each op includes the
+  /// previous snapshot to allow rollback on persistent failure.
+  Future<void> bulkArchive(List<String> ids) async {
+    final prevs = state.tasks.where((t) => ids.contains(t.id)).toList();
+    final list = state.tasks
+        .map(
+          (t) => ids.contains(t.id)
+              ? t.copyWith(archived: true, syncStatus: SyncStatus.pending)
+              : t,
+        )
+        .toList();
+    await repo.saveTasks(list);
+    if (writeQueue != null) {
+      for (final p in prevs) {
+        final updated = p.copyWith(
+          archived: true,
+          syncStatus: SyncStatus.pending,
+        );
+        final payload = updated.toMap();
+        try {
+          payload['_previous'] = p.toMap();
+        } catch (_) {}
+        writeQueue!.enqueueOp(
+          QueueOp(type: QueueOpType.saveTask, id: updated.id, payload: payload),
+        );
+      }
+    } else if (remoteRepo != null) {
+      for (final id in ids) {
+        final t = list.firstWhere((x) => x.id == id);
+        unawaited(remoteRepo!.saveTask(t));
       }
     }
     emit(state.copyWith(tasks: list));

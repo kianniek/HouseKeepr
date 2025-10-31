@@ -22,7 +22,10 @@ class FirestoreShoppingRepository implements RemoteShoppingRepository {
   Future<void> saveItem(ShoppingItem item) async {
     final data = item.toMap();
     final id = item.id;
-    await _col.doc(id).set(data);
+    // Add a server-side timestamp so clients can track server version and
+    // resolve conflicts deterministically when needed.
+    data['serverUpdateTimestamp'] = FieldValue.serverTimestamp();
+    await _col.doc(id).set(data, SetOptions(merge: true));
   }
 
   @override

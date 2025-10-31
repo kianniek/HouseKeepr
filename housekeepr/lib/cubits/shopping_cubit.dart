@@ -14,7 +14,7 @@ class ShoppingCubit extends Cubit<ShoppingState> {
   final ShoppingRepository repo;
   RemoteShoppingRepository? remoteRepo;
   final SettingsRepository? settings;
-  final WriteQueue? writeQueue;
+  WriteQueue? writeQueue;
 
   ShoppingCubit(this.repo, {this.settings, this.writeQueue})
     : super(ShoppingState.initial()) {
@@ -33,11 +33,15 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     if (mode != SyncMode.localOnly) {
       if (remoteRepo != null) {
         if (writeQueue != null) {
+          final payload = item.toMap();
+          try {
+            payload['_isNew'] = true;
+          } catch (_) {}
           writeQueue!.enqueueOp(
             QueueOp(
               type: QueueOpType.saveShopping,
               id: item.id,
-              payload: item.toMap(),
+              payload: payload,
             ),
           );
         } else {
@@ -50,17 +54,25 @@ class ShoppingCubit extends Cubit<ShoppingState> {
   }
 
   Future<void> updateItem(ShoppingItem item) async {
+    final prev = state.items.firstWhere(
+      (i) => i.id == item.id,
+      orElse: () => item,
+    );
     final list = state.items.map((i) => i.id == item.id ? item : i).toList();
     await repo.saveItems(list);
     final mode = settings?.getSyncMode() ?? SyncMode.sync;
     if (mode != SyncMode.localOnly) {
       if (remoteRepo != null) {
         if (writeQueue != null) {
+          final payload = item.toMap();
+          try {
+            payload['_previous'] = prev.toMap();
+          } catch (_) {}
           writeQueue!.enqueueOp(
             QueueOp(
               type: QueueOpType.saveShopping,
               id: item.id,
-              payload: item.toMap(),
+              payload: payload,
             ),
           );
         } else {
@@ -78,6 +90,7 @@ class ShoppingCubit extends Cubit<ShoppingState> {
   }
 
   Future<void> deleteItem(String id) async {
+    final prev = state.items.firstWhere((i) => i.id == id);
     final list = List<ShoppingItem>.from(state.items)
       ..removeWhere((i) => i.id == id);
     await repo.saveItems(list);
@@ -85,8 +98,12 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     if (mode != SyncMode.localOnly) {
       if (remoteRepo != null) {
         if (writeQueue != null) {
+          final payload = <String, dynamic>{};
+          try {
+            payload['_previous'] = prev.toMap();
+          } catch (_) {}
           writeQueue!.enqueueOp(
-            QueueOp(type: QueueOpType.deleteShopping, id: id),
+            QueueOp(type: QueueOpType.deleteShopping, id: id, payload: payload),
           );
         } else {
           Future<void> op() => remoteRepo!.deleteItem(id);
@@ -95,6 +112,40 @@ class ShoppingCubit extends Cubit<ShoppingState> {
       }
     }
     emit(state.copyWith(items: list));
+  }
+
+  /// Attach or replace the WriteQueue so this cubit can enqueue operations.
+  void attachWriteQueue(WriteQueue? wq) {
+    writeQueue = wq;
+  }
+
+  /// Remove a shopping item from the local store without enqueueing remote
+  /// operations. Used to rollback optimistic creates when remote persistence
+  /// fails permanently.
+  Future<void> removeLocalItem(String id) async {
+    try {
+      final list = List<ShoppingItem>.from(state.items)
+        ..removeWhere((i) => i.id == id);
+      await repo.saveItems(list);
+      emit(state.copyWith(items: list));
+    } catch (_) {}
+  }
+
+  /// Restore an item from a serialized map into the local store without
+  /// re-enqueueing remote ops. Used by the write-queue failure handler.
+  Future<void> restoreItemFromMap(Map<String, dynamic> m) async {
+    try {
+      final it = ShoppingItem.fromMap(Map<String, dynamic>.from(m));
+      final list = List<ShoppingItem>.from(state.items);
+      final idx = list.indexWhere((x) => x.id == it.id);
+      if (idx != -1) {
+        list[idx] = it;
+      } else {
+        list.add(it);
+      }
+      await repo.saveItems(list);
+      emit(state.copyWith(items: list));
+    } catch (_) {}
   }
 
   void setRemoteRepository(RemoteShoppingRepository? r) {

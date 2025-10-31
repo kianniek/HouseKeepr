@@ -25,12 +25,16 @@ class FirestoreSyncService {
       final tasks = snap.docs.map((d) {
         final m = Map<String, dynamic>.from(d.data());
         m['id'] = d.id;
+        // If a serverUpdateTimestamp exists on the document, surface it
+        // so Task.fromMap can parse it into lastSyncedAt/serverVersion.
+        final ts = d.data()['serverUpdateTimestamp'];
+        if (ts is Timestamp) {
+          m['lastSyncedAt'] = ts;
+          m['serverVersion'] = ts.millisecondsSinceEpoch;
+        }
         // mark server-origin tasks as synced locally
         final t = Task.fromMap(m);
-        return t.copyWith(
-          syncStatus: SyncStatus.synced,
-          lastSyncedAt: DateTime.now().toUtc(),
-        );
+        return t.copyWith(syncStatus: SyncStatus.synced);
       }).toList();
       taskCubit.replaceAll(tasks);
     });
@@ -43,6 +47,11 @@ class FirestoreSyncService {
       final items = snap.docs.map((d) {
         final m = Map<String, dynamic>.from(d.data());
         m['id'] = d.id;
+        final ts = d.data()['serverUpdateTimestamp'];
+        if (ts is Timestamp) {
+          m['lastSyncedAt'] = ts;
+          m['serverVersion'] = ts.millisecondsSinceEpoch;
+        }
         return ShoppingItem.fromMap(m);
       }).toList();
       shoppingCubit.replaceAll(items);

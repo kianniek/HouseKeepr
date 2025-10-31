@@ -68,13 +68,13 @@ Implementation notes
 
 - To implement / verify (detailed):
 	- [x] Add per-item sync status metadata and UI badges (pending / syncing / failed / synced). Files: UI task list row, Task model, sync service.
-	- [ ] Display assignee avatars reliably (resolve avatar URL or initials fallback). Files: user profile model and task list widgets.
-	- [ ] Add optimistic UI with rollback on failed sync (WriteQueue + UI handlers).
-	- [ ] Implement server version tracking for conflict resolution (store serverUpdateTimestamp on synced docs).
-	- [ ] Add pagination / lazy-loading for long task lists (infinite scroll + local query limits).
-	- [ ] Implement task archiving & bulk-delete flows with confirmations and undo.
-	- [ ] Add in-app audit/history view for each task showing changes (use HistoryRepository) and wire UI to `history_repository`.
-	- [ ] Add keyboard & accessibility support for task interactions (a11y labels, focus order).
+	- [x] Display assignee avatars reliably (resolve avatar URL or initials fallback). Files: user profile model and task list widgets.
+	- [x] Add optimistic UI with rollback on failed sync (WriteQueue + UI handlers).
+	- [x] Implement server version tracking for conflict resolution (store serverUpdateTimestamp on synced docs).
+	- [x] Add pagination / lazy-loading for long task lists (infinite scroll + local query limits).
+	- [x] Implement task archiving & bulk-delete flows with confirmations and undo.
+	- [x] Add in-app audit/history view for each task showing changes (use HistoryRepository) and wire UI to `history_repository`.
+	- [x] Add keyboard & accessibility support for task interactions (a11y labels, focus order).
 	- [ ] Add unit tests for TaskRepository (local persistence) and widget tests for TaskList and TaskDetail pages.
 
 ---
