@@ -4,44 +4,44 @@
 
 This repository contains the Flutter app plus Firebase configuration, emulator helpers, and Cloud Functions.
 
-## What it is
+```mermaid
+flowchart LR
+	subgraph App[HouseKeepr Flutter App]
+		UI["UI Widgets<br/>(ProfileMenu, ProfilePage, Dashboard, Tasks, Shopping)"]
+		ProfilePage[ProfilePage]
+		Cubits["State Layer<br/>(TaskCubit, ShoppingCubit, UserCubit)"]
+		Repos["Local Repos<br/>(TaskRepository, ShoppingRepository)"]
+		WriteQ[WriteQueue]
+		Cropper[SimpleCropper]
+	end
 
-HouseKeepr (also referred to in older docs as “Smart Household Agenda”) is an app for households to coordinate everyday life (tasks/chores, shopping, and household membership) with real-time sync.
+	subgraph Firebase[Firebase Services]
+		Auth[Firebase Auth]
+		Firestore[Cloud Firestore]
+		Storage[Firebase Storage]
+	end
 
-## Features
+	Google[Google Sign-In]
 
-**Currently implemented (code exists in this repo):**
+	UI --> Cubits
+	Cubits --> Repos
+	Cubits -->|enqueue remote ops| WriteQ
+	WriteQ -->|executes| Firestore
+	Repos -.->|local cache| Shared[SharedPreferences]
+	Shared --- Repos
+	ProfilePage --> Cropper
+	Cropper --> ProfilePage
 
-- Shared tasks + subtasks (local-first with remote sync)
-- Shared shopping list (local-first with remote sync)
-- Household membership (including joining via invite code)
-- Firebase Auth + Firestore + Storage
-- Write queue for retry/resume of remote operations
+	Cubits -->|sync service| Firestore
+	UI -->|sign in/out| Auth
+	Auth -->|user profile| Firestore
+	ProfilePage -->|upload image| Storage
+	UI -->|Google sign in| Google
+	Google -->|credential| Auth
 
-**Planned / aspirational (may not be fully implemented yet):**
-
-- Calendar, meal planning, additional smart-home integrations
-
-## Vision (product direction)
-
-### The problem
-
-Household management is fragmented across calendars, to-do apps, grocery lists, and smart-home apps. That fragmentation creates digital noise and makes it harder to answer simple questions at a glance.
-
-### The solution
-
-HouseKeepr is intended to consolidate household planning into a single, shared interface designed to work well as an “ambient screen” (always-on tablet/monitor), while remaining fully usable on mobile and desktop.
-
-### Target audience
-
-Families, roommates, and shared-living households who want better coordination and less day-to-day friction.
-
-### Feature roadmap (high level)
-
-**Tier 1: Core household management**
-
-- Shared task & chore management (including subtasks and assignment)
-- Shared shopping list with real-time sync
+	classDef ext fill:#f9f,stroke:#333,stroke-width:1px;
+	class Firebase,Google ext;
+```
 
 **Tier 2: Enhanced coordination (planned)**
 
