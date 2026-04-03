@@ -1,0 +1,23 @@
+#!/bin/sh
+# Basic secret-detection pre-commit hook
+# Checks staged files for common secret patterns and aborts the commit if found.
+
+files=$(git diff --cached --name-only --diff-filter=ACM)
+if [ -z "$files" ]; then
+  exit 0
+fi
+
+# Patterns to check for (add more as needed)
+PATTERNS=("API_KEY" "SECRET" "PRIVATE_KEY" "AKIA" "AIza" "-----BEGIN PRIVATE KEY-----")
+
+for p in "${PATTERNS[@]}"; do
+  if git diff --cached --name-only --diff-filter=ACM | xargs grep -I --line-number -E "$p" >/dev/null 2>&1; then
+    echo "Potential secret detected (pattern: $p). Commit aborted."
+    echo "Files:"
+    git diff --cached --name-only --diff-filter=ACM | xargs grep -I --line-number -E "$p"
+    echo "\nIf this is a false positive, edit the files or commit with --no-verify."
+    exit 1
+  fi
+done
+
+exit 0

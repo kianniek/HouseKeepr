@@ -1,0 +1,22 @@
+title: "Ideas"
+labels: [idea]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for product/UX ideas and open-ended proposals.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: Describe the idea and the motivation behind it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: What would success look like?
+    validations:
+      required: false

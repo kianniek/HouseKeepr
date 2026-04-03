@@ -1,0 +1,13 @@
+{
+  "name": "housekeepr-functions",
+  "description": "Cloud Functions for HouseKeepr",
+  "dependencies": {
+    "firebase-admin": "^11.9.0",
+    "firebase-functions": "^4.4.1"
+  },
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "private": true
+}

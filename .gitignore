@@ -1,0 +1,100 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+Thumbs.db
+Desktop.ini
+.atom/
+.build/
+.buildlog/
+.history
+.vs/
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+.vscode/
+*.code-workspace
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Gradle/Android tooling caches
+**/.gradle/
+**/.kotlin/
+**/.cxx/
+
+# Mobile build outputs
+**/*.apk
+**/*.aab
+**/*.ipa
+**/*.dSYM/
+**/*.dSYM.zip
+
+# CocoaPods / Xcode derived data
+**/Pods/
+**/.symlinks/
+**/DerivedData/
+**/xcuserdata/
+**/*.xcuserstate
+
+# Firebase CLI local state
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Local secrets
+.env
+.env.*
+.envrc
+pubspec_overrides.yaml
+
+# Firebase Admin SDK service account keys (never commit)
+housekeepr-*.json
+*-firebase-adminsdk-*.json
+
+# Common signing / certificate files
+**/*.keystore
+**/*.jks
+**/*.p12
+**/*.pfx
+**/*.pem
+**/*.key
+# Firebase service account / google-services
+**/google-services.json
+**/GoogleService-Info.plist
+
+# Node dependencies (Cloud Functions)
+functions/node_modules/

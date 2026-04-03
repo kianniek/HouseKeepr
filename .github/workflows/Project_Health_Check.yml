@@ -1,0 +1,43 @@
+name: Project Health Check
+
+on:
+  push:
+    branches: [ FlutterApp ]
+  pull_request:
+    branches: [ FlutterApp ]
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.35.6'
+  WORKING_DIR: 'housekeepr'
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKING_DIR }}
+        run: flutter pub get
+
+      - name: Verify Formatting
+        working-directory: ${{ env.WORKING_DIR }}
+        run: dart format --output=none --set-exit-if-changed .
+        # This fails the build if your code isn't formatted correctly
+
+      - name: Static Analysis
+        working-directory: ${{ env.WORKING_DIR }}
+        run: flutter analyze
+        # This checks for errors, warnings, and linter rules
+
+      - name: Run Unit Tests
+        working-directory: ${{ env.WORKING_DIR }}
+        run: flutter test
