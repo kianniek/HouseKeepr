@@ -34,18 +34,56 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ env.WORKING_DIR }}
-        run: flutter pub get
+        run: |
+          flutter pub get
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::error::'flutter pub get' failed (exit code $rc)"
+            echo "To reproduce/fix locally:"
+            echo "  cd ${{ env.WORKING_DIR }}"
+            echo "  flutter pub get"
+            echo "  # If cache issues persist: flutter pub cache repair"
+            exit $rc
+          fi
 
       - name: Verify Formatting
         working-directory: ${{ env.WORKING_DIR }}
-        run: dart format --output=none --set-exit-if-changed .
+        run: |
+          dart format --output=none --set-exit-if-changed .
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::error::Formatting check failed (exit code $rc)"
+            echo "To fix locally:"
+            echo "  cd ${{ env.WORKING_DIR }}"
+            echo "  dart format ."
+            echo "  git add -A && git commit -m \"style: format\""
+            exit $rc
+          fi
         # This fails the build if your code isn't formatted correctly
 
       - name: Static Analysis
         working-directory: ${{ env.WORKING_DIR }}
-        run: flutter analyze
+        run: |
+          flutter analyze
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::error::Static analysis failed (exit code $rc)"
+            echo "To run locally and inspect problems:"
+            echo "  cd ${{ env.WORKING_DIR }}"
+            echo "  flutter analyze"
+            exit $rc
+          fi
         # This checks for errors, warnings, and linter rules
 
       - name: Run Unit Tests
         working-directory: ${{ env.WORKING_DIR }}
-        run: flutter test
+        run: |
+          flutter test
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::error::Unit tests failed (exit code $rc)"
+            echo "To reproduce locally:"
+            echo "  cd ${{ env.WORKING_DIR }}"
+            echo "  flutter test"
+            exit $rc
+          fi
