@@ -264,7 +264,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   radius: 48,
                   backgroundColor:
                       color?.withAlpha((0.7 * 255).round()) ??
-                      scheme.surfaceVariant,
+                      scheme.surfaceContainerHighest,
                   child: const Icon(Icons.person, size: 48),
                 ),
               const SizedBox(height: 8),
@@ -318,7 +318,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     onTap: _saving ? null : _pickColor,
                     child: CircleAvatar(
                       radius: 16,
-                      backgroundColor: color ?? scheme.surfaceVariant,
+                      backgroundColor: color ?? scheme.surfaceContainerHighest,
                       child: color == null
                           ? Icon(
                               Icons.color_lens,
@@ -381,7 +381,7 @@ class _ProfilePageState extends State<ProfilePage> {
       scheme.primaryContainer,
       scheme.secondaryContainer,
       scheme.tertiaryContainer,
-      scheme.surfaceVariant,
+      scheme.surfaceContainerHighest,
       scheme.surface,
       scheme.outline,
       scheme.inversePrimary,

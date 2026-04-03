@@ -103,7 +103,8 @@ class _AssigneeAvatarState extends State<AssigneeAvatar> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final fallbackBg = _personalColor ?? theme.colorScheme.surfaceVariant;
+    final fallbackBg =
+        _personalColor ?? theme.colorScheme.surfaceContainerHighest;
     final fallbackTextColor =
         ThemeData.estimateBrightnessForColor(fallbackBg) == Brightness.dark
         ? theme.colorScheme.onPrimary

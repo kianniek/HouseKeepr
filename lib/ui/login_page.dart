@@ -156,7 +156,7 @@ class _LoginPageState extends State<LoginPage> {
               height: 150,
               margin: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: scheme.surfaceVariant,
+                color: scheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: scheme.outline),
               ),

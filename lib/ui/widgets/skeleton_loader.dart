@@ -48,9 +48,9 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
             borderRadius: widget.borderRadius ?? BorderRadius.circular(4),
             gradient: LinearGradient(
               colors: [
-                scheme.surfaceVariant,
+                scheme.surfaceContainerHighest,
                 scheme.surface,
-                scheme.surfaceVariant,
+                scheme.surfaceContainerHighest,
               ],
               stops: const [0.0, 0.5, 1.0],
               begin: Alignment(-1.0 + (_controller.value * 2), 0.0),

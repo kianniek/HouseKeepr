@@ -37,7 +37,7 @@ class ShoppingListItemTile extends StatelessWidget {
       onDismissed: (_) => onDelete(),
       child: Container(
         color: item.checked
-            ? scheme.surfaceVariant.withOpacity(0.2)
+            ? scheme.surfaceContainerHighest.withOpacity(0.2)
             : scheme.surface.withAlpha(0),
         child: ListTile(
           contentPadding: EdgeInsets.symmetric(

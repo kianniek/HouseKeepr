@@ -282,7 +282,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 });
               },
               selectedColor: scheme.primaryContainer,
-              backgroundColor: scheme.surfaceVariant,
+              backgroundColor: scheme.surfaceContainerHighest,
               checkmarkColor: scheme.primary,
               labelStyle: textTheme.bodySmall?.copyWith(
                 color: isSelected ? scheme.onSurface : scheme.onSurfaceVariant,

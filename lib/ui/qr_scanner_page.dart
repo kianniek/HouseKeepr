@@ -139,7 +139,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
                 children: [
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: scheme.surfaceVariant,
+                      backgroundColor: scheme.surfaceContainerHighest,
                       foregroundColor: scheme.onSurfaceVariant,
                     ),
                     onPressed: () async {
@@ -151,7 +151,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
                   ),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: scheme.surfaceVariant,
+                      backgroundColor: scheme.surfaceContainerHighest,
                       foregroundColor: scheme.onSurfaceVariant,
                     ),
                     onPressed: () => Navigator.of(context).pop(),
