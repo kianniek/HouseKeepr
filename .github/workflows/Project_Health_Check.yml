@@ -9,7 +9,7 @@ on:
 
 env:
   FLUTTER_VERSION: '3.35.6'
-  WORKING_DIR: 'housekeepr'
+  WORKING_DIR: '.'
 
 jobs:
   analyze-and-test:
@@ -23,6 +23,14 @@ jobs:
           channel: 'stable'
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+
+      - name: Validate working directory
+        run: |
+          if [ ! -d "${{ env.WORKING_DIR }}" ]; then
+            echo "Working directory '${{ env.WORKING_DIR }}' does not exist."
+            echo "Repository root contents:" && ls -la
+            exit 1
+          fi
 
       - name: Install dependencies
         working-directory: ${{ env.WORKING_DIR }}

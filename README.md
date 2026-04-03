@@ -71,7 +71,6 @@ flowchart LR
 ### Install
 
 ```powershell
-Set-Location -LiteralPath .\housekeepr
 flutter pub get
 ```
 
@@ -80,20 +79,20 @@ flutter pub get
 Most local runs use build-time Dart defines from a file:
 
 ```powershell
-Set-Location -LiteralPath .\housekeepr
 flutter run --dart-define-from-file=.env
 ```
 
 If you prefer to pass values directly (example for web):
 
 ```powershell
-flutter run -d chrome `
-    --dart-define=FIREBASE_WEB_API_KEY=AIza... `
-    --dart-define=FIREBASE_PROJECT_ID=your-project-id `
-    --dart-define=FIREBASE_AUTH_DOMAIN=your-app.firebaseapp.com `
-    --dart-define=FIREBASE_APP_ID=1:... `
-    --dart-define=FIREBASE_MEASUREMENT_ID=G-...
+flutter run -d chrome --dart-define-from-file=.env
 ```
+
+If you want to run it in release mode (example for web):
+
+```powershell
+flutter run -d chrome --release --dart-define-from-file=.env
+``` 
 
 ### Run tests
 
