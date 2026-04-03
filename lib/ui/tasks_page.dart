@@ -589,19 +589,11 @@ class _TasksPageState extends State<TasksPage>
               ],
             ),
           if (t.description != null)
-            Text(
-              t.description!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text(t.description!, maxLines: 2, overflow: TextOverflow.ellipsis),
           if (t.deadline != null)
             Text('Due: ${t.deadline!.toLocal()}'.split(' ')[0]),
           if (isRepeating && t.repeatRule != null) ...[
-            Text(
-              _repeatLabel(t),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text(_repeatLabel(t), maxLines: 1, overflow: TextOverflow.ellipsis),
             if (t.isRepeating)
               Builder(
                 builder: (ctx) {
@@ -653,10 +645,7 @@ class _TasksPageState extends State<TasksPage>
           child: FadeTransition(opacity: anim, child: child),
         );
       },
-      child: KeyedSubtree(
-        key: ValueKey(t.id),
-        child: card,
-      ),
+      child: KeyedSubtree(key: ValueKey(t.id), child: card),
     );
   }
 

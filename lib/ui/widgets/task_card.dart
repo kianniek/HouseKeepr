@@ -90,8 +90,9 @@ class TaskCard extends StatelessWidget {
 
     return Dismissible(
       key: ValueKey('dismiss_${task.id}'),
-      direction:
-          isRetrying ? DismissDirection.none : DismissDirection.endToStart,
+      direction: isRetrying
+          ? DismissDirection.none
+          : DismissDirection.endToStart,
       background: Container(
         color: scheme.error,
         alignment: Alignment.centerRight,

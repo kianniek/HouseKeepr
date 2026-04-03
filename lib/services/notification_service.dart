@@ -220,7 +220,6 @@ class NotificationService {
               'Task Reminders',
               importance: Importance.low,
               icon: 'ic_launcher_monochrome',
-              
             ),
             iOS: DarwinNotificationDetails(),
           ),
