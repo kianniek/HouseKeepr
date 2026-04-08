@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import 'package:flutter/widget_previews.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../cubits/task_cubit.dart';
 import '../models/task.dart';
 import 'settings_page.dart';
 import 'tasks_page.dart';
 import 'widgets/task_card.dart';
-import 'package:intl/intl.dart';
+// removed unused imports
 
 class DashboardPage extends StatefulWidget {
   final fb.User? currentUser;
@@ -40,7 +39,7 @@ class _DashboardPageState extends State<DashboardPage> {
         'User';
 
     return Scaffold(
-      backgroundColor: scheme.background,
+      backgroundColor: scheme.surface,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

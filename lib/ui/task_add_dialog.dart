@@ -80,7 +80,7 @@ Future<void> showTaskAddEditDialog(
     text: repeatInterval.toString(),
   );
   final deadlineCtl = TextEditingController(
-    text: deadline != null ? '${deadline!.toLocal()}'.split(' ')[0] : '',
+    text: deadline != null ? '${deadline.toLocal()}'.split(' ')[0] : '',
   );
 
   // Try to default to provided currentUser, otherwise try FirebaseAuth (guarded).
@@ -532,7 +532,7 @@ Future<void> showTaskAddEditDialog(
                         const SizedBox(width: 12),
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: repeatUnit,
+                            initialValue: repeatUnit,
                             decoration: const InputDecoration(
                               labelText: 'Unit',
                             ),
@@ -570,7 +570,7 @@ Future<void> showTaskAddEditDialog(
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<int>(
-                            value: reminderOffset ?? 60,
+                            initialValue: reminderOffset ?? 60,
                             decoration: const InputDecoration(
                               labelText: 'Notify',
                             ),

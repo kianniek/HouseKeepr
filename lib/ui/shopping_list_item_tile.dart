@@ -37,7 +37,7 @@ class ShoppingListItemTile extends StatelessWidget {
       onDismissed: (_) => onDelete(),
       child: Container(
         color: item.checked
-            ? scheme.surfaceContainerHighest.withOpacity(0.2)
+            ? scheme.surfaceContainerHighest.withValues(alpha: 0.2)
             : scheme.surface.withAlpha(0),
         child: ListTile(
           contentPadding: EdgeInsets.symmetric(
@@ -113,7 +113,7 @@ class ShoppingListItemTile extends StatelessWidget {
               height: aisleMode ? 56 : 48,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: scheme.primary.withOpacity(0.15),
+                color: scheme.primary.withValues(alpha: 0.15),
               ),
               child: Center(
                 child: Text(

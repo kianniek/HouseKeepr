@@ -98,3 +98,4 @@ housekeepr-*.json
 
 # Node dependencies (Cloud Functions)
 functions/node_modules/
+.agent.md

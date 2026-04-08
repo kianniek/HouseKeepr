@@ -19,7 +19,11 @@ class EmptyStateWidget extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 64, color: scheme.onSurfaceVariant.withOpacity(0.6)),
+          Icon(
+            icon,
+            size: 64,
+            color: scheme.onSurfaceVariant.withValues(alpha: 0.6),
+          ),
           const SizedBox(height: 16),
           Text(
             message,
@@ -33,7 +37,7 @@ class EmptyStateWidget extends StatelessWidget {
             Text(
               subMessage!,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant.withOpacity(0.8),
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
               ),
               textAlign: TextAlign.center,
             ),

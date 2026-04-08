@@ -5,7 +5,6 @@ import 'package:uuid/uuid.dart';
 import 'package:hive/hive.dart';
 
 import '../models/task.dart';
-import '../services/recurrence_generator.dart';
 
 class TaskRepository {
   final SharedPreferences prefs;

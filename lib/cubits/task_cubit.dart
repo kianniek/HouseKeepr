@@ -8,7 +8,6 @@ import '../core/sync_mode.dart';
 import '../services/write_queue.dart';
 import '../repositories/history_repository.dart';
 import '../models/completion_record.dart';
-import '../services/recurrence_generator.dart';
 import '../services/notification_service.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';

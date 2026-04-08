@@ -4,67 +4,27 @@
 
 This repository contains the Flutter app plus Firebase configuration, emulator helpers, and Cloud Functions.
 
-## Architecture
+# Documentation
+The `/docs` folder contains markdown files that document the architecture, design decisions, and implementation details of the app. Each file is structured with three perspectives:
+- **The Team Perspective:** A high-level summary of the business purpose and "The Why"
+- **The Developer Perspective:** A technical "How-to" with API signatures, types, and implementation notes.
+- **The Designer Perspective:** A description of user-facing behaviors, UI states (loading/error), and interaction constraints.
 
-```mermaid
-flowchart LR
-    subgraph App [HouseKeepr Flutter App]
-        UI["UI Widgets<br/>(Profile, Dashboard, Tasks, Shopping)"]
-        Cubits["State Layer<br/>(TaskCubit, ShoppingCubit, UserCubit)"]
-        Repos["Local Repos<br/>(TaskRepository, ShoppingRepository)"]
-        WriteQ[WriteQueue]
-        Cropper[SimpleCropper]
-        Shared[(SharedPreferences)]
-    end
-
-    subgraph Firebase [Firebase Services]
-        Auth[Firebase Auth]
-        Firestore[Cloud Firestore]
-        Storage[Firebase Storage]
-    end
-
-    Google[Google Sign-In]
-
-    UI --> Cubits
-    Cubits --> Repos
-    Cubits -->|enqueue remote ops| WriteQ
-    WriteQ -->|executes| Firestore
-    
-    Repos -.->|local cache| Shared
-    Shared -.-> Repos
-    
-    UI --> Cropper
-    Cropper --> UI
-
-    Cubits -->|sync service| Firestore
-    UI -->|sign in/out| Auth
-    Auth -->|user profile| Firestore
-    UI -->|upload image| Storage
-    UI -->|Google sign in| Google
-    Google -->|credential| Auth
-
-    classDef ext fill:#f9f,stroke:#333,stroke-width:1px;
-    class Firebase,Google ext;
-```
-
-**Notes:**
-- **Cubits** are the single source of truth for UI state; sync services keep cubits synced with Firestore.
-- **WriteQueue** persists operations locally (via SharedPreferences) and retries them when remote repositories/network are available.
-- **Location-specific services** (e.g., transit/weather/waste collection) can be integrated as additional data providers.
+Find the Table of Contents in [docs/README.md](docs/README.md). Each document also includes a Mermaid diagram that visually maps the system's components and interactions.
 
 ---
 
 ## Repo layout
 
-- `housekeepr/` — Flutter app + Firebase config (this is the directory you `cd` into for Flutter commands)
-- `housekeepr/functions/` — Firebase Cloud Functions
-- `housekeepr/scripts/` — helper scripts (emulator runner, run-with-firebase, etc.)
+- `./` — Flutter app + Firebase config (this is the directory you `cd` into for Flutter commands)
+- `./functions/` — Firebase Cloud Functions
+- `./scripts/` — helper scripts (emulator runner, run-with-firebase, etc.)
 
 ## Getting started (developer)
 
 ### Prerequisites
 
-- **Flutter** (Dart SDK is constrained by `housekeepr/pubspec.yaml`)
+- **Flutter** (Dart SDK is constrained by `./pubspec.yaml`)
 - **A Firebase project** (or the Firebase emulators for tests)
 - **For emulators:** Java (JRE/JDK) + Firebase CLI (`npm i -g firebase-tools`)
 
@@ -122,10 +82,10 @@ To run a single integration test:
 
 This repo includes a Cloud Function used to join a household via an invite code.
 
-Deploy (from `housekeepr/functions`):
+Deploy (from `./functions`):
 
 ```bash
-cd housekeepr/functions
+cd ./functions
 npm install
 firebase deploy --only functions
 ```
@@ -135,7 +95,7 @@ firebase deploy --only functions
 Standard Flutter builds apply (Android/iOS/Desktop/Web). Example:
 
 ```powershell
-Set-Location -LiteralPath .\housekeepr
+Set-Location -LiteralPath .\
 flutter build web --release --dart-define-from-file=.env
 ```
 

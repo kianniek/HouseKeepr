@@ -130,7 +130,7 @@ class _ProfileMenuAvatarState extends State<_ProfileMenuAvatar> {
       );
     }
     return CircleAvatar(
-      backgroundColor: _color ?? theme.colorscheme.surfaceContainerHighest,
+      backgroundColor: _color ?? theme.colorScheme.surfaceContainerHighest,
       child: Icon(Icons.person, color: theme.colorScheme.onSurfaceVariant),
     );
   }

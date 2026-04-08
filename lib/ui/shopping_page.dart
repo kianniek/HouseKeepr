@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../cubits/shopping_cubit_v2.dart';
 import '../models/grocery_item.dart';
-import '../models/grocery_category.dart';
 import '../services/shopping_products_service.dart';
 import 'shopping_add_product_dialog.dart';
 
@@ -60,7 +59,7 @@ class _ShoppingPageState extends State<ShoppingPage> {
         _serviceInitialized = true;
       });
       _log('Service initialization complete');
-    } catch (e, st) {
+    } catch (e) {
       _log('Failed to initialize: $e');
       if (!mounted) return;
       setState(() {

@@ -421,7 +421,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                       style: inputTextStyle?.copyWith(
                                         color: Theme.of(
                                           context,
-                                        ).hintColor.withOpacity(0.7),
+                                        ).hintColor.withValues(alpha: 0.7),
                                       ),
                                     ),
                                   ],
@@ -618,7 +618,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                     decoration: BoxDecoration(
                       color: Theme.of(
                         context,
-                      ).colorScheme.primary.withOpacity(0.2),
+                      ).colorScheme.primary.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(

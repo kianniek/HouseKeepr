@@ -156,13 +156,9 @@ class ShoppingProductsService {
     if (normalized.isEmpty) return scores;
 
     // 1. Learned exact match gets full confidence.
-    if (_learningBox != null && _learningBox!.containsKey(normalized)) {
-      final catName = _learningBox!.get(normalized) as String?;
-      final learned = GroceryCategory.fromString(catName);
-      if (learned != null) {
-        scores[learned] = 1.0;
-      }
-    }
+    final catName = _learningBox?.get(normalized) as String?;
+    final learned = GroceryCategory.fromString(catName);
+    scores[learned] = 1.0;
 
     final tokens = normalized
         .split(RegExp(r'\s+'))

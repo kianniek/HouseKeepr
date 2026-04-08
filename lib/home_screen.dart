@@ -13,7 +13,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../cubits/task_cubit.dart';
 import '../cubits/shopping_cubit_v2.dart';
-import '../cubits/user_cubit.dart';
 import '../core/settings_repository.dart';
 import '../services/household_service.dart';
 
@@ -211,9 +210,11 @@ class HomeScreenState extends State<HomeScreen> {
                 height: 64,
                 constraints: const BoxConstraints(maxWidth: 400),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainer.withOpacity(0.8),
+                  color: colorScheme.surfaceContainer.withValues(alpha: 0.8),
                   borderRadius: BorderRadius.circular(30),
-                  border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: LayoutBuilder(
                   builder: (context, constraints) {

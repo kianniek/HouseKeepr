@@ -23,7 +23,6 @@ import 'repositories/task_repository.dart';
 import 'repositories/grocery_repository.dart';
 import 'firestore/firestore_task_repository.dart';
 import 'firestore/firestore_household_task_repository.dart';
-import 'firestore/firestore_grocery_repository.dart';
 import 'firestore/firestore_household_grocery_repository.dart';
 import 'models/task.dart';
 import 'models/grocery_item.dart';
@@ -37,6 +36,8 @@ import 'services/shopping_products_service.dart';
 import 'core/settings_repository.dart';
 import 'services/notification_service.dart';
 import 'services/widget_service.dart';
+import 'services/theme_controller.dart';
+import 'ui/app_theme.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -68,6 +69,10 @@ Future<void> main() async {
     debugPrint('Firebase initialization failed: $e\n$st');
   }
 
+  // Load persisted theme selection before running the app so the selected
+  // ColorScheme is available immediately.
+  await ThemeController.instance.load();
+
   runApp(MyApp(initializationError: initError));
 }
 
@@ -80,27 +85,51 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        final ColorScheme lightScheme =
+        // Keep the dynamic-color fallback available, but we prioritize the
+        // explicit ColorScheme coming from the ThemeController.
+        final ColorScheme fallbackLight =
             lightDynamic ??
             ColorScheme.fromSeed(
               seedColor: fallbackSeed,
               brightness: Brightness.light,
             );
-        final ColorScheme darkScheme =
+        final ColorScheme fallbackDark =
             darkDynamic ??
             ColorScheme.fromSeed(
               seedColor: fallbackSeed,
               brightness: Brightness.dark,
             );
 
-        return MaterialApp(
-          scaffoldMessengerKey: scaffoldMessengerKey,
-          navigatorKey: navigatorKey,
-          title: 'HouseKeepr',
-          theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
-          darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
-          themeMode: ThemeMode.system,
-          home: AppRoot(initializationError: initializationError),
+        final controller = ThemeController.instance;
+
+        return AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) {
+            final ColorScheme lightScheme = controller.lightScheme;
+            final ColorScheme darkScheme = controller.darkScheme;
+
+            return MaterialApp(
+              scaffoldMessengerKey: scaffoldMessengerKey,
+              navigatorKey: navigatorKey,
+              title: 'HouseKeepr',
+              theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
+              darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
+              themeMode: ThemeMode.system,
+              builder: (context, child) {
+                final isDark =
+                    MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+                final data = isDark
+                    ? ThemeData(colorScheme: darkScheme, useMaterial3: true)
+                    : ThemeData(colorScheme: lightScheme, useMaterial3: true);
+                return AnimatedTheme(
+                  data: data,
+                  duration: const Duration(milliseconds: 350),
+                  child: child!,
+                );
+              },
+              home: AppRoot(initializationError: initializationError),
+            );
+          },
         );
       },
     );
@@ -195,7 +224,7 @@ class _AppRootState extends State<AppRoot> {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: _householdStageLog.length,
-              separatorBuilder: (_, __) => const Divider(height: 12),
+              separatorBuilder: (context, index) => const Divider(height: 12),
               itemBuilder: (context, index) {
                 return Text(_householdStageLog[index]);
               },
@@ -540,7 +569,7 @@ class _HouseholdAppState extends State<HouseholdApp> {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: _initStageLog.length,
-              separatorBuilder: (_, __) => const Divider(height: 12),
+              separatorBuilder: (context, index) => const Divider(height: 12),
               itemBuilder: (context, index) {
                 return Text(_initStageLog[index]);
               },
