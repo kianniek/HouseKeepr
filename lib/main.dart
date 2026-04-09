@@ -37,7 +37,6 @@ import 'core/settings_repository.dart';
 import 'services/notification_service.dart';
 import 'services/widget_service.dart';
 import 'services/theme_controller.dart';
-import 'ui/app_theme.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -79,26 +78,13 @@ Future<void> main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key, this.initializationError});
   final Object? initializationError;
-  static const Color fallbackSeed = Color.fromARGB(255, 247, 136, 1);
 
   @override
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        // Keep the dynamic-color fallback available, but we prioritize the
-        // explicit ColorScheme coming from the ThemeController.
-        final ColorScheme fallbackLight =
-            lightDynamic ??
-            ColorScheme.fromSeed(
-              seedColor: fallbackSeed,
-              brightness: Brightness.light,
-            );
-        final ColorScheme fallbackDark =
-            darkDynamic ??
-            ColorScheme.fromSeed(
-              seedColor: fallbackSeed,
-              brightness: Brightness.dark,
-            );
+        // Dynamic color values are available in `lightDynamic`/`darkDynamic`,
+        // but this app uses the persisted `ThemeController` schemes instead.
 
         final controller = ThemeController.instance;
 

@@ -10,7 +10,7 @@ Future<void> showThemePickerSheet(BuildContext context) {
 }
 
 class ThemePickerSheet extends StatelessWidget {
-  const ThemePickerSheet({Key? key}) : super(key: key);
+  const ThemePickerSheet({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -41,11 +41,12 @@ class ThemePickerSheet extends StatelessWidget {
                     title: Text(t.label),
                     trailing: selected ? const Icon(Icons.check) : null,
                     onTap: () async {
+                      final navigator = Navigator.of(context);
                       await controller.setTheme(t);
-                      Navigator.of(context).maybePop();
+                      navigator.maybePop();
                     },
                   );
-                }).toList(),
+                }),
                 const SizedBox(height: 8),
               ],
             ),
@@ -58,7 +59,7 @@ class ThemePickerSheet extends StatelessWidget {
 
 class ThemePreviewRow extends StatelessWidget {
   final ColorScheme scheme;
-  const ThemePreviewRow({Key? key, required this.scheme}) : super(key: key);
+  const ThemePreviewRow({super.key, required this.scheme});
 
   @override
   Widget build(BuildContext context) {
