@@ -1,0 +1,29 @@
+{
+  "assets": {},
+  "config": {
+    "build_asset_types": [
+      "code_assets/code"
+    ],
+    "extensions": {
+      "code_assets": {
+        "android": {
+          "target_ndk_api": 24
+        },
+        "c_compiler": {
+          "ar": "C:\\Users\\kiann\\AppData\\Local\\Android\\sdk\\ndk\\29.0.14206865\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\llvm-ar.exe",
+          "cc": "C:\\Users\\kiann\\AppData\\Local\\Android\\sdk\\ndk\\29.0.14206865\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\clang.exe",
+          "ld": "C:\\Users\\kiann\\AppData\\Local\\Android\\sdk\\ndk\\29.0.14206865\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\ld.lld.exe"
+        },
+        "link_mode_preference": "dynamic",
+        "target_architecture": "x64",
+        "target_os": "android"
+      }
+    },
+    "linking_enabled": false
+  },
+  "out_dir_shared": "C:\\Users\\kiann\\Documents\\CodingProjects\\HouseKeepr\\.dart_tool\\hooks_runner\\shared\\win32\\build\\",
+  "out_file": "C:\\Users\\kiann\\Documents\\CodingProjects\\HouseKeepr\\.dart_tool\\hooks_runner\\win32\\3164de271b\\output.json",
+  "package_name": "win32",
+  "package_root": "C:\\Users\\kiann\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\win32-6.0.1\\",
+  "user_defines": {}
+}
