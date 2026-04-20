@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dynamic_color/dynamic_color.dart';
@@ -37,6 +37,7 @@ import 'core/settings_repository.dart';
 import 'services/notification_service.dart';
 import 'services/widget_service.dart';
 import 'services/theme_controller.dart';
+import 'ui/startup_splash_overlay.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
@@ -75,17 +76,26 @@ Future<void> main() async {
   runApp(MyApp(initializationError: initError));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key, this.initializationError});
   final Object? initializationError;
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool _splashAppReady = false;
+
+  void _markSplashAppReady() {
+    if (_splashAppReady) return;
+    setState(() => _splashAppReady = true);
+  }
 
   @override
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        // Dynamic color values are available in `lightDynamic`/`darkDynamic`,
-        // but this app uses the persisted `ThemeController` schemes instead.
-
         final controller = ThemeController.instance;
 
         return AnimatedBuilder(
@@ -110,10 +120,16 @@ class MyApp extends StatelessWidget {
                 return AnimatedTheme(
                   data: data,
                   duration: const Duration(milliseconds: 350),
-                  child: child!,
+                  child: StartupSplashHost(
+                    appReady: _splashAppReady,
+                    child: child!,
+                  ),
                 );
               },
-              home: AppRoot(initializationError: initializationError),
+              home: AppRoot(
+                initializationError: widget.initializationError,
+                onContentReady: _markSplashAppReady,
+              ),
             );
           },
         );
@@ -123,8 +139,9 @@ class MyApp extends StatelessWidget {
 }
 
 class AppRoot extends StatefulWidget {
-  const AppRoot({super.key, this.initializationError});
+  const AppRoot({super.key, this.initializationError, this.onContentReady});
   final Object? initializationError;
+  final VoidCallback? onContentReady;
 
   @override
   State<AppRoot> createState() => _AppRootState();
@@ -143,6 +160,7 @@ class _AppRootState extends State<AppRoot> {
   bool _showHouseholdGeneric = false;
   bool _showHouseholdDetailed = false;
   final List<String> _householdStageLog = [];
+  bool _splashReadyNotified = false;
 
   @override
   void initState() {
@@ -227,6 +245,17 @@ class _AppRootState extends State<AppRoot> {
     );
   }
 
+  void _notifySplashReady() {
+    if (_splashReadyNotified) return;
+    _splashReadyNotified = true;
+
+    // Force the splash to stay for at least 1.5 seconds so the user sees the Lottie
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      widget.onContentReady?.call();
+    });
+  }
+
   // Consolidated initialization logic
   Future<void> _retryInitialization() async {
     Object? initError;
@@ -306,6 +335,7 @@ class _AppRootState extends State<AppRoot> {
   Widget build(BuildContext context) {
     final effectiveInitError = _initError;
     if (effectiveInitError != null) {
+      _notifySplashReady();
       return Scaffold(
         appBar: AppBar(title: const Text('Initialization Error')),
         body: Padding(
@@ -328,6 +358,7 @@ class _AppRootState extends State<AppRoot> {
     }
 
     if (_user == null) {
+      _notifySplashReady();
       return LoginPage(
         auth: fb.FirebaseAuth.instance,
         googleSignIn: GoogleSignIn(),
@@ -359,12 +390,14 @@ class _AppRootState extends State<AppRoot> {
     }
 
     if (_householdId == null) {
+      _notifySplashReady();
       return HouseholdCreatePage(
         user: _user!,
         onCreated: (id) => setState(() => _householdId = id),
       );
     }
 
+    _notifySplashReady();
     return BlocProvider(
       create: (_) => UserCubit(_user),
       child: HouseholdApp(user: _user!, householdId: _householdId!),

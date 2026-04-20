@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:housekeepr/ui/smart_shopping_list_page.dart';
 import 'package:housekeepr/ui/tasks_page.dart';
 import 'package:housekeepr/ui/dashboard_page.dart';
+import 'package:housekeepr/ui/tools_library_page.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,9 +18,11 @@ import '../core/settings_repository.dart';
 import '../services/household_service.dart';
 
 enum HomeTab {
+  // When updating these, also update the _rebuildPages() method in HomeScreenState to ensure the correct pages are shown for each tab index
   dashboard(Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
   tasks(Icons.task_alt_outlined, Icons.task_alt, 'Taken'),
-  shopping(Icons.shopping_cart_outlined, Icons.shopping_cart, 'Boodschappen');
+  shopping(Icons.shopping_cart_outlined, Icons.shopping_cart, 'Boodschappen'),
+  tools(Icons.build_outlined, Icons.build, 'Tools');
 
   final IconData icon;
   final IconData activeIcon;
@@ -55,6 +58,7 @@ class HomeScreenState extends State<HomeScreen> {
       _checkForUpdates();
       _loadHouseholdId();
       _loadFloatingNavPreference();
+      _loadLastTab();
       _warmUpData();
     });
   }
@@ -86,6 +90,7 @@ class HomeScreenState extends State<HomeScreen> {
       DashboardPage(currentUser: user, householdId: _cachedHouseholdId),
       TasksPage(currentUser: user, householdId: _cachedHouseholdId),
       const SmartShoppingListPage(),
+      const ToolsLibraryPage(),
     ];
   }
 
@@ -165,7 +170,31 @@ class HomeScreenState extends State<HomeScreen> {
       }
       return;
     }
-    setState(() => _currentIndex = index);
+    setState(() {
+      _currentIndex = index;
+      _saveLastTab(index);
+    });
+  }
+
+  Future<void> _loadLastTab() async {
+    try {
+      _prefs ??= await SharedPreferences.getInstance();
+      final idx = _prefs?.getInt('last_home_tab');
+      if (idx != null && idx >= 0 && idx < HomeTab.values.length) {
+        setState(() => _currentIndex = idx);
+      }
+    } catch (e) {
+      debugPrint('Failed to load last tab: $e');
+    }
+  }
+
+  Future<void> _saveLastTab(int index) async {
+    try {
+      _prefs ??= await SharedPreferences.getInstance();
+      await _prefs?.setInt('last_home_tab', index);
+    } catch (e) {
+      debugPrint('Failed to save last tab: $e');
+    }
   }
 
   void selectTab(HomeTab tab) {
@@ -366,6 +395,7 @@ class HomeScreenState extends State<HomeScreen> {
       );
 
       return Scaffold(
+        resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
             bodyWithPadding,
@@ -381,6 +411,7 @@ class HomeScreenState extends State<HomeScreen> {
     }
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: _buildClassicNav(context),
     );

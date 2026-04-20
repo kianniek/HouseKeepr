@@ -9,6 +9,7 @@ class ShoppingListItemTile extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onQuantity;
   final VoidCallback? onQuantityLongPress;
+  final VoidCallback? onLongPress;
 
   const ShoppingListItemTile({
     super.key,
@@ -18,6 +19,7 @@ class ShoppingListItemTile extends StatelessWidget {
     required this.onDelete,
     required this.onQuantity,
     this.onQuantityLongPress,
+    this.onLongPress,
   });
 
   @override
@@ -129,6 +131,7 @@ class ShoppingListItemTile extends StatelessWidget {
           ),
 
           onTap: onCheck,
+          onLongPress: onLongPress,
         ),
       ),
     );

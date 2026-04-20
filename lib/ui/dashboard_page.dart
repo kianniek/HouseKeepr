@@ -6,7 +6,6 @@ import '../models/task.dart';
 import 'settings_page.dart';
 import 'tasks_page.dart';
 import 'widgets/task_card.dart';
-// removed unused imports
 
 class DashboardPage extends StatefulWidget {
   final fb.User? currentUser;
@@ -304,6 +303,18 @@ class _DashboardPageState extends State<DashboardPage> {
         final theme = Theme.of(context);
         final scheme = theme.colorScheme;
         var tasks = state.tasks.where((task) => !task.completed).toList();
+        // Sort by effective priority (bumped via putOffCount) then by soonest deadline
+        tasks.sort((a, b) {
+          final p = b.effectivePriority.index.compareTo(
+            a.effectivePriority.index,
+          );
+          if (p != 0) return p;
+          final aDeadline =
+              a.deadline ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bDeadline =
+              b.deadline ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return aDeadline.compareTo(bDeadline);
+        });
 
         if (_selectedRoom != 'Alles') {
           tasks = tasks.where((task) => task.room == _selectedRoom).toList();
@@ -330,28 +341,46 @@ class _DashboardPageState extends State<DashboardPage> {
                 ? '${task.room ?? 'Algemeen'} • $recurrence'
                 : task.room ?? 'Algemeen';
 
+            final isInactive =
+                task.inactiveUntil != null &&
+                DateTime.now().toUtc().isBefore(task.inactiveUntil!);
+
             return TaskCard(
               task: task,
               icon: _getTaskIcon(task),
               isCompleted: task.completed,
+              isInactive: isInactive,
               subtitle: Text(subtitle),
-              onToggleComplete: () {
+              onToggleComplete: () async {
                 if (task.isRepeating) {
                   final todayStr = DateTime.now()
                       .toUtc()
                       .toIso8601String()
                       .split('T')[0];
                   final cubit = context.read<TaskCubit>();
-                  if (task.completed) {
-                    cubit.uncompleteOccurrence(task.id, todayStr);
-                  } else {
-                    cubit.completeOccurrence(task.id, todayStr);
-                  }
+                  await cubit.completeOccurrence(task.id, todayStr);
                 } else {
                   context.read<TaskCubit>().updateTask(
-                    task.copyWith(completed: !task.completed),
+                    task.copyWith(completed: true),
                   );
                 }
+              },
+              onPutOff: () async {
+                final now = DateTime.now().toUtc();
+                final tomorrow = DateTime.utc(
+                  now.year,
+                  now.month,
+                  now.day + 1,
+                  12,
+                  0,
+                );
+
+                final updated = task.copyWith(
+                  deadline: tomorrow,
+                  putOffCount: task.putOffCount + 1,
+                );
+
+                context.read<TaskCubit>().updateTask(updated);
               },
             );
           }).toList(),
@@ -361,13 +390,12 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   IconData _getTaskIcon(Task task) {
-    IconData? match;
     final title = task.title.toLowerCase();
-    match = _matchIcon(title);
-    if (match != null) return match;
     final description = (task.description ?? '').toLowerCase();
-    match = _matchIcon(description);
-    return match ?? Icons.home;
+    final match1 = _matchIcon(title);
+    if (match1 != null) return match1;
+    final match2 = _matchIcon(description);
+    return match2 ?? Icons.home;
   }
 
   IconData? _matchIcon(String text) {

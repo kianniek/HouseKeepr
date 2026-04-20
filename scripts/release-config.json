@@ -1,0 +1,10 @@
+{
+  "status": "completed",
+  "nameTemplate": "Auto-release {versionCode}",
+  "releaseNotes": [
+    {
+      "language": "en-US",
+      "text": "Bug fixes and performance improvements."
+    }
+  ]
+}

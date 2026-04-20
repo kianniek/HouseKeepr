@@ -1,7 +1,7 @@
 # Run Flutter with device/mode selection and env defines
 # Usage: .\run_flutter_with_env.ps1
 
-$projectPath = "C:\Users\kiann\Documents\Coding Projects\HouseKeepr\housekeepr"
+$projectPath = (Get-Location).Path
 
 Push-Location $projectPath
 

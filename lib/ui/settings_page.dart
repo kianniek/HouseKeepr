@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:lottie/lottie.dart';
 
 import '../core/settings_repository.dart';
 import '../home_screen.dart';
@@ -117,15 +118,113 @@ class _SettingsPageState extends State<SettingsPage> {
             trailing: const Icon(Icons.access_time),
             onTap: _pickEnd,
           ),
-          ListTile(
-            title: const Text('Test notification'),
-            subtitle: const Text('Send a test notification now'),
-            trailing: const Icon(Icons.notifications_active),
-            onTap: () async {
-              await NotificationService.instance.showTestNotification();
-            },
+          ExpansionTile(
+            title: const Text('Diagnostics'),
+            leading: const Icon(Icons.bug_report),
+            children: [
+              ListTile(
+                title: const Text('Test notification'),
+                subtitle: const Text('Send a test notification now'),
+                trailing: const Icon(Icons.notifications_active),
+                onTap: () async {
+                  await NotificationService.instance.showTestNotification();
+                },
+              ),
+              ListTile(
+                title: const Text('Test splashscreen'),
+                subtitle: const Text('Play the startup animation'),
+                trailing: const Icon(Icons.play_circle_fill),
+                onTap: () {
+                  _showTestSplash();
+                },
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _showTestSplash() async {
+    await Navigator.of(context).push(_TestSplashRoute());
+  }
+}
+
+class _TestSplashRoute extends PageRouteBuilder<void> {
+  _TestSplashRoute()
+    : super(
+        opaque: false,
+        barrierDismissible: false,
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const _TestSplashScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
+      );
+}
+
+class _TestSplashScreen extends StatefulWidget {
+  const _TestSplashScreen();
+
+  @override
+  State<_TestSplashScreen> createState() => _TestSplashScreenState();
+}
+
+class _TestSplashScreenState extends State<_TestSplashScreen>
+    with TickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(vsync: this);
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        Navigator.of(context).pop();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final splashBackground = Theme.of(context).colorScheme.surface;
+    final splashPrimary = Theme.of(context).colorScheme.primary;
+
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: splashBackground,
+        body: SafeArea(
+          child: Center(
+            child: SizedBox(
+              width: MediaQuery.of(context).size.width * 0.7,
+              height: MediaQuery.of(context).size.width * 0.7,
+              child: ColorFiltered(
+                colorFilter: ColorFilter.mode(splashPrimary, BlendMode.srcIn),
+                child: Opacity(
+                  // 0.99 forces a saveLayer, which merges the overlapping
+                  // paths into a single flat shape before drawing.
+                  opacity: 0.99,
+                  child: Lottie.asset(
+                    'assets/HouseKeeprAnimationLottie.json',
+                    controller: _controller,
+                    fit: BoxFit.contain,
+                    animate: false,
+                    repeat: false,
+                    onLoaded: (composition) {
+                      _controller.duration = composition.duration;
+                      _controller.forward(from: 0);
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

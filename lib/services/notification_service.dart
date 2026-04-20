@@ -79,7 +79,7 @@ class NotificationService {
           defaultPresentBadge: true,
         );
         await _plugin!.initialize(
-          const InitializationSettings(android: android, iOS: iOS),
+          settings: const InitializationSettings(android: android, iOS: iOS),
           onDidReceiveNotificationResponse: _handleNotificationResponse,
         );
         await _createNotificationChannels();
@@ -211,10 +211,10 @@ class NotificationService {
       try {
         final id = DateTime.now().millisecondsSinceEpoch.remainder(1 << 31);
         await _plugin!.show(
-          id,
-          'Test notification',
-          'Notifications are working on this device.',
-          const NotificationDetails(
+          id: id,
+          title: 'Test notification',
+          body: 'Notifications are working on this device.',
+          notificationDetails: const NotificationDetails(
             android: AndroidNotificationDetails(
               'task_reminders',
               'Task Reminders',
@@ -258,11 +258,11 @@ class NotificationService {
         final scheduled = tz.TZDateTime.from(at.toUtc(), tz.local);
         final color = _getColorForPriority(priorityLevel);
         await _plugin!.zonedSchedule(
-          id,
-          title ?? 'Reminder',
-          body ?? '',
-          scheduled,
-          NotificationDetails(
+          id: id,
+          title: title ?? 'Reminder',
+          body: body ?? '',
+          scheduledDate: scheduled,
+          notificationDetails: NotificationDetails(
             android: AndroidNotificationDetails(
               'task_reminders',
               'Task Reminders',
@@ -296,7 +296,7 @@ class NotificationService {
     await _prefs!.setStringList(_kRemindersKey, filtered);
     if (_pluginAvailable && _plugin != null) {
       try {
-        await _plugin!.cancel(_hashId(taskId));
+        await _plugin!.cancel(id: _hashId(taskId));
       } catch (_) {}
     }
   }
@@ -325,8 +325,8 @@ class NotificationService {
     if (!enabled) {
       if (_pluginAvailable && _plugin != null) {
         try {
-          await _plugin!.cancel(startId);
-          await _plugin!.cancel(endId);
+          await _plugin!.cancel(id: startId);
+          await _plugin!.cancel(id: endId);
         } catch (_) {}
       }
       return;
@@ -357,11 +357,11 @@ class NotificationService {
     if (_pluginAvailable && _plugin != null) {
       try {
         await _plugin!.zonedSchedule(
-          startId,
-          'Start of day',
-          'Tasks for your day',
-          nextStart,
-          const NotificationDetails(
+          id: startId,
+          title: 'Start of day',
+          body: 'Tasks for your day',
+          scheduledDate: nextStart,
+          notificationDetails: const NotificationDetails(
             android: AndroidNotificationDetails(
               'daily_reminders',
               'Daily reminders',
@@ -376,11 +376,11 @@ class NotificationService {
         );
 
         await _plugin!.zonedSchedule(
-          endId,
-          'End of day',
-          'Review completed tasks',
-          nextEnd,
-          const NotificationDetails(
+          id: endId,
+          title: 'End of day',
+          body: 'Review completed tasks',
+          scheduledDate: nextEnd,
+          notificationDetails: const NotificationDetails(
             android: AndroidNotificationDetails(
               'daily_reminders',
               'Daily reminders',

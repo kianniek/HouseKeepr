@@ -13,7 +13,7 @@ import '../models/home.dart';
 import '../cubits/task_cubit.dart';
 import '../firestore/firestore_home_repository.dart';
 import 'profile_menu.dart';
-import 'household_dashboard_page.dart' show TaskListTile;
+import 'household_page.dart' show TaskListTile;
 import 'task_add_dialog.dart';
 import '../services/household_service.dart';
 import 'shopping_add_dialog.dart';
@@ -53,7 +53,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _bottomNavIndex = 0; // 0 = Home, 1 = Tasks, 2 = Shopping
+  int _bottomNavIndex = 0; // 0 = Home, 1 = Tasks, 2 = Shopping, 3 = Tools
   final int _feedIndex = 0; // 0 = For You, 1 = Everyone
   String? _cachedHouseholdId;
   bool _updateChecked = false;

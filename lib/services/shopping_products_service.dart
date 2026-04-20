@@ -69,6 +69,8 @@ class ShoppingProduct {
 class ShoppingProductsService {
   static const _kProductsKey = 'shopping_products_csv_v1';
   static const _kLearningBox = 'learning_products';
+  static const double _minLearnedConfidence = 0.45;
+  static const double _minCsvConfidence = 0.35;
 
   static final ShoppingProductsService _instance =
       ShoppingProductsService._internal();
@@ -140,30 +142,112 @@ class ShoppingProductsService {
     GroceryCategory category,
   ) async {
     if (_learningBox == null) return;
-    final key = productName.trim().toLowerCase();
+    final key = _normalizeText(productName);
+    if (key.isEmpty) return;
     await _learningBox!.put(key, category.name);
   }
 
   /// Get a learned category or fallback to CSV data.
   GroceryCategory? getCategoryForProduct(String productName) {
-    return getBestCategoryForProduct(productName);
+    final normalized = _normalizeText(productName);
+    if (normalized.isEmpty) return null;
+
+    final learnedScores = _getLearnedCategoryConfidenceScores(normalized);
+    final learnedBest = _bestCategoryForScores(learnedScores);
+    if (learnedBest != null && learnedBest.value >= _minLearnedConfidence) {
+      return learnedBest.key;
+    }
+
+    final csvScores = _getCsvCategoryConfidenceScores(normalized);
+    return _bestCategoryForScores(csvScores)?.key;
   }
 
   /// Get confidence scores for categories based on per-letter prefix matches.
   Map<GroceryCategory, double> getCategoryConfidenceScores(String productName) {
-    final normalized = productName.trim().toLowerCase();
+    final normalized = _normalizeText(productName);
     final scores = <GroceryCategory, double>{};
     if (normalized.isEmpty) return scores;
 
-    // 1. Learned exact match gets full confidence.
-    final catName = _learningBox?.get(normalized) as String?;
-    final learned = GroceryCategory.fromString(catName);
-    scores[learned] = 1.0;
+    _mergeScores(scores, _getLearnedCategoryConfidenceScores(normalized));
+    _mergeScores(scores, _getCsvCategoryConfidenceScores(normalized));
 
-    final tokens = normalized
-        .split(RegExp(r'\s+'))
-        .where((t) => t.isNotEmpty)
+    return scores;
+  }
+
+  /// Pick the category with the highest confidence score.
+  GroceryCategory? getBestCategoryForProduct(String productName) {
+    final normalized = _normalizeText(productName);
+    if (normalized.isEmpty) return null;
+
+    final learnedScores = _getLearnedCategoryConfidenceScores(normalized);
+    final learnedBest = _bestCategoryForScores(learnedScores);
+    if (learnedBest != null && learnedBest.value >= _minLearnedConfidence) {
+      return learnedBest.key;
+    }
+
+    final scores = _getCsvCategoryConfidenceScores(normalized);
+    if (scores.isEmpty) return null;
+
+    return _bestCategoryForScores(scores)?.key;
+  }
+
+  double _prefixConfidence(String token, String candidate) {
+    if (token.isEmpty || candidate.isEmpty) return 0.0;
+    if (!candidate.startsWith(token)) return 0.0;
+    if (candidate == token) return 1.0;
+
+    final denom = candidate.length;
+    if (denom == 0) return 0.0;
+    return token.length / denom;
+  }
+
+  String _normalizeText(String input) {
+    return input.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  List<String> _tokenize(String input) {
+    final normalized = _normalizeText(input);
+    if (normalized.isEmpty) return const [];
+
+    return normalized
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where((token) => token.isNotEmpty)
         .toList();
+  }
+
+  Map<GroceryCategory, double> _getLearnedCategoryConfidenceScores(
+    String productName,
+  ) {
+    final scores = <GroceryCategory, double>{};
+    if (_learningBox == null || !_learningBox!.isOpen) return scores;
+
+    final normalized = _normalizeText(productName);
+    if (normalized.isEmpty) return scores;
+
+    for (final rawKey in _learningBox!.keys) {
+      if (rawKey is! String) continue;
+      final categoryName = _learningBox!.get(rawKey) as String?;
+      final category = GroceryCategory.fromString(categoryName);
+      final score = _learnedMatchConfidence(normalized, rawKey);
+      if (score <= 0) continue;
+
+      final existing = scores[category] ?? 0.0;
+      if (score > existing) {
+        scores[category] = score;
+      }
+    }
+
+    return scores;
+  }
+
+  Map<GroceryCategory, double> _getCsvCategoryConfidenceScores(
+    String productName,
+  ) {
+    final normalized = _normalizeText(productName);
+    final scores = <GroceryCategory, double>{};
+    if (normalized.isEmpty) return scores;
+
+    final tokens = _tokenize(normalized);
     if (tokens.isEmpty) return scores;
 
     for (final p in _products) {
@@ -180,7 +264,7 @@ class ShoppingProductsService {
         }
       }
 
-      if (bestProductScore > 0) {
+      if (bestProductScore >= _minCsvConfidence) {
         final category = _mapSectionToCategory(p.sectionEN);
         final existing = scores[category] ?? 0.0;
         if (bestProductScore > existing) {
@@ -192,31 +276,90 @@ class ShoppingProductsService {
     return scores;
   }
 
-  /// Pick the category with the highest confidence score.
-  GroceryCategory? getBestCategoryForProduct(String productName) {
-    final scores = getCategoryConfidenceScores(productName);
+  MapEntry<GroceryCategory, double>? _bestCategoryForScores(
+    Map<GroceryCategory, double> scores,
+  ) {
     if (scores.isEmpty) return null;
 
-    GroceryCategory? bestCategory;
-    double bestScore = 0.0;
+    MapEntry<GroceryCategory, double>? best;
     scores.forEach((category, score) {
-      if (score > bestScore) {
-        bestScore = score;
-        bestCategory = category;
+      if (best == null || score > best!.value) {
+        best = MapEntry(category, score);
       }
     });
 
-    return bestCategory;
+    return best;
   }
 
-  double _prefixConfidence(String token, String candidate) {
-    if (token.isEmpty || candidate.isEmpty) return 0.0;
-    if (!candidate.startsWith(token)) return 0.0;
-    if (candidate == token) return 1.0;
+  void _mergeScores(
+    Map<GroceryCategory, double> target,
+    Map<GroceryCategory, double> source,
+  ) {
+    source.forEach((category, score) {
+      final existing = target[category] ?? 0.0;
+      if (score > existing) {
+        target[category] = score;
+      }
+    });
+  }
 
-    final denom = candidate.length;
-    if (denom == 0) return 0.0;
-    return token.length / denom;
+  double _learnedMatchConfidence(String input, String learnedKey) {
+    final normalizedInput = _normalizeText(input);
+    final normalizedLearned = _normalizeText(learnedKey);
+    if (normalizedInput.isEmpty || normalizedLearned.isEmpty) return 0.0;
+
+    if (normalizedInput == normalizedLearned) {
+      return 1.0;
+    }
+
+    final inputTokens = _tokenize(normalizedInput);
+    final learnedTokens = _tokenize(normalizedLearned);
+    if (inputTokens.isEmpty || learnedTokens.isEmpty) return 0.0;
+
+    double bestScore = 0.0;
+
+    for (
+      int learnedIndex = 0;
+      learnedIndex < learnedTokens.length;
+      learnedIndex++
+    ) {
+      final learnedToken = learnedTokens[learnedIndex];
+      final tokenWeight =
+          learnedTokens.length == 1 || learnedIndex == learnedTokens.length - 1
+          ? 1.0
+          : 0.8;
+
+      for (final inputToken in inputTokens) {
+        final similarity = _tokenSimilarity(inputToken, learnedToken);
+        if (similarity <= 0) continue;
+
+        final score = 0.75 + (0.25 * similarity * tokenWeight);
+        if (score > bestScore) {
+          bestScore = score;
+        }
+      }
+    }
+
+    return bestScore;
+  }
+
+  double _tokenSimilarity(String inputToken, String learnedToken) {
+    if (inputToken.isEmpty || learnedToken.isEmpty) return 0.0;
+    if (inputToken == learnedToken) return 1.0;
+
+    if (inputToken.startsWith(learnedToken) ||
+        learnedToken.startsWith(inputToken)) {
+      final shorter = inputToken.length < learnedToken.length
+          ? inputToken.length
+          : learnedToken.length;
+      final longer = inputToken.length > learnedToken.length
+          ? inputToken.length
+          : learnedToken.length;
+      if (longer == 0) return 0.0;
+      return shorter / longer;
+    }
+
+    return 0.0;
   }
 
   static const _sectionToCategory = {

@@ -86,6 +86,14 @@ class Task extends Equatable {
   final int? localVersion;
   final int? serverVersion;
   final bool isRetrying;
+  // The original priority when the task was created. This remains constant
+  // and is used when 'Done' should not reset the created priority.
+  final TaskPriority initialPriority;
+  // Number of times the task was put off (used to compute bumped priority).
+  final int putOffCount;
+  // For repeating tasks that have been completed, this records the next
+  // activation datetime (UTC) until which the task should remain inactive.
+  final DateTime? inactiveUntil;
 
   const Task({
     required this.id,
@@ -114,7 +122,10 @@ class Task extends Equatable {
     this.localVersion,
     this.serverVersion,
     this.isRetrying = false,
-  });
+    TaskPriority? initialPriority,
+    this.putOffCount = 0,
+    this.inactiveUntil,
+  }) : initialPriority = initialPriority ?? priority;
 
   Task copyWith({
     String? id,
@@ -143,6 +154,9 @@ class Task extends Equatable {
     int? serverVersion,
     bool? isRetrying,
     bool? archived,
+    TaskPriority? initialPriority,
+    int? putOffCount,
+    DateTime? inactiveUntil,
   }) => Task(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -168,6 +182,9 @@ class Task extends Equatable {
     serverVersion: serverVersion ?? this.serverVersion,
     isRetrying: isRetrying ?? this.isRetrying,
     archived: archived ?? this.archived,
+    initialPriority: initialPriority ?? this.initialPriority,
+    putOffCount: putOffCount ?? this.putOffCount,
+    inactiveUntil: inactiveUntil ?? this.inactiveUntil,
     reminderEnabled: reminderEnabled ?? this.reminderEnabled,
     reminderOffsetMinutes: reminderOffsetMinutes ?? this.reminderOffsetMinutes,
   );
@@ -199,6 +216,9 @@ class Task extends Equatable {
     'localVersion': localVersion,
     'serverVersion': serverVersion,
     'isRetrying': isRetrying,
+    'initialPriority': initialPriority.index,
+    'putOffCount': putOffCount,
+    'inactiveUntil': inactiveUntil?.toUtc().toIso8601String(),
   };
 
   factory Task.fromMap(Map<String, dynamic> map) => Task(
@@ -330,6 +350,43 @@ class Task extends Equatable {
       if (v is String) return int.tryParse(v);
       return null;
     }(),
+    initialPriority: () {
+      final p = map['initialPriority'];
+      if (p is int && p >= 0 && p < TaskPriority.values.length) {
+        return TaskPriority.values[p];
+      }
+      if (p is String) {
+        final idx = int.tryParse(p);
+        if (idx != null && idx >= 0 && idx < TaskPriority.values.length) {
+          return TaskPriority.values[idx];
+        }
+        final byName = TaskPriority.values.firstWhere(
+          (v) => v.toString().split('.').last.toLowerCase() == p.toLowerCase(),
+          orElse: () => TaskPriority.medium,
+        );
+        return byName;
+      }
+      return TaskPriority.medium;
+    }(),
+    putOffCount: () {
+      final v = map['putOffCount'];
+      if (v is int) return v;
+      if (v is String) return int.tryParse(v) ?? 0;
+      return 0;
+    }(),
+    inactiveUntil: () {
+      final v = map['inactiveUntil'];
+      if (v is DateTime) return v;
+      try {
+        if (v is fs.Timestamp) return v.toDate().toUtc();
+      } catch (_) {}
+      if (v is String && v.isNotEmpty) {
+        try {
+          return DateTime.parse(v).toUtc();
+        } catch (_) {}
+      }
+      return null;
+    }(),
     archived: map['archived'] is bool
         ? map['archived'] as bool
         : (map['archived'] is String
@@ -426,5 +483,17 @@ class Task extends Equatable {
     localVersion,
     serverVersion,
     isRetrying,
+    initialPriority,
+    putOffCount,
+    inactiveUntil,
   ];
+}
+
+extension TaskPriorityExtensions on Task {
+  TaskPriority get effectivePriority {
+    final base = initialPriority.index;
+    final bump = (putOffCount);
+    final idx = (base + bump).clamp(0, TaskPriority.values.length - 1);
+    return TaskPriority.values[idx];
+  }
 }

@@ -1,10 +1,20 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:flutter/services.dart';
+import 'package:uuid/uuid.dart';
 import '../cubits/task_cubit.dart';
 import '../models/task.dart';
 import 'task_add_dialog.dart';
 import 'widgets/task_card.dart';
+
+class _TaskIconKeyword {
+  final IconData icon;
+  final List<String> keywords;
+  const _TaskIconKeyword(this.icon, this.keywords);
+}
 
 class TasksPage extends StatefulWidget {
   final String? householdId;
@@ -21,45 +31,171 @@ class _RepeatConfig {
   const _RepeatConfig(this.interval, this.unit);
 }
 
-class _TaskIconKeyword {
-  final IconData icon;
-  final List<String> keywords;
-  const _TaskIconKeyword(this.icon, this.keywords);
-}
+class _TasksPageState extends State<TasksPage> {
+  final TextEditingController _bulkImportController = TextEditingController();
 
-class _TasksPageState extends State<TasksPage>
-    with SingleTickerProviderStateMixin {
-  int _tabIndex = 0; // 0 = Regular, 1 = Repeating
-  late final TabController _tabController;
-  bool _todayCompletedExpanded = false;
-  bool _otherCompletedExpanded = false;
-  final ExpansibleController _todayController =
-      ExpansibleController(); // <--- ADD THIS
-  final ExpansibleController _otherController =
-      ExpansibleController(); // <--- ADD THIS
-  final GlobalKey<AnimatedListState> _todayCompletedListKey =
-      GlobalKey<AnimatedListState>();
-  final GlobalKey<AnimatedListState> _otherCompletedListKey =
-      GlobalKey<AnimatedListState>();
-  final GlobalKey _todayCompletedTileKey = GlobalKey();
-  final GlobalKey _otherCompletedTileKey = GlobalKey();
-  final List<Task> _todayCompletedCache = [];
-  final List<Task> _otherCompletedCache = [];
+  String _bulkTemplateJson() {
+    // Provide a concise template that only exposes fields users should edit.
+    // Internal/sync fields (ids, versions, timestamps) will be generated
+    // or injected during import.
+    final template = [
+      {
+        "title": "String (e.g., 'Dweil de vloer')",
+        "description": "String (Optional - extra details about the task)",
+        "priority": "Integer (0=low, 1=medium, 2=high, 3=urgent)",
+        "deadline": "String (ISO 8601 format: '2026-04-20T12:00:00Z')",
+        "room":
+            "String (Options: 'Badkamer', 'Keuken', 'Slaapkamer', 'Woonkamer')",
+        "isRepeating": "Boolean (true or false)",
+        "repeatRule":
+            "String (Format: 'every:1:day', 'every:2:week', or 'monthly')",
+        "repeatDays":
+            "Array of Integers (1=Mon through 7=Sun; e.g., [1, 3] for Mon/Wed)",
+      },
+    ];
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) return;
-      setState(() => _tabIndex = _tabController.index);
-    });
+    return const JsonEncoder.withIndent('  ').convert(template);
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+  Future<void> _copyBulkTemplate() async {
+    try {
+      final jsonStr = _bulkTemplateJson();
+      await Clipboard.setData(ClipboardData(text: jsonStr));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Template copied to clipboard')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to copy template: $e')));
+    }
+  }
+
+  Future<void> _confirmBulkImport(BuildContext sheetContext) async {
+    final raw = _bulkImportController.text.trim();
+    if (raw.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please paste a JSON array of tasks')),
+      );
+      return;
+    }
+
+    try {
+      final decoded = json.decode(raw);
+      if (decoded is! List) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Expected a JSON array of task objects'),
+          ),
+        );
+        return;
+      }
+
+      final rawEntries = <Map<String, dynamic>>[];
+      final tasks = <Task>[];
+
+      for (final e in decoded) {
+        try {
+          if (e is Map) {
+            final map = Map<String, dynamic>.from(e);
+            rawEntries.add(map);
+            tasks.add(Task.fromMap(map));
+          } else if (e is String) {
+            final m = Map<String, dynamic>.from(json.decode(e) as Map);
+            rawEntries.add(m);
+            tasks.add(Task.fromMap(m));
+          }
+        } catch (_) {
+          // skip malformed entry
+        }
+      }
+
+      if (tasks.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No valid task objects found')),
+        );
+        return;
+      }
+
+      // Close the sheet and show a confirmation preview page
+      Navigator.of(sheetContext).pop();
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (ctx) => _BulkImportConfirmationPage(
+            tasks: tasks,
+            rawEntries: rawEntries,
+            taskCubit: context.read<TaskCubit>(),
+            householdId: widget.householdId,
+            currentUser: widget.currentUser,
+            buildPreviewCard: (c, task) =>
+                _buildTaskCard(c, task, isRepeating: task.isRepeating),
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Invalid JSON: $e')));
+    }
+  }
+
+  Future<void> _showBulkImportSheet() async {
+    _bulkImportController.clear();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 12,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Bulk Import Mode',
+                  style: Theme.of(sheetContext).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                const Text('Paste a JSON array of task objects.'),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _copyBulkTemplate,
+                  icon: const Icon(Icons.copy),
+                  label: const Text('Copy Template'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _bulkImportController,
+                  maxLines: 8,
+                  decoration: const InputDecoration(
+                    labelText: 'Task JSON array',
+                    hintText: '[{"title":"Vacuum living room"}]',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => _confirmBulkImport(sheetContext),
+                    child: const Text('Confirm & Preview'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -72,36 +208,24 @@ class _TasksPageState extends State<TasksPage>
         );
         // ------------------
 
-        // We rely on TaskCubit to contain ALL tasks (User + Household).
-        // FirestoreSyncService merges them. We simply filter here.
-        final regularTasks = state.tasks.where((t) => !t.isRepeating).toList();
-        final repeatingTasks = state.tasks.where((t) => t.isRepeating).toList();
+        final repeatingTasksCount = state.tasks
+            .where((t) => t.isRepeating)
+            .length;
+        final regularTasksCount = state.tasks.length - repeatingTasksCount;
 
-        debugPrint('TasksPage: Regular tasks count: ${regularTasks.length}');
-        debugPrint(
-          'TasksPage: Repeating tasks count: ${repeatingTasks.length}',
-        );
+        debugPrint('TasksPage: Regular tasks count: $regularTasksCount');
+        debugPrint('TasksPage: Repeating tasks count: $repeatingTasksCount');
 
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Tasks'),
-            bottom: TabBar(
-              controller: _tabController,
-              tabs: const [
-                Tab(text: 'Regular'),
-                Tab(text: 'Repeating'),
-              ],
-            ),
-          ),
-          body: _tabIndex == 0
-              ? _buildTaskList(context, regularTasks)
-              : _buildTaskList(context, repeatingTasks, isRepeating: true),
+          appBar: AppBar(title: const Text('Tasks')),
+          body: _buildTaskList(context, state.tasks),
           floatingActionButton: FloatingActionButton(
             onPressed: () {
               showTaskAddEditDialog(
                 context,
                 householdId: widget.householdId,
                 currentUser: widget.currentUser,
+                onBulkImportTap: _showBulkImportSheet,
               );
             },
             tooltip: 'Add Task',
@@ -154,14 +278,98 @@ class _TasksPageState extends State<TasksPage>
     return 'Repeats every ${cfg.interval} $unitLabel';
   }
 
-  Widget _buildTaskList(
-    BuildContext context,
-    List<Task> tasks, {
-    bool isRepeating = false,
-  }) {
+  DateTime? _nextOccurrence(Task task) {
+    if (!task.isRepeating) return null;
+    final cfg = _parseRepeatRule(task.repeatRule);
+    final now = DateTime.now().toUtc();
+    final deadline = (task.deadline ?? now).toUtc();
+    final startDate = DateTime.utc(deadline.year, deadline.month, deadline.day);
+    final today = DateTime.utc(now.year, now.month, now.day);
+    final todayStr = DateTime.utc(
+      now.year,
+      now.month,
+      now.day,
+    ).toIso8601String().split('T')[0];
+    final completedToday = (task.completedDates ?? []).contains(todayStr);
+
+    if (cfg.unit == 'day') {
+      final diffDays = today.difference(startDate).inDays;
+      if (diffDays < 0) return startDate;
+      final remainder = diffDays % cfg.interval;
+      final offset = remainder == 0 ? 0 : cfg.interval - remainder;
+      final candidate = today.add(Duration(days: offset));
+      if (completedToday && candidate.isAtSameMomentAs(today)) {
+        return candidate.add(Duration(days: cfg.interval));
+      }
+      return candidate;
+    }
+
+    if (cfg.unit == 'week') {
+      final days = task.repeatDays?.isNotEmpty ?? false
+          ? task.repeatDays!
+          : <int>[startDate.weekday];
+      for (int offset = 0; offset <= 366; offset++) {
+        final check = now.add(Duration(days: offset));
+        if (completedToday && offset == 0) continue;
+        if (!days.contains(check.weekday)) continue;
+        final diff = check.difference(startDate).inDays;
+        if (diff < 0) continue;
+        final weekIndex = diff ~/ 7;
+        if (weekIndex % cfg.interval != 0) continue;
+        return DateTime.utc(check.year, check.month, check.day);
+      }
+      return null;
+    }
+
+    if (cfg.unit == 'month') {
+      final days = task.repeatDays?.isNotEmpty ?? false
+          ? task.repeatDays!
+          : <int>[startDate.day];
+      for (int m = 0; m <= 24; m++) {
+        final monthCandidate = DateTime.utc(now.year, now.month + m, 1);
+        final monthDiff =
+            (monthCandidate.year - startDate.year) * 12 +
+            (monthCandidate.month - startDate.month);
+        if (monthDiff < 0 || monthDiff % cfg.interval != 0) continue;
+        for (final d in days) {
+          try {
+            final candidate = DateTime.utc(
+              monthCandidate.year,
+              monthCandidate.month,
+              d,
+            );
+            if (completedToday && candidate.isAtSameMomentAs(today)) continue;
+            if (!candidate.isBefore(now)) return candidate;
+          } catch (_) {
+            // skip invalid day
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  int _compareByNextOccurrence(Task a, Task b) {
+    final aNext = _nextOccurrence(a);
+    final bNext = _nextOccurrence(b);
+    if (aNext == null && bNext == null) return a.title.compareTo(b.title);
+    if (aNext == null) return 1;
+    if (bNext == null) return -1;
+    return aNext.compareTo(bNext);
+  }
+
+  Widget _buildTaskList(BuildContext context, List<Task> tasks) {
     // Helper: determine if a repeating task is active today
     bool isRepeatingActiveToday(Task t) {
       if (!t.isRepeating) return false;
+      // Respect explicit inactiveUntil flag if set — task remains inactive until then
+      try {
+        final iu = t.inactiveUntil;
+        if (iu != null) {
+          final nowUtc = DateTime.now().toUtc();
+          if (nowUtc.isBefore(iu)) return false;
+        }
+      } catch (_) {}
       final cfg = _parseRepeatRule(t.repeatRule);
       final now = DateTime.now().toUtc();
       final today = DateTime.utc(now.year, now.month, now.day);
@@ -191,237 +399,137 @@ class _TasksPageState extends State<TasksPage>
       return false;
     }
 
-    // Filter out repeating tasks that aren't active today (deactivate them)
-    final activeTasks = tasks.where((t) {
-      if (t.isRepeating && !isRepeating) return false; // Tab filter
-      if (isRepeating && !t.isRepeating) return false; // Tab filter
-      if (t.isRepeating && !isRepeatingActiveToday(t)) {
-        return false; // Hide repeating tasks not active today
-      }
-      return true;
-    }).toList();
-
-    if (activeTasks.isEmpty) {
-      return const Center(child: Text('No tasks yet'));
-    }
-
-    // Normalize "today" to UTC for comparison
-    final today = DateTime.now().toUtc();
-    bool isToday(DateTime? d) {
-      if (d == null) return false;
-      final du = d.toUtc();
-      return du.year == today.year &&
-          du.month == today.month &&
-          du.day == today.day;
-    }
-
-    // Tasks for today: due today (regular tasks are not shown if not today unless in Other)
-    final tasksForToday = activeTasks
-        .where((t) => isToday(t.deadline))
-        .toList();
-    // Other tasks: non-repeating tasks without a deadline or future deadline
-    final otherTasks = activeTasks
-        .where((t) => !tasksForToday.contains(t))
-        .toList();
-
-    // Helper: determine whether a task is considered completed for grouping.
-    bool isTaskCompleted(Task t) {
+    bool isDoneForToday(Task t, String todayStr) {
       if (t.isRepeating) {
-        final todayStr = DateTime.now().toUtc().toIso8601String().split('T')[0];
         return (t.completedDates ?? []).contains(todayStr);
       }
       return t.completed;
     }
 
-    Widget buildSection(String title, List<Task> list) {
-      final incomplete = list.where((t) => !isTaskCompleted(t)).toList();
-      final children = <Widget>[];
-      if (incomplete.isNotEmpty) {
-        children.add(
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              'Active (${incomplete.length})',
-              style: Theme.of(
-                context,
-              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-          ),
-        );
-        children.addAll(
-          incomplete.map(
-            (t) => _buildTaskCard(context, t, isRepeating: isRepeating),
-          ),
-        );
+    bool isInactiveFutureRepeating(Task t) {
+      if (!t.isRepeating) return false;
+      final next = _nextOccurrence(t);
+      if (next == null) return false;
+      final nowUtc = DateTime.now().toUtc();
+      final todayUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day);
+      final nextDayUtc = DateTime.utc(next.year, next.month, next.day);
+      return nextDayUtc.isAfter(todayUtc);
+    }
+
+    final nowUtc = DateTime.now().toUtc();
+    final todayStr = nowUtc.toIso8601String().split('T')[0];
+
+    final activeTasks = <Task>[];
+    final inactiveFutureTasks = <Task>[];
+    final doneTasks = <Task>[];
+
+    for (final t in tasks) {
+      final done = isDoneForToday(t, todayStr);
+      if (done) {
+        doneTasks.add(t);
+        continue;
       }
-      if (children.isEmpty) return const SizedBox.shrink();
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      );
+
+      if (!t.isRepeating) {
+        activeTasks.add(t);
+        continue;
+      }
+
+      if (isRepeatingActiveToday(t)) {
+        activeTasks.add(t);
+      } else if (isInactiveFutureRepeating(t)) {
+        inactiveFutureTasks.add(t);
+      }
     }
 
-    Widget buildCompletedSection(String title, List<Task> list) {
-      if (list.isEmpty) return const SizedBox.shrink();
-      const taskRowHeight = 80.0;
-      final screenHeight = MediaQuery.of(context).size.height;
-      final isTodaySection = title == 'Today';
+    inactiveFutureTasks.sort(_compareByNextOccurrence);
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (isTodaySection) {
-          _syncCompletedSection(
-            list,
-            _todayCompletedCache,
-            _todayCompletedListKey,
-            sectionKey: 'Today',
-          );
-        } else {
-          _syncCompletedSection(
-            list,
-            _otherCompletedCache,
-            _otherCompletedListKey,
-            sectionKey: 'Other',
-          );
-        }
-      });
-
-      return ExpansionTile(
-        key: isTodaySection ? _todayCompletedTileKey : _otherCompletedTileKey,
-        controller: isTodaySection ? _todayController : _otherController,
-        leading: const Icon(Icons.check_circle_outline),
-        title: Text('$title (${list.length})'),
-        initiallyExpanded: isTodaySection
-            ? _todayCompletedExpanded
-            : _otherCompletedExpanded,
-        onExpansionChanged: (v) {
-          setState(
-            () => isTodaySection
-                ? _todayCompletedExpanded = v
-                : _otherCompletedExpanded = v,
-          );
-          if (v) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              final ctx =
-                  (isTodaySection
-                      ? _todayCompletedTileKey.currentContext
-                      : _otherCompletedTileKey.currentContext) ??
-                  context;
-              Scrollable.ensureVisible(
-                ctx,
-                alignment: 1.0,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOut,
-              );
-            });
-          }
-        },
-        children: [
-          SizedBox(
-            height: (list.length * taskRowHeight)
-                .clamp(taskRowHeight * 2.5, screenHeight * 0.5)
-                .toDouble(),
-            child: AnimatedList(
-              key: isTodaySection
-                  ? _todayCompletedListKey
-                  : _otherCompletedListKey,
-              initialItemCount: isTodaySection
-                  ? _todayCompletedCache.length
-                  : _otherCompletedCache.length,
-              itemBuilder: (ctx, idx, anim) {
-                final t = isTodaySection
-                    ? _todayCompletedCache[idx]
-                    : _otherCompletedCache[idx];
-                return _buildCompletedAnimatedItem(
-                  ctx,
-                  t,
-                  anim,
-                  sectionKey: isTodaySection ? 'Today' : 'Other',
-                );
-              },
-            ),
-          ),
-        ],
-      );
+    if (activeTasks.isEmpty &&
+        inactiveFutureTasks.isEmpty &&
+        doneTasks.isEmpty) {
+      return const Center(child: Text('No tasks yet'));
     }
 
-    final todayCompleted = tasksForToday
-        .where((t) => isTaskCompleted(t))
-        .toList();
-    final otherCompleted = otherTasks.where((t) => isTaskCompleted(t)).toList();
+    final listChildren = <Widget>[];
 
-    final activeChildren = <Widget>[];
-    if (tasksForToday.isNotEmpty) {
-      activeChildren.add(
+    if (activeTasks.isNotEmpty) {
+      listChildren.add(
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Text(
-            'Tasks for Today',
+            'Active Tasks',
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
         ),
       );
-      activeChildren.add(buildSection('Today', tasksForToday));
-    }
-    if (otherTasks.isNotEmpty) {
-      if (tasksForToday.isNotEmpty) {
-        activeChildren.add(
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              'Other Tasks',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-          ),
-        );
-      }
-      activeChildren.add(buildSection('Other', otherTasks));
-    }
-
-    final hasCompleted = todayCompleted.isNotEmpty || otherCompleted.isNotEmpty;
-
-    return Column(
-      children: [
-        Expanded(
-          child: ListView(
-            children: [...activeChildren, const SizedBox(height: 24)],
+      listChildren.addAll(
+        activeTasks.map(
+          (t) => _buildTaskCard(
+            context,
+            t,
+            isRepeating: t.isRepeating,
+            isInactive: false,
+            taskSection: _TaskSection.active,
           ),
         ),
-        if (hasCompleted)
-          SafeArea(
-            top: false,
-            child: Material(
-              elevation: 8,
-              color: Theme.of(context).scaffoldBackgroundColor,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Text(
-                        'Completed',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    if (todayCompleted.isNotEmpty)
-                      buildCompletedSection('Today', todayCompleted),
-                    if (otherCompleted.isNotEmpty)
-                      buildCompletedSection('Other', otherCompleted),
-                  ],
-                ),
-              ),
-            ),
+      );
+    }
+
+    if (inactiveFutureTasks.isNotEmpty) {
+      listChildren.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Text(
+            'Future (${inactiveFutureTasks.length})',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
-      ],
+        ),
+      );
+      listChildren.addAll(
+        inactiveFutureTasks.map(
+          (t) => _buildTaskCard(
+            context,
+            t,
+            isRepeating: true,
+            isInactive: true,
+            taskSection: _TaskSection.future,
+          ),
+        ),
+      );
+    }
+
+    if (doneTasks.isNotEmpty) {
+      listChildren.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Text(
+            'Done (${doneTasks.length})',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+      listChildren.addAll(
+        doneTasks.map(
+          (t) => _buildTaskCard(
+            context,
+            t,
+            isRepeating: t.isRepeating,
+            isInactive: true,
+            taskSection: _TaskSection.done,
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: listChildren,
     );
   }
 
@@ -429,7 +537,8 @@ class _TasksPageState extends State<TasksPage>
     BuildContext context,
     Task t, {
     bool isRepeating = false,
-    String? sectionKey,
+    bool isInactive = false,
+    _TaskSection taskSection = _TaskSection.active,
   }) {
     final todayStr = DateTime.now().toUtc().toIso8601String().split('T')[0];
     final isCompleted = t.isRepeating
@@ -437,19 +546,9 @@ class _TasksPageState extends State<TasksPage>
         : t.completed;
 
     Future<void> toggleCompletion() async {
+      if (isInactive) return;
+
       final nextCompleted = !isCompleted;
-      if (nextCompleted && sectionKey != null) {
-        setState(() {
-          if (sectionKey == 'Today') {
-            _todayCompletedExpanded = true;
-            _todayController.expand();
-          }
-          if (sectionKey == 'Other') {
-            _otherCompletedExpanded = true;
-            _otherController.expand();
-          }
-        });
-      }
       if (t.isRepeating) {
         final cubit = context.read<TaskCubit>();
         if (nextCompleted) {
@@ -464,77 +563,84 @@ class _TasksPageState extends State<TasksPage>
       }
     }
 
-    DateTime? nextOccurrence(Task task) {
-      if (!task.isRepeating) return null;
-      final cfg = _parseRepeatRule(task.repeatRule);
-      final now = DateTime.now();
-      final deadline = task.deadline ?? now;
-      final hour = deadline.toLocal().hour;
-      final minute = deadline.toLocal().minute;
-      final startDate = DateTime(
-        deadline.year,
-        deadline.month,
-        deadline.day,
-        hour,
-        minute,
+    Future<void> putOffTask() async {
+      if (taskSection != _TaskSection.active) {
+        return;
+      }
+
+      // Move deadline to tomorrow's date.
+      final now = DateTime.now().toUtc();
+      final tomorrow = DateTime.utc(now.year, now.month, now.day + 1);
+
+      // Increment putOffCount (keeps initialPriority unchanged)
+      final updated = t.copyWith(
+        deadline: tomorrow,
+        putOffCount: t.putOffCount + 1,
       );
-      final today = DateTime(now.year, now.month, now.day, hour, minute);
 
-      if (cfg.unit == 'day') {
-        final diffDays = today.difference(startDate).inDays;
-        if (diffDays < 0) return startDate;
-        final remainder = diffDays % cfg.interval;
-        final offset = remainder == 0 ? 0 : cfg.interval - remainder;
-        final candidate = today.add(Duration(days: offset));
-        if (candidate.isBefore(now)) {
-          return candidate.add(Duration(days: cfg.interval));
-        }
-        return candidate;
+      context.read<TaskCubit>().updateTask(updated);
+    }
+
+    Future<void> doingItNow() async {
+      if (taskSection != _TaskSection.future) {
+        return;
       }
 
-      if (cfg.unit == 'week') {
-        final days = task.repeatDays?.isNotEmpty ?? false
-            ? task.repeatDays!
-            : <int>[startDate.weekday];
-        for (int offset = 0; offset <= 366; offset++) {
-          final check = now.add(Duration(days: offset));
-          if (!days.contains(check.weekday)) continue;
-          final diff = check.difference(startDate).inDays;
-          if (diff < 0) continue;
-          final weekIndex = diff ~/ 7;
-          if (weekIndex % cfg.interval != 0) continue;
-          return DateTime(check.year, check.month, check.day, hour, minute);
-        }
-        return null;
+      // Pull task back to today's date and decrease put-off pressure.
+      final now = DateTime.now().toUtc();
+      final today = DateTime.utc(now.year, now.month, now.day);
+
+      final updated = t.copyWith(
+        deadline: today,
+        putOffCount: t.putOffCount > 0 ? t.putOffCount - 1 : 0,
+      );
+
+      context.read<TaskCubit>().updateTask(updated);
+    }
+
+    Future<void> undoDone() async {
+      if (taskSection != _TaskSection.done) {
+        return;
       }
 
-      if (cfg.unit == 'month') {
-        final days = task.repeatDays?.isNotEmpty ?? false
-            ? task.repeatDays!
-            : <int>[startDate.day];
-        for (int m = 0; m <= 24; m++) {
-          final monthCandidate = DateTime(now.year, now.month + m, 1);
-          final monthDiff =
-              (monthCandidate.year - startDate.year) * 12 +
-              (monthCandidate.month - startDate.month);
-          if (monthDiff < 0 || monthDiff % cfg.interval != 0) continue;
-          for (final d in days) {
-            try {
-              final candidate = DateTime(
-                monthCandidate.year,
-                monthCandidate.month,
-                d,
-                hour,
-                minute,
-              );
-              if (!candidate.isBefore(now)) return candidate;
-            } catch (_) {
-              // skip invalid day
-            }
-          }
-        }
+      if (t.isRepeating) {
+        await context.read<TaskCubit>().uncompleteOccurrence(t.id, todayStr);
+      } else {
+        context.read<TaskCubit>().updateTask(t.copyWith(completed: false));
       }
-      return null;
+    }
+
+    String smartActionLabel() {
+      switch (taskSection) {
+        case _TaskSection.active:
+          return 'Put Off';
+        case _TaskSection.done:
+          return 'Undo';
+        case _TaskSection.future:
+          return 'Do It Now';
+      }
+    }
+
+    IconData smartActionIcon() {
+      switch (taskSection) {
+        case _TaskSection.active:
+          return Icons.schedule;
+        case _TaskSection.done:
+          return Icons.undo;
+        case _TaskSection.future:
+          return Icons.task;
+      }
+    }
+
+    VoidCallback? smartActionHandler() {
+      switch (taskSection) {
+        case _TaskSection.active:
+          return putOffTask;
+        case _TaskSection.done:
+          return undoDone;
+        case _TaskSection.future:
+          return doingItNow;
+      }
     }
 
     String friendlyDate(DateTime d) {
@@ -543,18 +649,13 @@ class _TasksPageState extends State<TasksPage>
       final dt = DateTime(d.year, d.month, d.day);
       final diff = dt.difference(today).inDays;
       final local = d.toLocal();
-      String timePart() {
-        final hh = local.hour.toString().padLeft(2, '0');
-        final mm = local.minute.toString().padLeft(2, '0');
-        return ' at $hh:$mm';
-      }
 
-      if (diff == 0) return 'Today${timePart()}';
-      if (diff == 1) return 'Tomorrow${timePart()}';
-      if (diff > 1 && diff < 7) return 'In $diff days${timePart()}';
+      if (diff == 0) return 'Today';
+      if (diff == 1) return 'Tomorrow';
+      if (diff > 1 && diff < 7) return 'In $diff days';
       final datePart =
           '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
-      return '$datePart${timePart()}';
+      return datePart;
     }
 
     Widget card = TaskCard(
@@ -597,7 +698,7 @@ class _TasksPageState extends State<TasksPage>
             if (t.isRepeating)
               Builder(
                 builder: (ctx) {
-                  final next = nextOccurrence(t);
+                  final next = _nextOccurrence(t);
                   if (next != null) {
                     return Text(
                       'Next: ${friendlyDate(next)}',
@@ -617,6 +718,7 @@ class _TasksPageState extends State<TasksPage>
         ],
       ),
       onToggleComplete: toggleCompletion,
+      onPutOff: smartActionHandler(),
       onLongPress: () => showTaskAddEditDialog(
         context,
         taskToEdit: t,
@@ -626,11 +728,46 @@ class _TasksPageState extends State<TasksPage>
       onDelete: () => context.read<TaskCubit>().deleteTask(t.id),
       enableDismiss: true,
       isRetrying: t.isRetrying,
-      elevation: isCompleted ? 0 : 2,
+      elevation: (isCompleted || isInactive) ? 0 : 2,
       isThreeLine:
           (t.assignedToName != null || t.isHouseholdTask) &&
           t.description != null,
+      isInactive: isInactive,
+      putOffLabel: smartActionLabel(),
+      putOffIcon: smartActionIcon(),
+      showDoneAction: taskSection == _TaskSection.active,
     );
+
+    if (isInactive) {
+      card = Opacity(
+        opacity: 0.55,
+        child: ColorFiltered(
+          colorFilter: const ColorFilter.matrix([
+            0.2126,
+            0.7152,
+            0.0722,
+            0,
+            0,
+            0.2126,
+            0.7152,
+            0.0722,
+            0,
+            0,
+            0.2126,
+            0.7152,
+            0.0722,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+          ]),
+          child: card,
+        ),
+      );
+    }
 
     // Wrap card in AnimatedSwitcher so removals/insertions animate subtly.
     return AnimatedSwitcher(
@@ -767,87 +904,124 @@ class _TasksPageState extends State<TasksPage>
       'onderhoud',
     ]),
   ];
+}
 
-  void _syncCompletedSection(
-    List<Task> newList,
-    List<Task> old,
-    GlobalKey<AnimatedListState> listKey, {
-    required String sectionKey,
-  }) {
+enum _TaskSection { active, future, done }
+
+class _BulkImportConfirmationPage extends StatefulWidget {
+  final List<Task> tasks;
+  final List<Map<String, dynamic>> rawEntries;
+  final TaskCubit taskCubit;
+  final String? householdId;
+  final fb.User? currentUser;
+  final Widget Function(BuildContext context, Task task) buildPreviewCard;
+
+  const _BulkImportConfirmationPage({
+    required this.tasks,
+    required this.rawEntries,
+    required this.taskCubit,
+    required this.householdId,
+    required this.currentUser,
+    required this.buildPreviewCard,
+  });
+
+  @override
+  State<_BulkImportConfirmationPage> createState() =>
+      _BulkImportConfirmationPageState();
+}
+
+class _BulkImportConfirmationPageState
+    extends State<_BulkImportConfirmationPage> {
+  bool _isFinalizing = false;
+
+  Future<void> _finalizeImport() async {
+    setState(() => _isFinalizing = true);
     try {
-      final newIds = newList.map((t) => t.id).toList();
+      const uuid = Uuid();
 
-      // Removals (iterate backwards)
-      for (int i = old.length - 1; i >= 0; i--) {
-        final id = old[i].id;
-        if (!newIds.contains(id)) {
-          final removed = old.removeAt(i);
-          listKey.currentState?.removeItem(
-            i,
-            (ctx, anim) => _buildCompletedAnimatedItem(
-              ctx,
-              removed,
-              anim,
-              sectionKey: sectionKey,
-            ),
-            duration: const Duration(milliseconds: 160),
+      for (int i = 0; i < widget.tasks.length; i++) {
+        var task = widget.tasks[i];
+        final raw = widget.rawEntries[i];
+
+        if (task.id.trim().isEmpty) {
+          task = task.copyWith(id: uuid.v4());
+        }
+
+        final currentHouseholdId = task.householdId;
+        if ((currentHouseholdId == null || currentHouseholdId.trim().isEmpty) &&
+            widget.householdId != null) {
+          task = task.copyWith(householdId: widget.householdId);
+        }
+
+        // Task has no createdBy field, so use assignedToId as the closest local field.
+        final rawCreatedBy =
+            raw['createdBy']?.toString() ?? raw['created_by']?.toString();
+        final fallbackCreator =
+            (rawCreatedBy == null || rawCreatedBy.trim().isEmpty)
+            ? widget.currentUser?.uid
+            : rawCreatedBy;
+
+        final currentAssignedToId = task.assignedToId;
+        if (!task.isHouseholdTask &&
+            (currentAssignedToId == null ||
+                currentAssignedToId.trim().isEmpty) &&
+            fallbackCreator != null &&
+            fallbackCreator.isNotEmpty) {
+          task = task.copyWith(
+            assignedToId: fallbackCreator,
+            assignedToName:
+                task.assignedToName ??
+                widget.currentUser?.displayName ??
+                widget.currentUser?.email,
           );
         }
+
+        await widget.taskCubit.addTask(task);
       }
 
-      // Inserts / moves
-      for (int i = 0; i < newList.length; i++) {
-        final id = newList[i].id;
-        final existingIndex = old.indexWhere((t) => t.id == id);
-        if (existingIndex == -1) {
-          // insert
-          old.insert(i, newList[i]);
-          listKey.currentState?.insertItem(
-            i,
-            duration: const Duration(milliseconds: 180),
-          );
-        } else if (existingIndex != i) {
-          final removed = old.removeAt(existingIndex);
-          listKey.currentState?.removeItem(
-            existingIndex,
-            (ctx, anim) => _buildCompletedAnimatedItem(
-              ctx,
-              removed,
-              anim,
-              sectionKey: sectionKey,
-            ),
-            duration: const Duration(milliseconds: 160),
-          );
-          old.insert(i, removed);
-          listKey.currentState?.insertItem(
-            i,
-            duration: const Duration(milliseconds: 160),
-          );
-        }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Imported ${widget.tasks.length} tasks.')),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _isFinalizing = false);
       }
-    } catch (_) {}
+    }
   }
 
-  Widget _buildCompletedAnimatedItem(
-    BuildContext ctx,
-    Task t,
-    Animation<double> anim, {
-    required String sectionKey,
-  }) {
-    return SizeTransition(
-      sizeFactor: anim,
-      child: AnimatedBuilder(
-        animation: anim,
-        builder: (context, child) {
-          final scheme = Theme.of(context).colorScheme;
-          final highlight = Color.lerp(
-            scheme.surface.withAlpha(0),
-            scheme.secondaryContainer.withAlpha((0.35 * 255).round()),
-            anim.value,
-          );
-          return Container(color: highlight, child: child);
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Preview Import (${widget.tasks.length})')),
+      body: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        itemCount: widget.tasks.length,
+        itemBuilder: (context, index) {
+          return widget.buildPreviewCard(context, widget.tasks[index]);
         },
-        child: _buildTaskCard(context, t, sectionKey: sectionKey),
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isFinalizing ? null : _finalizeImport,
+            child: _isFinalizing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('FINALIZE IMPORT'),
+          ),
+        ),
       ),
     );
   }

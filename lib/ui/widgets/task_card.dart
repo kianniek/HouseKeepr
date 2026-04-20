@@ -7,6 +7,7 @@ class TaskCard extends StatelessWidget {
   final bool isCompleted;
   final Widget subtitle;
   final VoidCallback onToggleComplete;
+  final VoidCallback? onPutOff;
   final VoidCallback? onLongPress;
   final VoidCallback? onDelete;
   final bool enableDismiss;
@@ -15,6 +16,10 @@ class TaskCard extends StatelessWidget {
   final double? elevation;
   final Color? color;
   final bool? isThreeLine;
+  final bool isInactive;
+  final String putOffLabel;
+  final IconData putOffIcon;
+  final bool showDoneAction;
 
   const TaskCard({
     super.key,
@@ -23,6 +28,7 @@ class TaskCard extends StatelessWidget {
     required this.isCompleted,
     required this.subtitle,
     required this.onToggleComplete,
+    this.onPutOff,
     this.onLongPress,
     this.onDelete,
     this.enableDismiss = false,
@@ -31,6 +37,10 @@ class TaskCard extends StatelessWidget {
     this.elevation,
     this.color,
     this.isThreeLine,
+    this.isInactive = false,
+    this.putOffLabel = 'Put Off',
+    this.putOffIcon = Icons.schedule,
+    this.showDoneAction = true,
   });
 
   @override
@@ -43,50 +53,100 @@ class TaskCard extends StatelessWidget {
       color: color ?? scheme.surfaceContainerHighest,
       elevation: elevation,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        onLongPress: onLongPress,
-        isThreeLine: isThreeLine,
-        leading: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: scheme.tertiaryContainer,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: 24),
-        ),
-        title: Text(
-          task.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            decoration: isCompleted ? TextDecoration.lineThrough : null,
-          ),
-        ),
-        subtitle: subtitle,
-        trailing: GestureDetector(
-          onTap: onToggleComplete,
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: isCompleted ? scheme.primary : scheme.surface,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isCompleted ? scheme.primary : scheme.outlineVariant,
-                width: 2,
-              ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: scheme.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        task.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          decoration: isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      subtitle,
+                    ],
+                  ),
+                ),
+              ],
             ),
-            child: isCompleted
-                ? Icon(Icons.check, color: scheme.onPrimary, size: 20)
-                : null,
-          ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Builder(
+                  builder: (context) {
+                    if (!showDoneAction) {
+                      return const SizedBox.shrink();
+                    }
+                    return Expanded(
+                      child: SizedBox(
+                        height: 32,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.check, size: 16),
+                          label: const Text(
+                            'Done',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          onPressed: isInactive || isRetrying
+                              ? null
+                              : onToggleComplete,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 32,
+                    child: OutlinedButton.icon(
+                      icon: Icon(putOffIcon, size: 16),
+                      label: Text(
+                        putOffLabel,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      onPressed: isRetrying ? null : onPutOff,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
 
-    if (!enableDismiss || onDelete == null) return card;
+    final cardWithGesture = GestureDetector(
+      onLongPress: onLongPress,
+      child: card,
+    );
+
+    if (!enableDismiss || onDelete == null) return cardWithGesture;
 
     return Dismissible(
       key: ValueKey('dismiss_${task.id}'),
@@ -100,7 +160,7 @@ class TaskCard extends StatelessWidget {
         child: Icon(Icons.delete, color: scheme.onError),
       ),
       onDismissed: (_) => onDelete?.call(),
-      child: card,
+      child: cardWithGesture,
     );
   }
 }

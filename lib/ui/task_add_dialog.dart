@@ -18,6 +18,7 @@ Future<void> showTaskAddEditDialog(
   Task? taskToEdit,
   String? householdId,
   fb.User? currentUser,
+  Future<void> Function()? onBulkImportTap,
 }) async {
   final cubit = context.read<TaskCubit>();
   final titleCtl = TextEditingController(text: taskToEdit?.title ?? '');
@@ -30,9 +31,13 @@ Future<void> showTaskAddEditDialog(
       ? 'household'
       : taskToEdit?.assignedToId;
   DateTime? deadline = taskToEdit?.deadline;
-  bool isRepeating = taskToEdit?.isRepeating ?? false;
+  bool isRepeating = taskToEdit?.isRepeating ?? true;
   int repeatInterval = 1;
   String repeatUnit = 'day';
+  final Set<int> selectedRepeatDays = {
+    ...(taskToEdit?.repeatDays?.where((d) => d >= 1 && d <= 7).toSet() ??
+        const <int>{}),
+  };
   bool reminderEnabled = taskToEdit?.reminderEnabled ?? false;
   int? reminderOffset = taskToEdit?.reminderOffsetMinutes; // minutes
 
@@ -42,13 +47,31 @@ Future<void> showTaskAddEditDialog(
     return '${trimmed[0].toUpperCase()}${trimmed.substring(1)}';
   }
 
+  String normalizeRepeatUnit(String? value) {
+    final raw = (value ?? '').toLowerCase().trim();
+    switch (raw) {
+      case 'day':
+      case 'daily':
+        return 'day';
+      case 'week':
+      case 'weekly':
+        return 'week';
+      case 'month':
+      case 'monthly':
+        return 'month';
+      default:
+        return 'day';
+    }
+  }
+
   void parseRepeatRule(String? rule) {
     final raw = (rule ?? '').toLowerCase().trim();
     if (raw.startsWith('every:')) {
       final parts = raw.split(':');
       if (parts.length >= 3) {
-        repeatInterval = int.tryParse(parts[1]) ?? 1;
-        repeatUnit = parts[2];
+        final parsedInterval = int.tryParse(parts[1]) ?? 1;
+        repeatInterval = parsedInterval < 1 ? 1 : parsedInterval;
+        repeatUnit = normalizeRepeatUnit(parts[2]);
       }
       return;
     }
@@ -136,6 +159,15 @@ Future<void> showTaskAddEditDialog(
         return titleOk;
       }
 
+      List<int>? buildRepeatDaysForSave() {
+        if (!isRepeating) return null;
+        if (repeatUnit != 'week') return null;
+        if (selectedRepeatDays.isEmpty) return null;
+        final days = selectedRepeatDays.where((d) => d >= 1 && d <= 7).toList()
+          ..sort();
+        return days;
+      }
+
       return StatefulBuilder(
         builder: (contextSB, setStateSB) {
           final theme = Theme.of(contextSB);
@@ -154,9 +186,24 @@ Future<void> showTaskAddEditDialog(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    taskToEdit == null ? 'New Task' : 'Edit Task',
-                    style: Theme.of(contextSB).textTheme.titleLarge,
+                  Row(
+                    children: [
+                      if (taskToEdit == null && onBulkImportTap != null)
+                        const SizedBox(width: 8),
+                      Text(
+                        taskToEdit == null ? 'New Task' : 'Edit Task',
+                        style: Theme.of(contextSB).textTheme.titleLarge,
+                      ),
+                      if (taskToEdit == null && onBulkImportTap != null)
+                        TextButton.icon(
+                          onPressed: () async {
+                            Navigator.pop(contextSB);
+                            await onBulkImportTap();
+                          },
+                          icon: const Icon(Icons.playlist_add_check),
+                          label: const Text('Bulk Import'),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -557,6 +604,52 @@ Future<void> showTaskAddEditDialog(
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Repeat days (weekly)',
+                        style: Theme.of(contextSB).textTheme.labelMedium,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: List.generate(7, (index) {
+                        const labels = [
+                          'Mon',
+                          'Tue',
+                          'Wed',
+                          'Thu',
+                          'Fri',
+                          'Sat',
+                          'Sun',
+                        ];
+                        final weekday = index + 1;
+                        return FilterChip(
+                          label: Text(labels[index]),
+                          selected: selectedRepeatDays.contains(weekday),
+                          onSelected: repeatUnit == 'week'
+                              ? (selected) => setStateSB(() {
+                                  if (selected) {
+                                    selectedRepeatDays.add(weekday);
+                                  } else {
+                                    selectedRepeatDays.remove(weekday);
+                                  }
+                                })
+                              : null,
+                        );
+                      }),
+                    ),
+                    if (repeatUnit != 'week')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Set Unit to Week to apply selected repeat days.',
+                          style: Theme.of(contextSB).textTheme.bodySmall,
+                        ),
+                      ),
                   ],
                   const SizedBox(height: 8),
                   SwitchListTile.adaptive(
@@ -634,7 +727,7 @@ Future<void> showTaskAddEditDialog(
                                     repeatRule: isRepeating
                                         ? 'every:$repeatInterval:$repeatUnit'
                                         : null,
-                                    repeatDays: null,
+                                    repeatDays: buildRepeatDaysForSave(),
                                     isHouseholdTask: isHouseholdTask,
                                     reminderEnabled: reminderEnabled,
                                     reminderOffsetMinutes: reminderOffset,
@@ -662,7 +755,7 @@ Future<void> showTaskAddEditDialog(
                                     repeatRule: isRepeating
                                         ? 'every:$repeatInterval:$repeatUnit'
                                         : null,
-                                    repeatDays: null,
+                                    repeatDays: buildRepeatDaysForSave(),
                                     isHouseholdTask: isHouseholdTask,
                                     householdId: householdId,
                                     reminderEnabled: reminderEnabled,

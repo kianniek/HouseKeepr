@@ -7,6 +7,7 @@ import '../models/grocery_category.dart';
 import '../services/shopping_products_service.dart';
 import 'shopping_list_item_tile.dart';
 import 'quantity_picker_dialog.dart';
+import 'category_picker_dialog.dart';
 
 class SmartShoppingListPage extends StatefulWidget {
   const SmartShoppingListPage({super.key});
@@ -24,11 +25,18 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
   String _manualOverrideText = '';
   String? _suggestedText;
   double _suggestionConfidence = 0.0;
+  // Scroll FAB state
+  final ScrollController _scrollController = ScrollController();
+  bool _showScrollDownFab = false;
+  bool _showScrollUpFab = false;
+  static const Duration _fabAnimDur = Duration(milliseconds: 200);
 
   @override
   void initState() {
     super.initState();
     _itemController.addListener(_onTextChanged);
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateFabVisibility());
   }
 
   void _onTextChanged() {
@@ -79,9 +87,62 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
     _itemController.removeListener(_onTextChanged);
     _itemController.dispose();
     _itemFocusNode.dispose();
+    _scrollController.dispose();
     // Disable wake lock when leaving the page
     WakelockPlus.disable();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final max = _scrollController.position.maxScrollExtent;
+    final offset = _scrollController.offset;
+
+    // If there's nothing to scroll, hide both
+    if (max <= 0) {
+      if (_showScrollDownFab || _showScrollUpFab) {
+        setState(() {
+          _showScrollDownFab = false;
+          _showScrollUpFab = false;
+        });
+      }
+      return;
+    }
+
+    final atBottom = offset >= (max - 24.0);
+
+    if (atBottom) {
+      if (!_showScrollUpFab || _showScrollDownFab) {
+        setState(() {
+          _showScrollUpFab = true;
+          _showScrollDownFab = false;
+        });
+      }
+    } else {
+      if (!_showScrollDownFab || _showScrollUpFab) {
+        setState(() {
+          _showScrollDownFab = true;
+          _showScrollUpFab = false;
+        });
+      }
+    }
+  }
+
+  void _updateFabVisibility() {
+    if (!_scrollController.hasClients) return;
+    final max = _scrollController.position.maxScrollExtent;
+    final offset = _scrollController.offset;
+    if (max > 50 && offset < (max - 24.0)) {
+      setState(() {
+        _showScrollDownFab = true;
+        _showScrollUpFab = false;
+      });
+    } else {
+      setState(() {
+        _showScrollDownFab = false;
+        _showScrollUpFab = false;
+      });
+    }
   }
 
   void _addItem() {
@@ -128,6 +189,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
         }
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         appBar: AppBar(
           title: const Text('Shopping List'),
           elevation: 0,
@@ -244,117 +306,248 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                         uncheckedItems,
                       )..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-                      return NotificationListener<ScrollNotification>(
-                        onNotification: (notification) {
-                          if (notification is ScrollStartNotification ||
-                              notification is UserScrollNotification) {
-                            FocusScope.of(context).unfocus();
-                          }
-                          return false;
-                        },
-                        child: CustomScrollView(
-                          slivers: [
-                            // Unchecked items - flat or grouped
-                            if (state.flatViewEnabled)
-                              // Flat view: single list without category headers
-                              SliverList(
-                                delegate: SliverChildBuilderDelegate((
-                                  context,
-                                  index,
-                                ) {
-                                  final item = flatSortedItems[index];
-                                  return ShoppingListItemTile(
-                                    item: item,
-                                    aisleMode: state.aisleModeEnabled,
-                                    onCheck: () => context
-                                        .read<ShoppingCubit>()
-                                        .toggleItem(item.id),
-                                    onDelete: () => context
-                                        .read<ShoppingCubit>()
-                                        .deleteItem(item.id),
-                                    onQuantity: () => context
-                                        .read<ShoppingCubit>()
-                                        .cycleQuantity(item.id),
-                                    onQuantityLongPress: () async {
-                                      final newQty =
-                                          await showQuantityPickerDialog(
-                                            context,
-                                            currentQuantity: item.quantity,
-                                          );
-                                      if (newQty != null && context.mounted) {
-                                        context
+                      return Stack(
+                        children: [
+                          NotificationListener<ScrollNotification>(
+                            onNotification: (notification) {
+                              if (notification is ScrollStartNotification ||
+                                  notification is UserScrollNotification) {
+                                FocusScope.of(context).unfocus();
+                                if (_showScrollDownFab || _showScrollUpFab) {
+                                  setState(() {
+                                    _showScrollDownFab = false;
+                                    _showScrollUpFab = false;
+                                  });
+                                }
+                              }
+                              return false;
+                            },
+                            child: CustomScrollView(
+                              controller: _scrollController,
+                              slivers: [
+                                // Unchecked items - flat or grouped
+                                if (state.flatViewEnabled)
+                                  // Flat view: single list without category headers
+                                  SliverList(
+                                    delegate: SliverChildBuilderDelegate((
+                                      context,
+                                      index,
+                                    ) {
+                                      final item = flatSortedItems[index];
+                                      return ShoppingListItemTile(
+                                        item: item,
+                                        aisleMode: state.aisleModeEnabled,
+                                        onCheck: () => context
                                             .read<ShoppingCubit>()
-                                            .updateQuantity(item.id, newQty);
-                                      }
-                                    },
-                                  );
-                                }, childCount: flatSortedItems.length),
-                              )
-                            else
-                              // Grouped by category
-                              ...categories.entries.map((entry) {
-                                final category = entry.key;
-                                final items = entry.value;
-                                return _buildCategorySection(
-                                  context,
-                                  category,
-                                  items,
-                                  state.aisleModeEnabled,
-                                );
-                              }),
+                                            .toggleItem(item.id),
+                                        onDelete: () => context
+                                            .read<ShoppingCubit>()
+                                            .deleteItem(item.id),
+                                        onQuantity: () => context
+                                            .read<ShoppingCubit>()
+                                            .cycleQuantity(item.id),
+                                        onQuantityLongPress: () async {
+                                          final newQty =
+                                              await showQuantityPickerDialog(
+                                                context,
+                                                currentQuantity: item.quantity,
+                                              );
+                                          if (newQty != null &&
+                                              context.mounted) {
+                                            context
+                                                .read<ShoppingCubit>()
+                                                .updateQuantity(
+                                                  item.id,
+                                                  newQty,
+                                                );
+                                          }
+                                        },
+                                        onLongPress: () async {
+                                          final newCat =
+                                              await showCategoryPickerDialog(
+                                                context,
+                                                currentCategory: item.category,
+                                              );
+                                          if (newCat != null &&
+                                              context.mounted) {
+                                            context
+                                                .read<ShoppingCubit>()
+                                                .updateCategory(
+                                                  item.id,
+                                                  newCat,
+                                                );
+                                          }
+                                        },
+                                      );
+                                    }, childCount: flatSortedItems.length),
+                                  )
+                                else
+                                  // Grouped by category
+                                  ...categories.entries.map((entry) {
+                                    final category = entry.key;
+                                    final items = entry.value;
+                                    return _buildCategorySection(
+                                      context,
+                                      category,
+                                      items,
+                                      state.aisleModeEnabled,
+                                    );
+                                  }),
 
-                            // Checked items section
-                            if (checkedItems.isNotEmpty)
-                              SliverToBoxAdapter(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 16),
-                                  child: _buildCompletedHeader(
-                                    checkedItems.length,
+                                // Checked items section
+                                if (checkedItems.isNotEmpty)
+                                  SliverToBoxAdapter(
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(top: 16),
+                                      child: _buildCompletedHeader(
+                                        checkedItems.length,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            if (checkedItems.isNotEmpty)
-                              SliverList(
-                                delegate: SliverChildBuilderDelegate(
-                                  (context, index) => ShoppingListItemTile(
-                                    item: checkedItems[index],
-                                    aisleMode: state.aisleModeEnabled,
-                                    onCheck: () => context
-                                        .read<ShoppingCubit>()
-                                        .toggleItem(checkedItems[index].id),
-                                    onDelete: () => context
-                                        .read<ShoppingCubit>()
-                                        .deleteItem(checkedItems[index].id),
-                                    onQuantity: () => context
-                                        .read<ShoppingCubit>()
-                                        .cycleQuantity(checkedItems[index].id),
-                                    onQuantityLongPress: () async {
-                                      final newQty =
-                                          await showQuantityPickerDialog(
-                                            context,
-                                            currentQuantity:
-                                                checkedItems[index].quantity,
-                                          );
-                                      if (newQty != null && context.mounted) {
-                                        context
+                                if (checkedItems.isNotEmpty)
+                                  SliverList(
+                                    delegate: SliverChildBuilderDelegate(
+                                      (context, index) => ShoppingListItemTile(
+                                        item: checkedItems[index],
+                                        aisleMode: state.aisleModeEnabled,
+                                        onCheck: () => context
                                             .read<ShoppingCubit>()
-                                            .updateQuantity(
+                                            .toggleItem(checkedItems[index].id),
+                                        onDelete: () => context
+                                            .read<ShoppingCubit>()
+                                            .deleteItem(checkedItems[index].id),
+                                        onQuantity: () => context
+                                            .read<ShoppingCubit>()
+                                            .cycleQuantity(
                                               checkedItems[index].id,
-                                              newQty,
-                                            );
-                                      }
-                                    },
+                                            ),
+                                        onQuantityLongPress: () async {
+                                          final newQty =
+                                              await showQuantityPickerDialog(
+                                                context,
+                                                currentQuantity:
+                                                    checkedItems[index]
+                                                        .quantity,
+                                              );
+                                          if (newQty != null &&
+                                              context.mounted) {
+                                            context
+                                                .read<ShoppingCubit>()
+                                                .updateQuantity(
+                                                  checkedItems[index].id,
+                                                  newQty,
+                                                );
+                                          }
+                                        },
+                                        onLongPress: () async {
+                                          final newCat =
+                                              await showCategoryPickerDialog(
+                                                context,
+                                                currentCategory:
+                                                    checkedItems[index]
+                                                        .category,
+                                              );
+                                          if (newCat != null &&
+                                              context.mounted) {
+                                            context
+                                                .read<ShoppingCubit>()
+                                                .updateCategory(
+                                                  checkedItems[index].id,
+                                                  newCat,
+                                                );
+                                          }
+                                        },
+                                      ),
+                                      childCount: checkedItems.length,
+                                    ),
                                   ),
-                                  childCount: checkedItems.length,
+                                const SliverSafeArea(
+                                  sliver: SliverToBoxAdapter(
+                                    child: SizedBox(height: 16),
+                                  ),
                                 ),
-                              ),
-                            const SliverSafeArea(
-                              sliver: SliverToBoxAdapter(
-                                child: SizedBox(height: 16),
+                              ],
+                            ),
+                          ),
+
+                          // Scroll Down FAB (appears when not at bottom)
+                          Positioned(
+                            right: 16,
+                            bottom: 16,
+                            child: AnimatedSlide(
+                              duration: _fabAnimDur,
+                              offset: _showScrollDownFab
+                                  ? Offset.zero
+                                  : const Offset(0, 1),
+                              child: AnimatedOpacity(
+                                duration: _fabAnimDur,
+                                opacity: _showScrollDownFab ? 1.0 : 0.0,
+                                child: FloatingActionButton(
+                                  heroTag: 'scrollDownFab',
+                                  onPressed: () async {
+                                    setState(() => _showScrollDownFab = false);
+                                    await _scrollController.animateTo(
+                                      _scrollController
+                                          .position
+                                          .maxScrollExtent,
+                                      duration: const Duration(
+                                        milliseconds: 420,
+                                      ),
+                                      curve: Curves.easeOut,
+                                    );
+                                    if (context.mounted) {
+                                      setState(() {
+                                        _showScrollUpFab = true;
+                                        _showScrollDownFab = false;
+                                      });
+                                    }
+                                  },
+                                  child: const Icon(Icons.arrow_downward),
+                                ),
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+
+                          // Scroll Up FAB (appears when at bottom)
+                          Positioned(
+                            right: 16,
+                            top: 16,
+                            child: AnimatedSlide(
+                              duration: _fabAnimDur,
+                              offset: _showScrollUpFab
+                                  ? Offset.zero
+                                  : const Offset(0, -1),
+                              child: AnimatedOpacity(
+                                duration: _fabAnimDur,
+                                opacity: _showScrollUpFab ? 1.0 : 0.0,
+                                child: FloatingActionButton(
+                                  heroTag: 'scrollUpFab',
+                                  onPressed: () async {
+                                    setState(() => _showScrollUpFab = false);
+                                    await _scrollController.animateTo(
+                                      0.0,
+                                      duration: const Duration(
+                                        milliseconds: 420,
+                                      ),
+                                      curve: Curves.easeOut,
+                                    );
+                                    if (context.mounted) {
+                                      setState(() {
+                                        _showScrollDownFab =
+                                            _scrollController
+                                                .position
+                                                .maxScrollExtent >
+                                            50;
+                                        _showScrollUpFab = false;
+                                      });
+                                    }
+                                  },
+                                  child: const Icon(Icons.arrow_upward),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),
@@ -370,100 +563,85 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
   Widget _buildQuickAddSection(BuildContext context, bool isMobile) {
     const inputPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 12);
     final inputTextStyle = Theme.of(context).textTheme.bodyLarge;
+
     final currentText = _itemController.text;
     final suggestionLower = _suggestedText?.toLowerCase();
-    final currentLower = currentText.trim().toLowerCase();
+    final currentLower = currentText.toLowerCase();
+
     final showGhost =
         _suggestedText != null &&
         currentLower.isNotEmpty &&
         suggestionLower != null &&
         suggestionLower.startsWith(currentLower);
-    final ghostRemainder = showGhost
-        ? _suggestedText!.substring(currentLower.length)
-        : '';
+
+    if (showGhost && _suggestedText != null) {
+      _suggestedText =
+          currentText + _suggestedText!.substring(currentLower.length);
+    }
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Input row
-          Row(
+          Stack(
             children: [
-              Expanded(
-                child: Focus(
-                  onFocusChange: (hasFocus) {
-                    if (_showCategoryChips != hasFocus) {
-                      setState(() => _showCategoryChips = hasFocus);
+              if (showGhost)
+                IgnorePointer(
+                  child: TextField(
+                    controller: TextEditingController(text: _suggestedText),
+                    style: inputTextStyle?.copyWith(
+                      color: Theme.of(context).hintColor.withValues(alpha: 0.5),
+                    ),
+                    decoration: InputDecoration(
+                      // Match the decoration EXACTLY
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.transparent),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.transparent),
+                      ),
+                      contentPadding: inputPadding,
+                    ),
+                  ),
+                ),
+
+              // ACTUAL INPUT LAYER
+              Focus(
+                onFocusChange: (hasFocus) {
+                  if (_showCategoryChips != hasFocus) {
+                    setState(() => _showCategoryChips = hasFocus);
+                  }
+                },
+                child: TextField(
+                  controller: _itemController,
+                  focusNode: _itemFocusNode,
+                  style: inputTextStyle,
+                  onTap: () {
+                    if (showGhost && currentText != _suggestedText) {
+                      _itemController.text = _suggestedText!;
+                      _itemController.selection = TextSelection.fromPosition(
+                        TextPosition(offset: _itemController.text.length),
+                      );
                     }
                   },
-                  child: Stack(
-                    children: [
-                      if (showGhost)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: Padding(
-                              padding: inputPadding,
-                              child: RichText(
-                                text: TextSpan(
-                                  style: inputTextStyle,
-                                  children: [
-                                    TextSpan(
-                                      text: currentText,
-                                      style: inputTextStyle?.copyWith(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.surface.withAlpha(0),
-                                      ),
-                                    ),
-                                    TextSpan(
-                                      text: ghostRemainder,
-                                      style: inputTextStyle?.copyWith(
-                                        color: Theme.of(
-                                          context,
-                                        ).hintColor.withValues(alpha: 0.7),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      TextField(
-                        controller: _itemController,
-                        focusNode: _itemFocusNode,
-                        style: inputTextStyle,
-                        onTap: () {
-                          final current = _itemController.text.trim();
-                          if (_suggestedText != null &&
-                              current.isNotEmpty &&
-                              current.toLowerCase() !=
-                                  _suggestedText!.toLowerCase()) {
-                            _manualCategoryOverride = false;
-                            _itemController.text = _suggestedText!;
-                            _itemController
-                                .selection = TextSelection.fromPosition(
-                              TextPosition(offset: _itemController.text.length),
-                            );
-                          }
-                        },
-                        decoration: InputDecoration(
-                          hintText: 'Add item...',
-                          suffixText:
-                              'in category ${_selectedCategory.displayName}',
-                          suffixStyle: Theme.of(context).textTheme.labelSmall,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          contentPadding: inputPadding,
-                        ),
-                        onSubmitted: (_) => _addItem(),
-                        autofocus: false,
-                        textInputAction: TextInputAction.done,
-                      ),
-                    ],
+                  decoration: InputDecoration(
+                    hintText: 'Add item...',
+                    suffixText: showGhost
+                        ? null
+                        : 'in ${_selectedCategory.displayName}',
+                    suffixStyle: Theme.of(context).textTheme.labelSmall,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: inputPadding,
+                    // Important: Make background transparent so ghost shows through
+                    filled: false,
                   ),
+                  onSubmitted: (_) => _addItem(),
+                  textInputAction: TextInputAction.done,
                 ),
               ),
             ],
@@ -489,8 +667,8 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
 
   Widget _buildCategoryHexGrid(BuildContext context) {
     const chipSize = 44.0;
-    const hSpacing = 0.0;
-    const vSpacing = 0.0;
+    const hSpacing = chipSize * 0.1;
+    const vSpacing = chipSize * 0.1;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -508,10 +686,6 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
           final columns = isOffsetRow ? baseColumns - 1 : baseColumns;
           final rowItems = <Widget>[];
 
-          if (isOffsetRow) {
-            rowItems.add(SizedBox(width: (chipSize + hSpacing) / 2));
-          }
-
           for (
             var col = 0;
             col < columns && index < GroceryCategory.values.length;
@@ -519,13 +693,21 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
           ) {
             final cat = GroceryCategory.values[index];
             rowItems.add(_buildCategoryChip(context, cat, chipSize));
+
             if (col < columns - 1) {
               rowItems.add(const SizedBox(width: hSpacing));
             }
             index++;
           }
 
-          rows.add(Row(children: rowItems));
+          rows.add(
+            Row(
+              // This is the magic line that centers the chips horizontally
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: rowItems,
+            ),
+          );
+
           if (index < GroceryCategory.values.length) {
             rows.add(const SizedBox(height: vSpacing));
           }
@@ -533,7 +715,8 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
         }
 
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          // Centers the entire block of rows if the container is wider than the grid
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: rows,
         );
       },
@@ -649,6 +832,15 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                 );
                 if (newQty != null && context.mounted) {
                   context.read<ShoppingCubit>().updateQuantity(item.id, newQty);
+                }
+              },
+              onLongPress: () async {
+                final newCat = await showCategoryPickerDialog(
+                  context,
+                  currentCategory: item.category,
+                );
+                if (newCat != null && context.mounted) {
+                  context.read<ShoppingCubit>().updateCategory(item.id, newCat);
                 }
               },
             );

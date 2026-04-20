@@ -422,7 +422,123 @@ class TaskCubit extends Cubit<TaskState> {
     );
     final current = List<String>.from(t.completedDates ?? <String>[]);
     if (!current.contains(date)) current.add(date);
-    await updateTask(t.copyWith(completedDates: current));
+
+    // Compute next occurrence and set inactiveUntil so the UI can gray out
+    // the task until that datetime. Reuse the task's repeatRule/deadline.
+    DateTime? computeNext(Task task) {
+      if (!task.isRepeating) return null;
+      final rawRule = task.repeatRule;
+      // parse rule similar to UI helper
+      int interval = 1;
+      String unit = 'day';
+      if (rawRule != null) {
+        final raw = rawRule.toLowerCase().trim();
+        if (raw.startsWith('every:')) {
+          final parts = raw.split(':');
+          if (parts.length >= 3) {
+            interval = int.tryParse(parts[1]) ?? 1;
+            unit = parts[2];
+          }
+        } else {
+          switch (raw) {
+            case 'daily':
+            case 'day':
+              interval = 1;
+              unit = 'day';
+              break;
+            case 'weekly':
+            case 'week':
+              interval = 1;
+              unit = 'week';
+              break;
+            case 'monthly':
+            case 'month':
+              interval = 1;
+              unit = 'month';
+              break;
+            default:
+              interval = 1;
+              unit = 'day';
+          }
+        }
+      }
+      final now = DateTime.now();
+      final deadline = task.deadline ?? now;
+      final hour = deadline.toLocal().hour;
+      final minute = deadline.toLocal().minute;
+      final startDate = DateTime(
+        deadline.year,
+        deadline.month,
+        deadline.day,
+        hour,
+        minute,
+      );
+      final today = DateTime(now.year, now.month, now.day, hour, minute);
+
+      if (unit == 'day') {
+        final diffDays = today.difference(startDate).inDays;
+        if (diffDays < 0) return startDate.toUtc();
+        final remainder = diffDays % interval;
+        final offset = remainder == 0 ? 0 : interval - remainder;
+        final candidate = today.add(Duration(days: offset));
+        if (candidate.isBefore(now)) {
+          return candidate.add(Duration(days: interval)).toUtc();
+        }
+        return candidate.toUtc();
+      }
+
+      if (unit == 'week') {
+        final days = task.repeatDays?.isNotEmpty ?? false
+            ? task.repeatDays!
+            : <int>[startDate.weekday];
+        for (int offset = 0; offset <= 366; offset++) {
+          final check = now.add(Duration(days: offset));
+          if (!days.contains(check.weekday)) continue;
+          final diff = check.difference(startDate).inDays;
+          if (diff < 0) continue;
+          final weekIndex = diff ~/ 7;
+          if (weekIndex % interval != 0) continue;
+          return DateTime(
+            check.year,
+            check.month,
+            check.day,
+            hour,
+            minute,
+          ).toUtc();
+        }
+        return null;
+      }
+
+      if (unit == 'month') {
+        final days = task.repeatDays?.isNotEmpty ?? false
+            ? task.repeatDays!
+            : <int>[startDate.day];
+        for (int m = 0; m <= 24; m++) {
+          final monthCandidate = DateTime(now.year, now.month + m, 1);
+          final monthDiff =
+              (monthCandidate.year - startDate.year) * 12 +
+              (monthCandidate.month - startDate.month);
+          if (monthDiff < 0 || monthDiff % interval != 0) continue;
+          for (final d in days) {
+            try {
+              final candidate = DateTime(
+                monthCandidate.year,
+                monthCandidate.month,
+                d,
+                hour,
+                minute,
+              );
+              if (!candidate.isBefore(now)) return candidate.toUtc();
+            } catch (_) {}
+          }
+        }
+      }
+      return null;
+    }
+
+    final next = computeNext(t);
+
+    await updateTask(t.copyWith(completedDates: current, inactiveUntil: next));
     try {
       NotificationService.instance.show('Task completed', '${t.title} — $date');
       await NotificationService.instance.cancelReminder(taskId);
