@@ -1,0 +1,39 @@
+# flutter pub run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/icon/adaptive_icon_foreground_dark.png"
+
+  android: "launcher_icon"
+  image_path_android: "assets/icon/adaptive_icon_foreground_dark.png"
+  min_sdk_android: 21 # android min sdk min:16, default 21
+  adaptive_icon_background: "assets/icon/adaptive_icon_background_dark.png"
+  adaptive_icon_foreground: "assets/icon/adaptive_icon_foreground_dark.png"
+  adaptive_icon_foreground_inset: 28
+  adaptive_icon_monochrome: "assets/icon/adaptive_icon_monochrome.png"
+
+  ios: true
+  image_path_ios: "assets/icon/adaptive_icon_foreground_dark.png"
+  remove_alpha_ios: true
+  image_path_ios_Dark_transparent: "assets/icon/adaptive_icon_foreground_dark.png"
+  image_path_ios_tinted_grayscale: "assets/icon/adaptive_icon_foreground_dark.png"
+  desaturate_tinted_to_grayscale_ios: true
+  background_color_ios: "#072142"
+
+  web:
+    generate: true
+    image_path: "assets/icon/favicon_dark.ico"
+    background_color: "#072142"
+    theme_color: "#072142"
+
+  windows:
+    generate: true
+    image_path: "assets/icon/adaptive_icon_foreground_dark.png"
+    icon_size: 256 # min:48, max:256, default: 48
+
+  macos:
+    generate: true
+    image_path: "assets/icon/adaptive_icon_foreground_dark.png"
+
+# Light-mode asset filenames available in `assets/icon/`:
+# - adaptive_icon_foreground_light.png
+# - adaptive_icon_background_light.png
+# - adaptive_icon_monochrome.png
