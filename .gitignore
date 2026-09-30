@@ -144,4 +144,6 @@ scripts/*
 !scripts/*.ps1
 !scripts/*.py
 !scripts/release-config.json
+!scripts/hooks/
+!scripts/hooks/**
 TODO.md
