@@ -1,0 +1,107 @@
+{
+  "@@locale": "en",
+
+  "appName": "HouseKeepr",
+  "@appName": { "description": "The app name" },
+
+  "settingsTitle": "Settings",
+  "@settingsTitle": { "description": "Settings screen title" },
+
+  "language": "Language",
+  "@language": { "description": "Language setting label" },
+
+  "languageEnglish": "English",
+  "@languageEnglish": { "description": "English language label" },
+
+  "languageDutch": "Dutch",
+  "@languageDutch": { "description": "Dutch language label" },
+
+  "floatingNavTitle": "Floating pill navigation",
+  "@floatingNavTitle": { "description": "Floating nav toggle label" },
+
+  "floatingNavSubtitle": "Use a floating navigation bar style",
+  "@floatingNavSubtitle": { "description": "Floating nav toggle subtitle" },
+
+  "dailyNotificationsTitle": "Daily notifications",
+  "@dailyNotificationsTitle": { "description": "Daily notifications toggle label" },
+
+  "dailyNotificationsSubtitle": "Receive a summary at start and end of day",
+  "@dailyNotificationsSubtitle": { "description": "Daily notifications toggle subtitle" },
+
+  "startOfDayTime": "Start of day time",
+  "@startOfDayTime": { "description": "Start of day time picker label" },
+
+  "endOfDayTime": "End of day time",
+  "@endOfDayTime": { "description": "End of day time picker label" },
+
+  "profile": "Profile",
+  "@profile": { "description": "Profile list tile label" },
+
+  "profileSubtitle": "Manage your account and data",
+  "@profileSubtitle": { "description": "Profile list tile subtitle" },
+
+  "diagnostics": "Diagnostics",
+  "@diagnostics": { "description": "Diagnostics section label" },
+
+  "testNotification": "Test notification",
+  "@testNotification": { "description": "Test notification label" },
+
+  "testNotificationSubtitle": "Send a test notification now",
+  "@testNotificationSubtitle": { "description": "Test notification subtitle" },
+
+  "shoppingList": "Shopping List",
+  "@shoppingList": { "description": "Shopping list page title" },
+
+  "noItemsYet": "No items yet. Start adding!",
+  "@noItemsYet": { "description": "Empty shopping list message" },
+
+  "aisleMode": "Aisle Mode",
+  "@aisleMode": { "description": "Aisle mode toggle label" },
+
+  "aisleModeOn": "Aisle Mode: On",
+  "@aisleModeOn": { "description": "Aisle mode on label" },
+
+  "aisleModeOff": "Aisle Mode: Off",
+  "@aisleModeOff": { "description": "Aisle mode off label" },
+
+  "flatViewOn": "Flat View: On",
+  "@flatViewOn": { "description": "Flat view on label" },
+
+  "flatViewOff": "Flat View: Off",
+  "@flatViewOff": { "description": "Flat view off label" },
+
+  "clearCheckedItems": "Clear Checked Items",
+  "@clearCheckedItems": { "description": "Clear checked items menu item" },
+
+  "forceReload": "Force Reload",
+  "@forceReload": { "description": "Force reload menu item" },
+
+  "shoppingListReloaded": "Shopping list reloaded from server",
+  "@shoppingListReloaded": { "description": "Success message after force reload" },
+
+  "failedToReload": "Failed to reload: {error}",
+  "@failedToReload": {
+    "description": "Error message after failed force reload",
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+
+  "addItem": "Add item...",
+  "@addItem": { "description": "Shopping list item input hint" },
+
+  "bulkAdd": "Bulk Add",
+  "@bulkAdd": { "description": "Bulk add tooltip" },
+
+  "dashboard": "Dashboard",
+  "@dashboard": { "description": "Dashboard tab label" },
+
+  "tasks": "Tasks",
+  "@tasks": { "description": "Tasks tab label" },
+
+  "shopping": "Shopping",
+  "@shopping": { "description": "Shopping tab label" },
+
+  "tools": "Tools",
+  "@tools": { "description": "Tools tab label" }
+}

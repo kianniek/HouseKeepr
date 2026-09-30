@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Capability: Add item to shopping list -->
+    <capability android:name="actions.intent.CREATE_ITEM_LIST">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.kianhamidi.housekeepr"
+            android:targetClass="com.kianhamidi.housekeepr.MainActivity">
+            <url-template android:value="housekeepr://shopping/add{?item_name}" />
+            <parameter
+                android:name="itemList.hasListItem.name"
+                android:key="item_name" />
+        </intent>
+    </capability>
+
+    <!-- Capability: Create a household task -->
+    <capability android:name="actions.intent.CREATE_TASK">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.kianhamidi.housekeepr"
+            android:targetClass="com.kianhamidi.housekeepr.MainActivity">
+            <url-template android:value="housekeepr://tasks/add{?task_name}" />
+            <parameter
+                android:name="task.name"
+                android:key="task_name" />
+        </intent>
+    </capability>
+
+</shortcuts>

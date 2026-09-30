@@ -1,0 +1,70 @@
+name: Bug report
+description: Report a bug in HouseKeepr
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+        Please **remove secrets** (API keys, tokens, service accounts) from anything you paste here.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+      placeholder: "When I..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include minimal steps so we can reproduce the issue.
+      placeholder: |
+        1. Go to...
+        2. Click...
+        3. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Platform(s)
+      multiple: true
+      options:
+        - Web (Chrome)
+        - Android
+        - iOS
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: flutter_version
+    attributes:
+      label: Flutter version
+      placeholder: "flutter --version"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Paste relevant logs (sanitized) or screenshots.
+      render: shell
+    validations:
+      required: false

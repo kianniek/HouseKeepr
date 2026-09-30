@@ -1,0 +1,31 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/coffee_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="12dp"
+    android:background="#1F1B18">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="What to brew?" android:textColor="#A1887F" android:textSize="11sp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="▼" android:textColor="#D7CCC8" android:textSize="10sp" />
+        <TextView android:id="@+id/coffee_spin" android:layout_width="68dp" android:layout_height="68dp" android:gravity="center" android:text="◔" android:textColor="#D7CCC8" android:textSize="56sp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TAP TO SPIN" android:textColor="#1F1B18" android:background="#D7CCC8" android:paddingLeft="12dp" android:paddingRight="12dp" android:paddingTop="5dp" android:paddingBottom="5dp" android:textStyle="bold" android:textSize="10sp" />
+    </LinearLayout>
+
+    <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+        <TextView android:id="@+id/coffee_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Latte" android:textColor="#FFF3E0" android:textSize="16sp" android:textStyle="bold" />
+        <LinearLayout android:layout_width="64dp" android:layout_height="76dp" android:orientation="vertical" android:gravity="bottom" android:background="#FFFDF9" android:padding="4dp">
+            <TextView android:id="@+id/coffee_foam" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:text="0.5x Foam" android:textColor="#3E2723" android:textSize="6sp" android:background="#ECEFF1" />
+            <TextView android:id="@+id/coffee_milk" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="3" android:gravity="center" android:text="3x Milk" android:textColor="#3E2723" android:textSize="6sp" android:background="#FFF3E0" />
+            <TextView android:id="@+id/coffee_espresso" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:text="1x Espresso" android:textColor="#FFF3E0" android:textSize="6sp" android:background="#3E2723" />
+        </LinearLayout>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Tap for full recipe guide" android:textColor="#BCAAA4" android:textSize="9sp" android:layout_marginTop="8dp" />
+    </LinearLayout>
+</LinearLayout>

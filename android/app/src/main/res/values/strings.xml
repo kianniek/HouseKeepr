@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="appwidget_text">Shopping List</string>
+    <string name="add_widget">Add widget</string>
+    <string name="app_widget_description">Shopping list with checkboxes</string>
+    <string name="icon_shopping_cart">Shopping Cart</string>
+    <string name="no_items">No items</string>
+    <string name="empty_widget_text">All caught up! No items.</string>
+    <string name="shopping_list">Shopping List</string>
+    <string name="toggle_item">Toggle item</string>
+</resources>

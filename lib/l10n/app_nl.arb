@@ -1,0 +1,69 @@
+{
+  "@@locale": "nl",
+
+  "appName": "HouseKeepr",
+
+  "settingsTitle": "Instellingen",
+
+  "language": "Taal",
+
+  "languageEnglish": "Engels",
+
+  "languageDutch": "Nederlands",
+
+  "floatingNavTitle": "Zwevende navigatiebalk",
+
+  "floatingNavSubtitle": "Gebruik een zwevende navigatiebalkstijl",
+
+  "dailyNotificationsTitle": "Dagelijkse meldingen",
+
+  "dailyNotificationsSubtitle": "Ontvang een samenvatting aan het begin en einde van de dag",
+
+  "startOfDayTime": "Begin van de dag",
+
+  "endOfDayTime": "Einde van de dag",
+
+  "profile": "Profiel",
+
+  "profileSubtitle": "Beheer je account en gegevens",
+
+  "diagnostics": "Diagnostiek",
+
+  "testNotification": "Testmelding",
+
+  "testNotificationSubtitle": "Stuur nu een testmelding",
+
+  "shoppingList": "Boodschappenlijst",
+
+  "noItemsYet": "Nog geen items. Begin met toevoegen!",
+
+  "aisleMode": "Gangenmodus",
+
+  "aisleModeOn": "Gangenmodus: Aan",
+
+  "aisleModeOff": "Gangenmodus: Uit",
+
+  "flatViewOn": "Vlakke weergave: Aan",
+
+  "flatViewOff": "Vlakke weergave: Uit",
+
+  "clearCheckedItems": "Aangevinkte items wissen",
+
+  "forceReload": "Forceer herladen",
+
+  "shoppingListReloaded": "Boodschappenlijst herladen van server",
+
+  "failedToReload": "Herladen mislukt: {error}",
+
+  "addItem": "Item toevoegen...",
+
+  "bulkAdd": "Bulk toevoegen",
+
+  "dashboard": "Dashboard",
+
+  "tasks": "Taken",
+
+  "shopping": "Boodschappen",
+
+  "tools": "Gereedschap"
+}
