@@ -21,8 +21,8 @@ param(
     [ValidateSet('release','debug')] [string]$Mode = 'release',
     [switch]$DryRun,
     [string]$src = 'C:\Users\kiann\Documents\CodingProjects\HouseKeepr\build\web',
-    [string]$dst = 'C:\Users\kiann\Documents\CodingProjects\Websites\PortfolioWebsite\housekeepr\',
-    [string]$repo = 'C:\Users\kiann\Documents\CodingProjects\Websites\PortfolioWebsite'
+    [string]$dst = 'C:\Users\kiann\Documents\CodingProjects\Websites\PortfolioWebsite_KianHamidi\housekeepr\',
+    [string]$repo = 'C:\Users\kiann\Documents\CodingProjects\Websites\PortfolioWebsite_KianHamidi'
 )
 
 $ErrorActionPreference = 'Stop'

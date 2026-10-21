@@ -96,7 +96,7 @@ class HomeScreenState extends State<HomeScreen> {
       DashboardPage(currentUser: user, householdId: _cachedHouseholdId),
       TasksPage(currentUser: user, householdId: _cachedHouseholdId),
       const SmartShoppingListPage(),
-      const ToolsLibraryPage(),
+      ToolsLibraryPage(householdId: _cachedHouseholdId),
     ];
   }
 

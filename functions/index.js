@@ -60,7 +60,7 @@ exports.joinHouseholdByInviteCode = functions.https.onCall(async (data, context)
   }
 });
 
-const { onDocumentWritten, onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 
 exports.onGroceryListUpdate = onDocumentWritten(
   "households/{householdId}/groceries/{groceryId}",
@@ -81,50 +81,6 @@ exports.onGroceryListUpdate = onDocumentWritten(
       console.log(`Sent silent push to topic: household_${householdId}`);
     } catch (error) {
       console.error("Failed to send silent push for shopping update: ", error);
-    }
-  }
-);
-
-exports.onPingCreated = onDocumentCreated(
-  "households/{householdId}/pings/{pingId}",
-  async (event) =>
-  {
-    const pingData = event.data.data();
-    if (!pingData) return;
-
-    const { recipientId, senderId, reason } = pingData;
-    if (!recipientId) return;
-
-    // Typically you would fetch the user's FCM tokens here.
-    // For now, we will send it to a user-specific topic to ensure delivery.
-    const payload = {
-      data: {
-        action: "ping_request",
-        type: "ping",
-        pingId: event.params.pingId,
-        householdId: event.params.householdId,
-        senderId: senderId,
-        reason: reason || "Where are you?",
-      },
-      topic: `user_${recipientId}`,
-      android: {
-        priority: 'high',
-      },
-      apns: {
-        payload: {
-          aps: {
-            contentAvailable: true,
-            priority: 10,
-          },
-        },
-      }
-    };
-
-    try {
-      await admin.messaging().send(payload);
-      console.log(`Sent high priority ping push to topic: user_${recipientId}`);
-    } catch (error) {
-      console.error("Failed to send ping push: ", error);
     }
   }
 );

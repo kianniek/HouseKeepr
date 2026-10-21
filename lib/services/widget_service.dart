@@ -63,12 +63,18 @@ class WidgetService {
     await _writeAndRefresh(items);
   }
 
-  Future<void> updateCoffeeWidget(CoffeeRecipe recipe) async {
+  Future<void> updateCoffeeWidget(
+    CoffeeRecipe recipe, {
+    Iterable<CoffeeRecipe> availableRecipes = const [],
+  }) async {
     if (!_isAndroid) return;
     try {
       await HomeWidget.saveWidgetData<String>(
         _coffeeRecipeKey,
-        CoffeeRegistry.encode(recipe),
+        CoffeeRegistry.encodeForWidget(
+          recipe,
+          availableRecipes.isEmpty ? [recipe] : availableRecipes,
+        ),
       );
       await HomeWidget.updateWidget(androidName: _coffeeWidgetName);
     } catch (e) {

@@ -8,4 +8,22 @@
     <string name="empty_widget_text">All caught up! No items.</string>
     <string name="shopping_list">Shopping List</string>
     <string name="toggle_item">Toggle item</string>
+    <string name="latte">Latte</string>
+    <string name="tap_for_recipe">Tap for full recipe guide</string>
+    <string name="foam_ratio">0.5x Foam</string>
+    <string name="milk_ratio">3x Milk</string>
+    <string name="espresso_ratio">1x Espresso</string>
+    <string name="spin_again">↻ Spin again</string>
+    <!-- Text Colors -->
+    <color name="coffee_text_primary">#FFF3E0</color>
+    <color name="coffee_text_secondary">#BCAAA4</color>
+    <color name="coffee_text_dark">#3E2723</color>
+    <color name="coffee_text_light">#FFF3E0</color>
+    <color name="coffee_button_text">#1F1B18</color>
+
+    <!-- Component & Layer Backgrounds -->
+    <color name="coffee_bg_light">#FFFDF9</color>
+    <color name="coffee_foam_bg">#ECEFF1</color>
+    <color name="coffee_milk_bg">#FFF3E0</color>
+    <color name="coffee_espresso_bg">#3E2723</color>
 </resources>

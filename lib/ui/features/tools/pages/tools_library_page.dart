@@ -3,7 +3,6 @@ import 'package:marquee/marquee.dart';
 
 import '../widgets/coffee_picker_page.dart';
 import '../widgets/tool_personal_budget_page.dart';
-import '../widgets/tool_ping_household_member.dart';
 
 class ToolItem {
   final String title;
@@ -22,7 +21,9 @@ class ToolItem {
 }
 
 class ToolsLibraryPage extends StatefulWidget {
-  const ToolsLibraryPage({super.key});
+  final String? householdId;
+
+  const ToolsLibraryPage({super.key, this.householdId});
 
   @override
   State<ToolsLibraryPage> createState() => _ToolsLibraryPageState();
@@ -49,7 +50,7 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
     ToolCategory.kitchenUtilities,
   ];
 
-  final List<ToolItem> _allTools = const [
+  List<ToolItem> get _allTools => [
     ToolItem(
       title: 'Personal Budget Contribution',
       subtitle: 'Calculate your left-over budget',
@@ -58,18 +59,11 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
       destination: PersonalBudgetPage(),
     ),
     ToolItem(
-      title: 'Ping Household Member',
-      subtitle: 'Request the location of a household member',
-      category: ToolCategory.statusUtilities,
-      icon: Icons.location_on,
-      destination: ToolPingHouseholdMember(),
-    ),
-    ToolItem(
       title: 'Coffee Picker',
       subtitle: 'Spin for a coffee recipe and brew guide',
       category: ToolCategory.kitchenUtilities,
       icon: Icons.coffee,
-      destination: CoffeePickerPage(),
+      destination: CoffeePickerPage(householdId: widget.householdId),
     ),
   ];
 

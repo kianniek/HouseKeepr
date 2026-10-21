@@ -71,6 +71,7 @@ flutter {
 }
 
 dependencies {
+    implementation("androidx.constraintlayout:constraintlayout:2.2.2")
     // Required for core library desugaring (Java 8+ APIs) used by some plugins
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("com.google.code.gson:gson:2.10.1")

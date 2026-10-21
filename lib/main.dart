@@ -15,7 +15,6 @@ import 'package:housekeepr/home_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/locale_provider.dart';
 import 'core/settings_repository.dart';
-import 'cubits/ping_cubit.dart';
 import 'cubits/shopping_cubit.dart';
 import 'cubits/task_cubit.dart';
 import 'cubits/user_cubit.dart';
@@ -23,7 +22,6 @@ import 'firebase_options.dart';
 import 'firestore/firestore_history_repository.dart';
 import 'firestore/firestore_household_grocery_repository.dart';
 import 'firestore/firestore_household_task_repository.dart';
-import 'firestore/firestore_ping_repository.dart';
 import 'firestore/firestore_task_repository.dart';
 import 'generated/app_localizations.dart';
 import 'models/completion_record.dart';
@@ -383,14 +381,12 @@ class _AppRootState extends State<AppRoot> {
 class _HouseholdInitData {
   final TaskCubit taskCubit;
   final ShoppingCubit shoppingCubit;
-  final PingCubit pingCubit;
   final FirestoreSyncService syncService;
   final GroceryRepository groceryRepository;
 
   _HouseholdInitData({
     required this.taskCubit,
     required this.shoppingCubit,
-    required this.pingCubit,
     required this.syncService,
     required this.groceryRepository,
   });
@@ -716,13 +712,6 @@ class _HouseholdAppState extends State<HouseholdApp> {
     taskCubit.attachWriteQueueAndHistory(writeQueue, historyRepo);
     shoppingCubit.attachWriteQueue(writeQueue);
 
-    final pingCubit = PingCubit();
-    final pingRepo = FirestorePingRepository(
-      FirebaseFirestore.instance,
-      householdId: widget.householdId,
-    );
-    pingCubit.setRepository(pingRepo, widget.user.uid);
-
     final syncService = FirestoreSyncService(FirebaseFirestore.instance);
     setInitStageLabel('Starting sync service...');
     await syncService.start(
@@ -735,7 +724,6 @@ class _HouseholdAppState extends State<HouseholdApp> {
     return _HouseholdInitData(
       taskCubit: taskCubit,
       shoppingCubit: shoppingCubit,
-      pingCubit: pingCubit,
       syncService: syncService,
       groceryRepository: shoppingCubit.repository,
     );
@@ -799,7 +787,6 @@ class _HouseholdAppState extends State<HouseholdApp> {
           providers: [
             BlocProvider<TaskCubit>.value(value: data.taskCubit),
             BlocProvider<ShoppingCubit>.value(value: data.shoppingCubit),
-            BlocProvider<PingCubit>.value(value: data.pingCubit),
           ],
           child: RepositoryProvider<FirestoreSyncService>.value(
             value: data.syncService,
