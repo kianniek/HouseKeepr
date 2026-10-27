@@ -2,9 +2,9 @@ name: Project Health Check
 
 on:
   push:
-    branches: [ FlutterApp ]
+    branches: [ main ]
   pull_request:
-    branches: [ FlutterApp ]
+    branches: [ main ]
   workflow_dispatch:
 
 env:
