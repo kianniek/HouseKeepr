@@ -661,6 +661,57 @@ class TaskCubit extends Cubit<TaskState> {
     }
     return succeeded;
   }
+
+  Future<void> completeAllTasks() async {
+    final nowStr = DateTime.now().toUtc().toIso8601String().split('T')[0];
+    final prevs = state.tasks.where((t) => !t.completed).toList();
+    if (prevs.isEmpty) return;
+
+    final updatedTasks = state.tasks.map((t) {
+      if (t.completed) return t;
+      if (t.isRepeating) {
+        final currentDates = List<String>.from(t.completedDates ?? <String>[]);
+        if (!currentDates.contains(nowStr)) currentDates.add(nowStr);
+        return t.copyWith(
+          completedDates: currentDates,
+          syncStatus: SyncStatus.pending,
+        );
+      } else {
+        return t.copyWith(completed: true, syncStatus: SyncStatus.pending);
+      }
+    }).toList();
+
+    try {
+      await repo.saveTasks(updatedTasks);
+    } catch (_) {}
+
+    final mode = settings?.getSyncMode() ?? SyncMode.sync;
+    if (mode != SyncMode.localOnly) {
+      if (writeQueue != null) {
+        for (final p in prevs) {
+          final updated = updatedTasks.firstWhere((t) => t.id == p.id);
+          final payload = updated.toMap();
+          try {
+            payload['_previous'] = p.toMap();
+          } catch (_) {}
+          writeQueue!.enqueueOp(
+            QueueOp(
+              type: QueueOpType.saveTask,
+              id: updated.id,
+              payload: payload,
+            ),
+          );
+        }
+      } else if (remoteRepo != null) {
+        for (final p in prevs) {
+          final updated = updatedTasks.firstWhere((t) => t.id == p.id);
+          unawaited(remoteRepo!.saveTask(updated));
+        }
+      }
+    }
+
+    emit(state.copyWith(tasks: updatedTasks));
+  }
 }
 
 void unawaited(Future<void> f) {}

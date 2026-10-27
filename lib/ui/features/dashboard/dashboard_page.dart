@@ -1,10 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:housekeepr/services/recurrence_generator.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../cubits/task_cubit.dart';
 import '../../../../models/task.dart';
-import '../../common/widgets/task_card.dart';
 import '../profile/pages/settings_page.dart';
 import '../tasks/pages/tasks_page.dart';
 
@@ -19,15 +20,6 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  String _selectedRoom = 'Alles';
-  final List<String> _rooms = [
-    'Alles',
-    'Badkamer',
-    'Keuken',
-    'Slaapkamer',
-    'Woonkamer',
-  ];
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -60,7 +52,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         ),
                       ),
                       Text(
-                        'Welkom terug, $userName 👋',
+                        'Welcome back, $userName 👋',
                         style: textTheme.bodyMedium,
                       ),
                     ],
@@ -93,31 +85,31 @@ class _DashboardPageState extends State<DashboardPage> {
                   children: [
                     const SizedBox(height: 8),
 
-                    // Daily Progress Card
-                    _buildDailyProgressCard(),
+                    // Bento Grid Layout
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        // Use a column for narrow screens, or a 2-column bento row layout for wider screens
+                        return Column(
+                          children: [
+                            // Full-width Daily Progress Bento Box
+                            _buildDailyProgressCard(context),
+                            const SizedBox(height: 16),
 
-                    const SizedBox(height: 24),
-
-                    const SizedBox(height: 24),
-
-                    // Rooms Filter Section
-                    Text(
-                      'Ruimtes',
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            // Two-column Bento Row for Weather & Calendar Events
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: _buildWeatherCard(context)),
+                                const SizedBox(width: 16),
+                                Expanded(child: _buildCalendarCard(context)),
+                              ],
+                            ),
+                          ],
+                        );
+                      },
                     ),
 
-                    const SizedBox(height: 12),
-
-                    _buildRoomFilters(),
-
-                    const SizedBox(height: 16),
-
-                    // Filtered Tasks
-                    _buildFilteredTasksList(),
-
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -128,7 +120,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildDailyProgressCard() {
+  Widget _buildDailyProgressCard(BuildContext context) {
     return BlocBuilder<TaskCubit, TaskState>(
       builder: (context, state) {
         final theme = Theme.of(context);
@@ -155,7 +147,7 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: scheme.primaryContainer,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
             children: [
@@ -164,7 +156,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Dagelijkse voortgang',
+                      'Daily Progress',
                       style: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -172,8 +164,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     const SizedBox(height: 8),
                     Text(
                       remaining > 0
-                          ? 'Nog $remaining ${remaining == 1 ? 'taak' : 'taken'} te gaan voor vandaag!'
-                          : 'Alle taken van vandaag voltooid! 🎉',
+                          ? '$remaining ${remaining == 1 ? 'Task' : 'Tasks'} left for today!'
+                          : 'You finished all the tasks for today! 🎉',
                       style: textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -198,18 +190,18 @@ class _DashboardPageState extends State<DashboardPage> {
                         backgroundColor: scheme.primary,
                         foregroundColor: scheme.onPrimary,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      child: const Text('Bekijk details'),
+                      child: const Text('View Details'),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 16),
               SizedBox(
-                width: 100,
-                height: 100,
+                width: 90,
+                height: 90,
                 child: TweenAnimationBuilder<double>(
                   key: ValueKey(percentage),
                   tween: Tween<double>(begin: 0, end: percentage / 100),
@@ -221,16 +213,15 @@ class _DashboardPageState extends State<DashboardPage> {
                       children: [
                         Center(
                           child: SizedBox(
-                            width: 100,
-                            height: 100,
+                            width: 90,
+                            height: 90,
                             child: CircularProgressIndicator(
                               value: value,
-                              strokeWidth: 10,
+                              strokeWidth: 9,
                               backgroundColor: scheme.onPrimary.withValues(
                                 alpha: 0.3,
                               ),
                               strokeCap: StrokeCap.round,
-                              trackGap: 4,
                               valueColor: AlwaysStoppedAnimation<Color>(
                                 scheme.primary,
                               ),
@@ -240,7 +231,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         Center(
                           child: Text(
                             '$animatedPercent%',
-                            style: textTheme.headlineSmall?.copyWith(
+                            style: textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: scheme.primary,
                             ),
@@ -258,259 +249,131 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildRoomFilters() {
-    return SizedBox(
-      height: 40,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _rooms.length,
-        itemBuilder: (context, index) {
-          final theme = Theme.of(context);
-          final scheme = theme.colorScheme;
-          final textTheme = theme.textTheme;
-          final room = _rooms[index];
-          final isSelected = room == _selectedRoom;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              label: Text(room),
-              selected: isSelected,
-              onSelected: (selected) {
-                setState(() {
-                  _selectedRoom = room;
-                });
-              },
-              selectedColor: scheme.primaryContainer,
-              backgroundColor: scheme.surfaceContainerHighest,
-              checkmarkColor: scheme.primary,
-              labelStyle: textTheme.bodySmall?.copyWith(
-                color: isSelected ? scheme.onSurface : scheme.onSurfaceVariant,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+  Widget _buildWeatherCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
+    return Container(
+      height: 180,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Weather',
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              side: BorderSide.none,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+              Icon(Icons.wb_sunny_rounded, color: Colors.amber, size: 24),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '14°C',
+                style: textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+              const SizedBox(height: 2),
+              Text(
+                'Utrecht, Netherlands',
+                style: textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+          Text(
+            'Partly cloudy today',
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontStyle: FontStyle.italic,
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildFilteredTasksList() {
-    return BlocBuilder<TaskCubit, TaskState>(
-      builder: (context, state) {
-        final theme = Theme.of(context);
-        final scheme = theme.colorScheme;
-        var tasks = state.tasks.where((task) => !task.completed).toList();
-        // Sort by effective priority (bumped via putOffCount) then by soonest deadline
-        tasks.sort((a, b) {
-          final p = b.effectivePriority.index.compareTo(
-            a.effectivePriority.index,
-          );
-          if (p != 0) return p;
-          final aDeadline =
-              a.deadline ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final bDeadline =
-              b.deadline ?? DateTime.fromMillisecondsSinceEpoch(0);
-          return aDeadline.compareTo(bDeadline);
-        });
+  Widget _buildCalendarCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
-        if (_selectedRoom != 'Alles') {
-          tasks = tasks.where((task) => task.room == _selectedRoom).toList();
-        }
-
-        if (tasks.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Text(
-                'Geen taken gevonden',
-                style: theme.textTheme.bodyMedium?.copyWith(
+    // Note: To make this fully live with Google Calendar events, you can wrap this
+    // in a FutureBuilder or a Calendar Bloc if available, or hook it to your calendar data source.
+    return Container(
+      height: 180,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Next Event',
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Icon(
+                Icons.calendar_today_rounded,
+                color: scheme.primary,
+                size: 20,
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Gym',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Tomorrow, 05:15 AM',
+                style: textTheme.bodySmall?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
               ),
+            ],
+          ),
+          Text(
+            'Shared Calendar',
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.primary,
+              fontWeight: FontWeight.w500,
             ),
-          );
-        }
-
-        return Column(
-          children: tasks.take(5).map((task) {
-            final recurrence = task.repeatRule;
-            final subtitle = recurrence != null
-                ? '${task.room ?? 'Algemeen'} • $recurrence'
-                : task.room ?? 'Algemeen';
-
-            final isInactive =
-                task.inactiveUntil != null &&
-                DateTime.now().toUtc().isBefore(task.inactiveUntil!);
-
-            return TaskCard(
-              task: task,
-              icon: _getTaskIcon(task),
-              isCompleted: task.completed,
-              isInactive: isInactive,
-              subtitle: Text(subtitle),
-              onToggleComplete: () async {
-                if (task.isRepeating) {
-                  final todayStr = DateTime.now()
-                      .toUtc()
-                      .toIso8601String()
-                      .split('T')[0];
-                  final cubit = context.read<TaskCubit>();
-                  await cubit.completeOccurrence(task.id, todayStr);
-                } else {
-                  context.read<TaskCubit>().updateTask(
-                    task.copyWith(completed: true),
-                  );
-                }
-              },
-              onPutOff: () async {
-                final now = DateTime.now().toUtc();
-                final tomorrow = DateTime.utc(
-                  now.year,
-                  now.month,
-                  now.day + 1,
-                  12,
-                  0,
-                );
-
-                final updated = task.copyWith(
-                  deadline: tomorrow,
-                  putOffCount: task.putOffCount + 1,
-                );
-
-                context.read<TaskCubit>().updateTask(updated);
-              },
-            );
-          }).toList(),
-        );
-      },
+          ),
+        ],
+      ),
     );
   }
-
-  IconData _getTaskIcon(Task task) {
-    final title = task.title.toLowerCase();
-    final description = (task.description ?? '').toLowerCase();
-    final match1 = _matchIcon(title);
-    if (match1 != null) return match1;
-    final match2 = _matchIcon(description);
-    return match2 ?? Icons.home;
-  }
-
-  IconData? _matchIcon(String text) {
-    if (text.isEmpty) return null;
-    for (final entry in _taskIconKeywords) {
-      for (final keyword in entry.keywords) {
-        if (text.contains(keyword)) return entry.icon;
-      }
-    }
-    return null;
-  }
-
-  static final List<_TaskIconKeyword> _taskIconKeywords = [
-    _TaskIconKeyword(Icons.bathroom, [
-      'bath',
-      'badkamer',
-      'shower',
-      'douche',
-      'toilet',
-      'wc',
-      'sink',
-      'wasbak',
-    ]),
-    _TaskIconKeyword(Icons.kitchen, [
-      'kitchen',
-      'keuken',
-      'cook',
-      'koken',
-      'dish',
-      'afwas',
-      'vaat',
-      'fridge',
-      'koelkast',
-    ]),
-    _TaskIconKeyword(Icons.bed, ['bed', 'slaapkamer', 'sleep', 'sleeping']),
-    _TaskIconKeyword(Icons.weekend, [
-      'living',
-      'woonkamer',
-      'lounge',
-      'sofa',
-      'couch',
-    ]),
-    _TaskIconKeyword(Icons.local_laundry_service, [
-      'laundry',
-      'wash',
-      'was',
-      'wassen',
-      'clothes',
-      'kleding',
-    ]),
-    _TaskIconKeyword(Icons.cleaning_services, [
-      'clean',
-      'schoon',
-      'stof',
-      'dweil',
-      'mop',
-      'vacuum',
-      'stofzuig',
-    ]),
-    _TaskIconKeyword(Icons.shopping_cart, [
-      'shop',
-      'shopping',
-      'boodschap',
-      'boodschappen',
-      'grocery',
-    ]),
-    _TaskIconKeyword(Icons.delete, [
-      'trash',
-      'garbage',
-      'vuilnis',
-      'prullenbak',
-      'afval',
-    ]),
-    _TaskIconKeyword(Icons.grass, [
-      'garden',
-      'tuin',
-      'plant',
-      'plants',
-      'lawn',
-      'gras',
-    ]),
-    _TaskIconKeyword(Icons.pets, [
-      'pet',
-      'huisdier',
-      'hond',
-      'kat',
-      'dog',
-      'cat',
-    ]),
-    _TaskIconKeyword(Icons.directions_car, [
-      'car',
-      'auto',
-      'vehicle',
-      'garage',
-    ]),
-    _TaskIconKeyword(Icons.receipt_long, [
-      'bill',
-      'bills',
-      'invoice',
-      'rekening',
-      'factuur',
-    ]),
-    _TaskIconKeyword(Icons.build, [
-      'fix',
-      'repair',
-      'reparatie',
-      'maintenance',
-      'onderhoud',
-    ]),
-  ];
-}
-
-class _TaskIconKeyword {
-  final IconData icon;
-  final List<String> keywords;
-  const _TaskIconKeyword(this.icon, this.keywords);
 }

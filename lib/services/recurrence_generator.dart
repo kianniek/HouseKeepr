@@ -124,3 +124,53 @@ List<DateTime> generateOccurrencesForTask(
   // Unknown rule: no occurrences
   return out;
 }
+
+String formatRecurrence(String rule) {
+  final rawRule = rule.toLowerCase().trim();
+  var interval = 1;
+  var unit = rawRule;
+
+  if (rawRule.startsWith('every:')) {
+    final parts = rawRule.split(':');
+    if (parts.length >= 3) {
+      interval = int.tryParse(parts[1]) ?? 1;
+      unit = parts[2];
+    }
+  }
+
+  if (interval == 1) {
+    switch (unit) {
+      case 'daily':
+      case 'day':
+        return 'Every day';
+      case 'weekly':
+      case 'week':
+        return 'Every week';
+      case 'monthly':
+      case 'month':
+        return 'Every month';
+      case 'yearly':
+      case 'year':
+        return 'Every year';
+      default:
+        return 'Every $unit';
+    }
+  } else {
+    switch (unit) {
+      case 'daily':
+      case 'day':
+        return 'Every $interval days';
+      case 'weekly':
+      case 'week':
+        return 'Every $interval weeks';
+      case 'monthly':
+      case 'month':
+        return 'Every $interval months';
+      case 'yearly':
+      case 'year':
+        return 'Every $interval years';
+      default:
+        return 'Every $interval ${unit}s';
+    }
+  }
+}
