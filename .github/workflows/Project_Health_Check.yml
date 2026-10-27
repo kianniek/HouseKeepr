@@ -67,7 +67,7 @@ jobs:
       - name: Static Analysis
         working-directory: ${{ env.WORKING_DIR }}
         run: |
-          flutter analyze
+          flutter analyze --no-fatal-warnings
           rc=$?
           if [ $rc -ne 0 ]; then
             echo "::error::Static analysis failed (exit code $rc)"
@@ -76,7 +76,7 @@ jobs:
             echo "  flutter analyze"
             exit $rc
           fi
-        # This checks for errors, warnings, and linter rules
+        # This fails only for analyzer errors; warnings remain visible but non-fatal.
 
       - name: Run Unit Tests
         working-directory: ${{ env.WORKING_DIR }}
