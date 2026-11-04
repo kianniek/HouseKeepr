@@ -53,10 +53,10 @@ class ShoppingListItemTile extends StatelessWidget {
         child: Icon(Icons.delete, color: scheme.onError),
       ),
       onDismissed: (_) => onDelete(),
-      child: Container(
+      child: Material(
         color: item.checked
             ? scheme.surfaceContainerHighest.withValues(alpha: 0.2)
-            : scheme.surface.withAlpha(0),
+            : Colors.transparent,
         child: ListTile(
           contentPadding: EdgeInsets.symmetric(
             horizontal: aisleMode ? 24 : 16,

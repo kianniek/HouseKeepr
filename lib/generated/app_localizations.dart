@@ -176,6 +176,42 @@ abstract class AppLocalizations {
   /// **'Manage your account and data'**
   String get profileSubtitle;
 
+  /// Account section header in settings
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get accountSection;
+
+  /// View account title
+  ///
+  /// In en, this message translates to:
+  /// **'View Account'**
+  String get viewAccount;
+
+  /// View account subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'View and edit profile details'**
+  String get viewAccountSubtitle;
+
+  /// Logout button title
+  ///
+  /// In en, this message translates to:
+  /// **'Log Out'**
+  String get logout;
+
+  /// Logout confirmation message
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to log out?'**
+  String get logoutConfirmation;
+
+  /// Cancel button label
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
   /// Diagnostics section label
   ///
   /// In en, this message translates to:

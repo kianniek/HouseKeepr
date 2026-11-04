@@ -18,24 +18,24 @@ class CalendarService {
       _preferences = preferences;
 
   Future<calendar.CalendarApi> _api() async {
-    final account =
-        _googleSignIn.currentUser ?? await _googleSignIn.signInSilently();
+    GoogleSignInAccount? account = _googleSignIn.currentUser;
+    account ??=
+        await _googleSignIn.signInSilently() ?? await _googleSignIn.signIn();
+
     if (account == null) {
       throw StateError('Sign in with Google to connect Google Calendar.');
     }
 
-    final granted = await _googleSignIn.requestScopes([calendarScope]);
-    if (!granted) {
-      throw StateError('Google Calendar permission was not granted.');
-    }
+    _userKey = account.id;
 
     final client = await _googleSignIn.authenticatedClient();
     if (client == null) {
-      throw StateError('Unable to authenticate with Google Calendar.');
+      throw StateError(
+        'Unable to authenticate with Google Calendar. Make sure permissions were granted.',
+      );
     }
 
     _calendarApi ??= calendar.CalendarApi(client);
-    _userKey ??= account.id;
     return _calendarApi!;
   }
 

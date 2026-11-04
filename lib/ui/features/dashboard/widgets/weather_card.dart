@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../../../../core/extensions.dart';
 import '../../../../../services/weather_service.dart';
 
 class ScheduledForecast {
@@ -200,7 +201,7 @@ class _WeatherCardState extends State<WeatherCard> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      '${_forecast!.currentTemperature.round()}°C',
+                      formatTemperature(_forecast!.currentTemperature, context),
                       style: textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -261,7 +262,7 @@ class _UpcomingForecastCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: scheme.surface.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(10),
@@ -295,20 +296,24 @@ class _UpcomingForecastRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          Icon(Icons.schedule, size: 14, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            'At ${forecast.time.format(context)}',
-            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
-          ),
-          const Spacer(),
-          Text(condition.icon, style: const TextStyle(fontSize: 16)),
+          Icon(Icons.schedule, size: 12, color: scheme.onSurfaceVariant),
           const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              formatTimeWithSystemDefault(forecast.time, context),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(condition.icon, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 3),
           Text(
-            '${forecast.forecast.temperature.round()}°C',
+            formatTemperature(forecast.forecast.temperature, context),
             style: TextStyle(
               color: scheme.onSurfaceVariant,
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -549,7 +554,9 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                     children: _times
                         .map(
                           (time) => InputChip(
-                            label: Text(time.format(context)),
+                            label: Text(
+                              formatTimeWithSystemDefault(time, context),
+                            ),
                             selected: true,
                             onSelected: (_) => setState(
                               () => _times = _times

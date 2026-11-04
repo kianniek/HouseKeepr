@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/extensions.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -53,13 +55,33 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         _nextEvent = events.isEmpty ? null : events.first;
         _loading = false;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
+      debugPrint('Calendar load error: $error\n$stackTrace');
       if (!mounted) return;
       setState(() {
         _error = error;
         _loading = false;
       });
+      _showDebugToast(error);
     }
+  }
+
+  void _showDebugToast(Object error) {
+    if (!kDebugMode || !mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Calendar Error: $error'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: 'Dismiss',
+          onPressed: () => messenger.hideCurrentSnackBar(),
+        ),
+      ),
+    );
   }
 
   Future<void> _openCalendarPicker() async {
@@ -79,12 +101,14 @@ class _CalendarWidgetState extends State<CalendarWidget> {
       if (!mounted || selected?.id == null) return;
       await _calendarService.selectCalendar(selected!.id!);
       await _loadEvent();
-    } catch (error) {
+    } catch (error, stackTrace) {
+      debugPrint('Calendar picker error: $error\n$stackTrace');
       if (!mounted) return;
       setState(() {
         _error = error;
         _loading = false;
       });
+      _showDebugToast(error);
     }
   }
 
@@ -125,64 +149,74 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-              ? _ErrorContent(onRetry: _loadEvent)
+              ? _ErrorContent(onRetry: _loadEvent, error: _error)
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Next Event',
-                          style: textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Next Event',
+                                style: textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Icon(
+                                Icons.calendar_today_rounded,
+                                color: scheme.primary,
+                                size: 20,
+                              ),
+                            ],
                           ),
-                        ),
-                        Icon(
-                          Icons.calendar_today_rounded,
-                          color: scheme.primary,
-                          size: 20,
-                        ),
-                      ],
+                          const SizedBox(height: 12),
+                          if (_nextEvent == null)
+                            Text(
+                              'No upcoming events',
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            )
+                          else ...[
+                            Text(
+                              _nextEvent!.summary ?? 'Untitled event',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatEventStart(_nextEvent!),
+                              style: textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                            if ((_nextEvent!.location ??
+                                    _nextEvent!.hangoutLink) !=
+                                null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                _nextEvent!.location ?? 'Google Meet',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    if (_nextEvent == null)
-                      Text(
-                        'No upcoming events',
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      )
-                    else ...[
-                      Text(
-                        _nextEvent!.summary ?? 'Untitled event',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _formatEventStart(_nextEvent!),
-                        style: textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                      if ((_nextEvent!.location ?? _nextEvent!.hangoutLink) !=
-                          null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          _nextEvent!.location ?? 'Google Meet',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ],
-                    const Spacer(),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -223,9 +257,10 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           dateTime.year == now.year &&
           dateTime.month == now.month &&
           dateTime.day == now.day;
+      final timeStr = formatDateTimeTimeToSystemDefault(dateTime, context);
       return day
-          ? 'Today at ${DateFormat.Hm().format(dateTime.toLocal())}'
-          : DateFormat('EEE, d MMM at HH:mm').format(dateTime.toLocal());
+          ? 'Today at $timeStr'
+          : '${DateFormat('EEE, d MMM').format(dateTime.toLocal())} at $timeStr';
     }
     final date = start?.date;
     return date == null
@@ -330,8 +365,9 @@ class _CalendarPickerSheetState extends State<_CalendarPickerSheet> {
 
 class _ErrorContent extends StatelessWidget {
   final VoidCallback onRetry;
+  final Object? error;
 
-  const _ErrorContent({required this.onRetry});
+  const _ErrorContent({required this.onRetry, this.error});
 
   @override
   Widget build(BuildContext context) {
@@ -340,6 +376,20 @@ class _ErrorContent extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text('Unable to load Google Calendar'),
+          if (kDebugMode && error != null) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                '$error',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
+          ],
           TextButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
