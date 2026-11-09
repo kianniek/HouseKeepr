@@ -4,6 +4,7 @@ import 'package:housekeepr/core/extensions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../cubits/shopping_cubit.dart';
 import '../../../../models/grocery_item.dart';
+import '../../../../core/quantity_unit_formatter.dart';
 import '../../../../services/shopping_products_service.dart';
 import '../widgets/shopping_add_product_dialog.dart';
 
@@ -251,6 +252,36 @@ class _ShoppingPageState extends State<ShoppingPage> {
                 onReturn: () => _addNewItem(context),
               ),
             ),
+            Builder(
+              builder: (context) {
+                final unitLabel = formatQuantityUnit(item.unit, item.quantity);
+                final qtyStr = item.quantity % 1 == 0
+                    ? item.quantity.toInt().toString()
+                    : item.quantity.toTrimmedFixed(2);
+                final text = unitLabel != null && unitLabel.isNotEmpty
+                    ? '$qtyStr $unitLabel'
+                    : qtyStr;
+                return Container(
+                  margin: const EdgeInsets.only(right: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                );
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.close, size: 20),
               onPressed: () =>
@@ -263,6 +294,13 @@ class _ShoppingPageState extends State<ShoppingPage> {
   }
 
   Widget _buildCompletedItemTile(BuildContext context, GroceryItem item) {
+    final unitLabel = formatQuantityUnit(item.unit, item.quantity);
+    final qtyStr = item.quantity % 1 == 0
+        ? item.quantity.toInt().toString()
+        : item.quantity.toTrimmedFixed(2);
+    final text = unitLabel != null && unitLabel.isNotEmpty
+        ? '$qtyStr $unitLabel'
+        : qtyStr;
     return ListTile(
       leading: Checkbox(
         value: true,
@@ -271,6 +309,21 @@ class _ShoppingPageState extends State<ShoppingPage> {
       title: Text(
         item.name,
         style: const TextStyle(decoration: TextDecoration.lineThrough),
+      ),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
       ),
     );
   }

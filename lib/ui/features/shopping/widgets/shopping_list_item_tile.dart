@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
 
+import '../../../../core/extensions.dart';
 import '../../../../core/quantity_unit_formatter.dart';
 import '../../../../models/grocery_category.dart';
 import '../../../../models/grocery_item.dart';
@@ -190,7 +191,7 @@ class ShoppingListItemTile extends StatelessWidget {
                         Text(
                           item.quantity % 1 == 0
                               ? item.quantity.toInt().toString()
-                              : item.quantity.toString(),
+                              : item.quantity.toTrimmedFixed(2),
                           style:
                               (aisleMode
                                       ? theme.textTheme.headlineSmall

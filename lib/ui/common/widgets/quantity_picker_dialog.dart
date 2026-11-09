@@ -31,12 +31,16 @@ const List<String> commonUnits = [
   'L',
   'el',
   'tl',
+  'teen',
   'stuks',
   'pot',
   'pak',
   'blik',
   'fles',
   'zak',
+  'doos',
+  'bakje',
+  'bosje',
 ];
 
 class _QuantityPickerDialog extends StatefulWidget {

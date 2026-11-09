@@ -86,7 +86,9 @@ class WidgetService {
     if (!_isAndroid) return;
     try {
       // Serialize the items to a JSON array of lightweight maps.
+      // Soft-deleted items (tombstones kept for "Recently Deleted") are hidden.
       final widgetData = items
+          .where((item) => !item.isDeleted)
           .map(
             (item) => {
               'id': item.id,

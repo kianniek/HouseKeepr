@@ -6,6 +6,10 @@ void main() {
     test('keeps uncountable units unchanged', () {
       expect(formatQuantityUnit('kg', 1), 'kg');
       expect(formatQuantityUnit('L', 3), 'L');
+      expect(formatQuantityUnit('g', 500), 'g');
+      expect(formatQuantityUnit('ml', 250), 'ml');
+      expect(formatQuantityUnit('el', 2), 'el');
+      expect(formatQuantityUnit('tl', 1), 'tl');
     });
 
     test('uses singular form for quantity one', () {
@@ -13,6 +17,8 @@ void main() {
       expect(formatQuantityUnit('potten', 1), 'pot');
       expect(formatQuantityUnit('pakken', 1), 'pak');
       expect(formatQuantityUnit('flessen', 1), 'fles');
+      expect(formatQuantityUnit('tenen', 1), 'teen');
+      expect(formatQuantityUnit('teentjes', 1), 'teentje');
     });
 
     test('uses plural form for quantity greater than one', () {
@@ -21,6 +27,8 @@ void main() {
       expect(formatQuantityUnit('pak', 2), 'pakken');
       expect(formatQuantityUnit('fles', 2), 'flessen');
       expect(formatQuantityUnit('ei', 2), 'eieren');
+      expect(formatQuantityUnit('teen', 2), 'tenen');
+      expect(formatQuantityUnit('teentje', 2), 'teentjes');
     });
 
     test('returns the original unit when no mapping exists', () {

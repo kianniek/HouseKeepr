@@ -10,7 +10,9 @@ import '../../../common/widgets/bulk_import_confirmation_dialog.dart';
 import '../../../common/widgets/bulk_import_dialog.dart';
 import '../../../common/widgets/category_picker_dialog.dart';
 import '../../../common/widgets/quantity_picker_dialog.dart';
+import '../../../common/widgets/undo_toast.dart';
 import '../widgets/shopping_list_item_tile.dart';
+import 'recently_deleted_page.dart';
 
 class SmartShoppingListPage extends StatefulWidget {
   const SmartShoppingListPage({super.key});
@@ -114,6 +116,48 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
     _itemFocusNode.requestFocus();
   }
 
+  /// Soft-delete an item and offer an undo toast.
+  Future<void> _deleteWithUndo(BuildContext context, String id) async {
+    final cubit = context.read<ShoppingCubit>();
+    final deleted = await cubit.deleteItem(id);
+    if (deleted == null || !mounted) return;
+    showUndoToast(
+      this.context,
+      icon: Icons.delete_outline,
+      message: deleted.name.isEmpty
+          ? 'Item deleted'
+          : '"${deleted.name}" deleted',
+      onUndo: () => cubit.restoreItems([id]),
+    );
+  }
+
+  /// Clear all checked items and offer an undo toast.
+  Future<void> _clearCheckedWithUndo(BuildContext context) async {
+    final cubit = context.read<ShoppingCubit>();
+    final ids = await cubit.clearCheckedItems();
+    if (ids.isEmpty || !mounted) return;
+    showUndoToast(
+      this.context,
+      icon: Icons.playlist_remove,
+      message: ids.length == 1
+          ? '1 item cleared'
+          : '${ids.length} items cleared',
+      onUndo: () => cubit.restoreItems(ids),
+    );
+  }
+
+  void _openRecentlyDeleted(BuildContext context) {
+    final cubit = context.read<ShoppingCubit>();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BlocProvider.value(
+          value: cubit,
+          child: const RecentlyDeletedPage(),
+        ),
+      ),
+    );
+  }
+
   String _toPascalCase(String input) {
     final collapsed = input.trim().replaceAll(RegExp(r'\s+'), ' ');
     if (collapsed.isEmpty) return '';
@@ -166,7 +210,9 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
               builder: (context, state) => PopupMenuButton(
                 onSelected: (value) async {
                   if (value == 'clear') {
-                    context.read<ShoppingCubit>().clearCheckedItems();
+                    _clearCheckedWithUndo(context);
+                  } else if (value == 'recentlyDeleted') {
+                    _openRecentlyDeleted(context);
                   } else if (value == 'mode') {
                     context.read<ShoppingCubit>().toggleAisleMode();
                   } else if (value == 'flat') {
@@ -242,6 +288,20 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                   const PopupMenuItem(
                     value: 'clear',
                     child: Text('Clear Checked Items'),
+                  ),
+                  PopupMenuItem(
+                    value: 'recentlyDeleted',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.restore_from_trash, size: 20),
+                        const SizedBox(width: 8),
+                        const Text('Recently Deleted'),
+                        if (state.recentlyDeleted.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Badge(label: Text('${state.recentlyDeleted.length}')),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -350,9 +410,8 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                           onCheck: () => context
                                               .read<ShoppingCubit>()
                                               .toggleItem(item.id),
-                                          onDelete: () => context
-                                              .read<ShoppingCubit>()
-                                              .deleteItem(item.id),
+                                          onDelete: () =>
+                                              _deleteWithUndo(context, item.id),
                                           onQuantity: () => context
                                               .read<ShoppingCubit>()
                                               .cycleQuantity(item.id),
@@ -432,11 +491,10 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                               .toggleItem(
                                                 checkedItems[index].id,
                                               ),
-                                          onDelete: () => context
-                                              .read<ShoppingCubit>()
-                                              .deleteItem(
-                                                checkedItems[index].id,
-                                              ),
+                                          onDelete: () => _deleteWithUndo(
+                                            context,
+                                            checkedItems[index].id,
+                                          ),
                                           onQuantity: () => context
                                               .read<ShoppingCubit>()
                                               .cycleQuantity(
@@ -711,14 +769,9 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                     parsedItems,
                                   );
                               if (confirmedItems != null && context.mounted) {
-                                for (final item in confirmedItems) {
-                                  context.read<ShoppingCubit>().addItem(
-                                    item.name,
-                                    category: item.category,
-                                    quantity: item.quantity,
-                                    unit: item.unit,
-                                  );
-                                }
+                                await context.read<ShoppingCubit>().addItems(
+                                  confirmedItems,
+                                );
                               }
                             }
                           },
@@ -911,7 +964,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
               item: item,
               aisleMode: aisleMode,
               onCheck: () => context.read<ShoppingCubit>().toggleItem(item.id),
-              onDelete: () => context.read<ShoppingCubit>().deleteItem(item.id),
+              onDelete: () => _deleteWithUndo(context, item.id),
               onQuantity: () =>
                   context.read<ShoppingCubit>().cycleQuantity(item.id),
               onQuantityLongPress: () async {

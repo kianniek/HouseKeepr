@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:uuid/uuid.dart';
+
+import '../core/grocery_parser.dart';
 
 import '../models/grocery_category.dart';
 import '../models/grocery_item.dart';
@@ -11,9 +16,21 @@ import '../services/write_queue.dart';
 part 'shopping_state.dart';
 
 class ShoppingCubit extends Cubit<ShoppingState> {
+  /// How long soft-deleted items stay in "Recently Deleted" before they are
+  /// permanently purged.
+  static const Duration deletedRetention = Duration(days: 7);
+
+  /// How often expired soft-deleted items are purged while the app is open.
+  static const Duration purgeInterval = Duration(hours: 1);
+
   final GroceryRepository _repository;
   WriteQueue? _writeQueue;
   Future<void>? initializationFuture;
+  Timer? _purgeTimer;
+
+  /// Ids for which a remote hard-delete has already been enqueued during this
+  /// session, to avoid flooding the queue while snapshots catch up.
+  final Set<String> _purgeEnqueuedIds = {};
 
   /// Public access to the underlying repository (used by WidgetService for
   /// reconciling toggle actions from the home-screen widget).
@@ -21,10 +38,31 @@ class ShoppingCubit extends Cubit<ShoppingState> {
 
   ShoppingCubit(this._repository) : super(ShoppingState.initial()) {
     initializationFuture = _load();
+    _purgeTimer = Timer.periodic(
+      purgeInterval,
+      (_) => purgeExpiredDeletedItems(),
+    );
   }
+
+  @override
+  Future<void> close() {
+    _purgeTimer?.cancel();
+    _purgeTimer = null;
+    return super.close();
+  }
+
+  /// Soft-deleted items older than [deletedRetention] whose remote deletion
+  /// has not yet been enqueued because the write queue was not attached.
+  final Set<String> _pendingRemotePurgeIds = {};
 
   void attachWriteQueue(WriteQueue queue) {
     _writeQueue = queue;
+    for (final id in _pendingRemotePurgeIds) {
+      _enqueueDelete(id);
+    }
+    _pendingRemotePurgeIds.clear();
+    // Now that remote deletes can actually be enqueued, purge again.
+    purgeExpiredDeletedItems();
   }
 
   Future<void> reloadItems() async {
@@ -52,6 +90,7 @@ class ShoppingCubit extends Cubit<ShoppingState> {
   Future<void> _load() async {
     final items = _repository.loadItems();
     _emitSortedState(items);
+    await purgeExpiredDeletedItems();
   }
 
   /// Synchronizes incoming records with local state data using strict deterministic timestamp evaluations.
@@ -77,6 +116,18 @@ class ShoppingCubit extends Cubit<ShoppingState> {
       }
     }
 
+    // Drop tombstones that are past the retention window (and purge them
+    // remotely) instead of re-inserting them locally.
+    final expiredIds = mergedItemsById.values
+        .where(isExpiredTombstone)
+        .map((i) => i.id)
+        .toList();
+    for (final id in expiredIds) {
+      mergedItemsById.remove(id);
+      _repository.deleteItem(id);
+      _enqueueRemotePurge(id);
+    }
+
     final mergedItems = mergedItemsById.values.toList();
     _repository.saveItems(mergedItems);
     _emitSortedState(mergedItems);
@@ -95,6 +146,28 @@ class ShoppingCubit extends Cubit<ShoppingState> {
 
   Future<void> _enqueueDelete(String id) async {
     _writeQueue?.enqueueOp(QueueOp(type: QueueOpType.deleteGrocery, id: id));
+  }
+
+  /// Enqueue a remote hard-delete once per session for [id].
+  void _enqueueRemotePurge(String id) {
+    if (_writeQueue == null) {
+      _pendingRemotePurgeIds.add(id);
+      return; // retried once the queue is attached
+    }
+    if (!_purgeEnqueuedIds.add(id)) return;
+    _enqueueDelete(id);
+  }
+
+  /// The moment a tombstone was deleted (legacy tombstones without
+  /// `deletedAt` fall back to `updatedAt`).
+  static DateTime deletedMoment(GroceryItem item) =>
+      item.deletedAt ?? item.updatedAt;
+
+  /// Whether [item] is a tombstone older than [deletedRetention].
+  static bool isExpiredTombstone(GroceryItem item, {DateTime? now}) {
+    if (!item.isDeleted) return false;
+    final cutoff = (now ?? DateTime.now()).subtract(deletedRetention);
+    return deletedMoment(item).isBefore(cutoff);
   }
 
   String _normalizeItemName(String input) {
@@ -132,8 +205,11 @@ class ShoppingCubit extends Cubit<ShoppingState> {
       if (existingIndex != -1) {
         final existingItem = state.items[existingIndex];
         // Merge: Increment quantity and uncheck if checked
+        final addedQty = quantity ?? 1.0;
         final updatedItem = existingItem.copyWith(
-          quantity: existingItem.quantity + 1.0,
+          quantity: existingItem.quantity + addedQty,
+          unit: existingItem.unit ?? unit,
+          note: note ?? existingItem.note,
           checked: false,
           updatedAt: DateTime.now(),
         );
@@ -167,9 +243,11 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     }
 
     final newItem = GroceryItem(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: const Uuid().v4(),
       name: normalizedName,
       note: note,
+      quantity: quantity ?? 1.0,
+      unit: unit,
       category: finalCategory,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
@@ -178,6 +256,19 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     final items = List<GroceryItem>.from(state.items)..add(newItem);
     _emitSortedState(items);
     await _persist(newItem);
+  }
+
+  /// Bulk add multiple grocery items
+  Future<void> addItems(List<ParsedGroceryItem> parsedItems) async {
+    for (final item in parsedItems) {
+      await addItem(
+        item.name,
+        note: item.note,
+        category: item.category,
+        quantity: item.quantity,
+        unit: item.unit,
+      );
+    }
   }
 
   /// Toggle item checked status and apply bottom-sort
@@ -255,16 +346,20 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     }
   }
 
-  /// Delete an item
-  Future<void> deleteItem(String id) async {
+  /// Soft-delete an item. It stays in "Recently Deleted" for
+  /// [deletedRetention] before being purged. Returns the deleted item (so the
+  /// UI can offer undo) or null if it was not found.
+  ///
+  /// [deletedAt] can be passed to keep an item's original deletion time (used
+  /// when undoing a restore from "Recently Deleted").
+  Future<GroceryItem?> deleteItem(String id, {DateTime? deletedAt}) async {
     GroceryItem? deletedItem;
     final now = DateTime.now();
     final items = _repository.loadItems().map((item) {
-      if (item.id == id) {
+      if (item.id == id && !item.isDeleted) {
         deletedItem = item.copyWith(
           isDeleted: true,
-          checked: false,
-          checkedAt: null,
+          deletedAt: deletedAt ?? now,
           updatedAt: now,
         );
         return deletedItem!;
@@ -272,10 +367,12 @@ class ShoppingCubit extends Cubit<ShoppingState> {
       return item;
     }).toList();
 
-    if (deletedItem == null) return;
+    if (deletedItem == null) return null;
 
-    _repository.saveItems(items);
+    // Emit synchronously first: a dismissed Dismissible must leave the tree
+    // before the next frame.
     _emitSortedState(items);
+    await _repository.saveItems(items);
     _writeQueue?.enqueueOp(
       QueueOp(
         type: QueueOpType.saveGrocery,
@@ -283,7 +380,72 @@ class ShoppingCubit extends Cubit<ShoppingState> {
         payload: deletedItem!.toMap(),
       ),
     );
-    await _enqueueDelete(id);
+    return deletedItem;
+  }
+
+  /// Restore soft-deleted items. When [uncheck] is true the restored items are
+  /// also unchecked (used when restoring from "Recently Deleted").
+  Future<void> restoreItems(List<String> ids, {bool uncheck = false}) async {
+    if (ids.isEmpty) return;
+    final idSet = ids.toSet();
+    final now = DateTime.now();
+    final changed = <GroceryItem>[];
+    final items = _repository.loadItems().map((item) {
+      if (!idSet.contains(item.id) || !item.isDeleted) return item;
+      final restored = item.copyWith(
+        isDeleted: false,
+        deletedAt: null,
+        updatedAt: now,
+        checked: uncheck ? false : null,
+        checkedAt: uncheck ? null : item.checkedAt,
+      );
+      changed.add(restored);
+      return restored;
+    }).toList();
+
+    if (changed.isEmpty) return;
+
+    _emitSortedState(items);
+    await _repository.saveItems(items);
+    for (final item in changed) {
+      _purgeEnqueuedIds.remove(item.id);
+      _writeQueue?.enqueueOp(
+        QueueOp(
+          type: QueueOpType.saveGrocery,
+          id: item.id,
+          payload: item.toMap(),
+        ),
+      );
+    }
+  }
+
+  /// Permanently delete items locally and remotely (no undo).
+  Future<void> permanentlyDelete(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final idSet = ids.toSet();
+    // Emit synchronously first (Dismissible in "Recently Deleted").
+    _emitSortedState(
+      _repository.loadItems().where((i) => !idSet.contains(i.id)).toList(),
+    );
+    for (final id in idSet) {
+      await _repository.deleteItem(id);
+      _purgeEnqueuedIds.add(id);
+      await _enqueueDelete(id);
+    }
+  }
+
+  /// Permanently delete all tombstones older than [deletedRetention].
+  Future<void> purgeExpiredDeletedItems() async {
+    if (isClosed) return;
+    final items = _repository.loadItems();
+    final expired = items.where(isExpiredTombstone).map((i) => i.id).toList();
+    if (expired.isEmpty) return;
+    for (final id in expired) {
+      await _repository.deleteItem(id);
+      _enqueueRemotePurge(id);
+    }
+    if (isClosed) return;
+    _emitSortedState(_repository.loadItems());
   }
 
   /// Reorder items (for drag-and-drop)
@@ -364,31 +526,31 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     emit(state.copyWith(flatViewEnabled: !state.flatViewEnabled));
   }
 
-  /// Clear all checked items
-  Future<void> clearCheckedItems() async {
+  /// Clear all checked items (soft-delete). Returns the ids that were cleared
+  /// so the UI can offer undo.
+  Future<List<String>> clearCheckedItems() async {
     final checkedIds = state.items
         .where((item) => item.checked)
         .map((item) => item.id)
         .toSet();
-    if (checkedIds.isEmpty) return;
+    if (checkedIds.isEmpty) return const [];
 
     final now = DateTime.now();
     final allItems = _repository.loadItems();
     final changedItems = <GroceryItem>[];
     final updatedItems = allItems.map((item) {
-      if (!checkedIds.contains(item.id)) return item;
+      if (!checkedIds.contains(item.id) || item.isDeleted) return item;
       final deletedItem = item.copyWith(
         isDeleted: true,
-        checked: false,
-        checkedAt: null,
+        deletedAt: now,
         updatedAt: now,
       );
       changedItems.add(deletedItem);
       return deletedItem;
     }).toList();
 
-    _repository.saveItems(updatedItems);
     _emitSortedState(updatedItems);
+    await _repository.saveItems(updatedItems);
 
     for (final item in changedItems) {
       _writeQueue?.enqueueOp(
@@ -398,8 +560,8 @@ class ShoppingCubit extends Cubit<ShoppingState> {
           payload: item.toMap(),
         ),
       );
-      await _enqueueDelete(item.id);
     }
+    return changedItems.map((i) => i.id).toList();
   }
 
   /// Helper: Calculate next quantity in cycle
@@ -438,9 +600,18 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     );
 
     final sorted = [...unchecked, ...checked];
+
+    final now = DateTime.now();
+    final recentlyDeleted =
+        items
+            .where((i) => i.isDeleted && !isExpiredTombstone(i, now: now))
+            .toList()
+          ..sort((a, b) => deletedMoment(b).compareTo(deletedMoment(a)));
+
     emit(
       state.copyWith(
         items: sorted,
+        recentlyDeleted: recentlyDeleted,
         selectedCategory: selectedCategory ?? state.selectedCategory,
         manualCategoryOverride:
             manualCategoryOverride ?? state.manualCategoryOverride,

@@ -2,6 +2,9 @@ part of 'shopping_cubit.dart';
 
 class ShoppingState extends Equatable {
   final List<GroceryItem> items;
+
+  /// Soft-deleted items still inside the retention window, newest first.
+  final List<GroceryItem> recentlyDeleted;
   final bool aisleModeEnabled;
   final bool flatViewEnabled;
   final bool isLoading;
@@ -14,6 +17,7 @@ class ShoppingState extends Equatable {
 
   const ShoppingState({
     this.items = const [],
+    this.recentlyDeleted = const [],
     this.aisleModeEnabled = false,
     this.flatViewEnabled = false,
     this.isLoading = false,
@@ -29,6 +33,7 @@ class ShoppingState extends Equatable {
 
   ShoppingState copyWith({
     List<GroceryItem>? items,
+    List<GroceryItem>? recentlyDeleted,
     bool? aisleModeEnabled,
     bool? flatViewEnabled,
     bool? isLoading,
@@ -40,6 +45,7 @@ class ShoppingState extends Equatable {
     double? suggestionConfidence,
   }) => ShoppingState(
     items: items ?? this.items,
+    recentlyDeleted: recentlyDeleted ?? this.recentlyDeleted,
     aisleModeEnabled: aisleModeEnabled ?? this.aisleModeEnabled,
     flatViewEnabled: flatViewEnabled ?? this.flatViewEnabled,
     isLoading: isLoading ?? this.isLoading,
@@ -55,6 +61,7 @@ class ShoppingState extends Equatable {
   @override
   List<Object?> get props => [
     items,
+    recentlyDeleted,
     aisleModeEnabled,
     flatViewEnabled,
     isLoading,
