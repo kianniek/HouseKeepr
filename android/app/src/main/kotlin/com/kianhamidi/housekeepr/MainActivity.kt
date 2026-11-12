@@ -12,6 +12,7 @@ class MainActivity : FlutterActivity() {
     
     private var pendingAction: String? = null
     private var shouldOpenShopping = false
+    private var shouldOpenMedications = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,6 +49,9 @@ class MainActivity : FlutterActivity() {
                 if (shouldOpenShopping) {
                     result.success("open_shopping")
                     shouldOpenShopping = false
+                } else if (shouldOpenMedications) {
+                    result.success("open_medications")
+                    shouldOpenMedications = false
                 } else {
                     result.success(null)
                 }
@@ -65,6 +69,9 @@ class MainActivity : FlutterActivity() {
 
         if (intent?.getBooleanExtra("open_shopping", false) == true) {
             shouldOpenShopping = true
+        }
+        if (intent?.getBooleanExtra("open_medications", false) == true) {
+            shouldOpenMedications = true
         }
     }
 }

@@ -3,6 +3,7 @@ import 'package:marquee/marquee.dart';
 
 import '../widgets/coffee_picker_page.dart';
 import '../widgets/tool_personal_budget_page.dart';
+import 'medication_reminders_page.dart';
 
 class ToolItem {
   final String title;
@@ -57,6 +58,13 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
       category: ToolCategory.financeUtilities,
       icon: Icons.account_balance_wallet,
       destination: PersonalBudgetPage(),
+    ),
+    ToolItem(
+      title: 'Medication Reminders',
+      subtitle: 'Personal medication tracker & daily schedule',
+      category: ToolCategory.statusUtilities,
+      icon: Icons.medication_outlined,
+      destination: const MedicationRemindersPage(),
     ),
     ToolItem(
       title: 'Coffee Picker',

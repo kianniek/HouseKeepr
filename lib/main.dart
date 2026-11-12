@@ -29,6 +29,7 @@ import 'models/grocery_item.dart';
 import 'models/task.dart';
 import 'repositories/grocery_repository.dart';
 import 'repositories/history_repository.dart';
+import 'repositories/local_medication_repository.dart';
 import 'repositories/task_repository.dart';
 import 'services/firebase_messaging_service.dart';
 import 'services/firestore_sync_service.dart';
@@ -598,6 +599,21 @@ class _HouseholdAppState extends State<HouseholdApp> {
     });
   }
 
+  void openMedicationsTool() {
+    final homeState = homeScreenKey.currentState;
+    if (homeState != null) {
+      homeState.selectTab(HomeTab.tools);
+      return;
+    }
+    final navState = navigatorKey.currentState;
+    if (navState != null) {
+      navState.popUntil((route) => route.isFirst);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      homeScreenKey.currentState?.selectTab(HomeTab.tools);
+    });
+  }
+
   Future<void> maybeRequestNotificationPermissions(
     SettingsRepository settingsRepo,
   ) async {
@@ -627,6 +643,7 @@ class _HouseholdAppState extends State<HouseholdApp> {
       prefs,
       scaffoldKey: scaffoldMessengerKey,
       onOpenTasks: openTasksTab,
+      onOpenMedications: openMedicationsTool,
     );
     await maybeRequestNotificationPermissions(settingsRepo);
     await NotificationService.instance.checkAndFireDueReminders();
@@ -641,6 +658,10 @@ class _HouseholdAppState extends State<HouseholdApp> {
     await WidgetService.instance.updateWidgetImmediate(
       shoppingCubit.state.items,
     );
+    final medicationRepo = LocalMedicationRepository(prefs: prefs);
+    await WidgetService.instance.processPendingPillToggles(medicationRepo);
+    final pillSummary = await medicationRepo.getWidgetSummary(DateTime.now());
+    await WidgetService.instance.updateMedicationWidget(pillSummary);
 
     FirebaseMessagingService.instance.init(
       shoppingCubit: shoppingCubit,

@@ -77,5 +77,9 @@
 
   "shopping": "Boodschappen",
 
-  "tools": "Gereedschap"
+  "tools": "Gereedschap",
+  "medicationReminders": "Medicatie herinneringen",
+  "pillWidgetTitle": "Pillen",
+  "daytimeDoses": "Overdag",
+  "eveningDoses": "Avond"
 }

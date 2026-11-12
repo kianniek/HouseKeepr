@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 import '../models/coffee_recipe.dart';
 import '../models/grocery_item.dart';
+import '../models/medication.dart';
+import '../repositories/local_medication_repository.dart';
 
 /// Service that bridges Flutter's ShoppingCubit state to the Android home-screen
 /// widget via [home_widget].
@@ -28,11 +30,14 @@ class WidgetService {
   /// The Android widget provider class name (fully qualified).
   static const _androidWidgetName = 'ShoppingListWidget';
   static const _coffeeWidgetName = 'CoffeeWidget';
+  static const _pillWidgetName = 'PillWidget';
 
   /// Key used in SharedPreferences / HomeWidget data store.
   static const _dataKey = 'shopping_list_data';
   static const _pendingTogglesKey = 'pending_toggles';
   static const _coffeeRecipeKey = 'coffee_recipe_data';
+  static const _pillDataKey = 'pill_widget_data';
+  static const _pillPendingTogglesKey = 'pill_pending_toggles';
 
   /// Initialize home_widget configuration.
   Future<void> init() async {
@@ -79,6 +84,82 @@ class WidgetService {
       await HomeWidget.updateWidget(androidName: _coffeeWidgetName);
     } catch (e) {
       debugPrint('WidgetService: failed to update coffee widget: $e');
+    }
+  }
+
+  /// Push medication schedule summary to the PillWidget RemoteViews.
+  Future<void> updateMedicationWidget(
+    WidgetDoseSummary summary, {
+    String title = 'Pillen',
+  }) async {
+    if (!_isAndroid) return;
+    try {
+      final widgetData = {
+        'title': title,
+        'dateKey': Medication.dateToKey(summary.date),
+        'hasMorning': summary.hasMorningDoses,
+        'morningTaken': summary.isMorningTaken,
+        'hasEvening': summary.hasEveningDoses,
+        'eveningTaken': summary.isEveningTaken,
+        'morningCount': summary.morningDoses.length,
+        'eveningCount': summary.eveningDoses.length,
+      };
+
+      await HomeWidget.saveWidgetData<String>(
+        _pillDataKey,
+        json.encode(widgetData),
+      );
+      await HomeWidget.updateWidget(androidName: _pillWidgetName);
+    } catch (e) {
+      debugPrint('WidgetService: failed to update pill widget: $e');
+    }
+  }
+
+  /// Process any pending pill slot toggles performed from the widget while the app was backgrounded.
+  Future<void> processPendingPillToggles(
+    LocalMedicationRepository repository,
+  ) async {
+    if (!_isAndroid) return;
+    try {
+      final data = await HomeWidget.getWidgetData<String>(
+        _pillPendingTogglesKey,
+      );
+      if (data == null || data.isEmpty) return;
+
+      // Clear pending queue
+      await HomeWidget.saveWidgetData<String>(_pillPendingTogglesKey, '');
+
+      final actions = data.split(',').where((s) => s.isNotEmpty);
+      final today = DateTime.now();
+
+      for (final action in actions) {
+        final parts = action.split(':');
+        if (parts.isEmpty) continue;
+        final slotName = parts[0];
+        final isTaken = parts.length > 1
+            ? parts[1].toLowerCase() == 'true'
+            : true;
+        final status = isTaken ? DoseStatus.taken : DoseStatus.pending;
+
+        if (slotName == 'morning') {
+          await repository.setSlotDosesStatus(
+            date: today,
+            slot: TimeOfDaySlot.morning,
+            status: status,
+          );
+        } else if (slotName == 'evening') {
+          await repository.setSlotDosesStatus(
+            date: today,
+            slot: TimeOfDaySlot.evening,
+            status: status,
+          );
+        }
+      }
+
+      final freshSummary = await repository.getWidgetSummary(today);
+      await updateMedicationWidget(freshSummary);
+    } catch (e) {
+      debugPrint('WidgetService: failed to process pending pill toggles: $e');
     }
   }
 

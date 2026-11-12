@@ -11,6 +11,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import '../models/medication.dart';
 
 /// Lightweight in-app notification service.
 ///
@@ -34,11 +35,15 @@ class NotificationService {
   FlutterLocalNotificationsPlugin? _plugin;
   bool _pluginAvailable = false;
   VoidCallback? _onOpenTasks;
+  VoidCallback? _onOpenMedications;
 
   static const _kPayloadOpenTasks = 'open_tasks';
+  static const _kPayloadOpenMedications = 'open_medications';
+  static const _kActionRemindLater = 'remind_later';
   static const _kAndroidIntentChannel = 'housekeepr/notification_intents';
 
   static const _kRemindersKey = 'scheduled_reminders_v1';
+  static const _kMedicationRemindersKey = 'scheduled_medication_reminders_v1';
 
   Color? _getColorForPriority(int? priorityLevel) {
     if (priorityLevel == null) {
@@ -62,10 +67,12 @@ class NotificationService {
     SharedPreferences prefs, {
     GlobalKey<ScaffoldMessengerState>? scaffoldKey,
     VoidCallback? onOpenTasks,
+    VoidCallback? onOpenMedications,
   }) async {
     _prefs = prefs;
     _scaffoldKey = scaffoldKey;
     _onOpenTasks = onOpenTasks;
+    _onOpenMedications = onOpenMedications;
     // Try to initialize platform notifications. Wrap errors so tests/headless
     // environments don't fail.
     if (!kIsWeb) {
@@ -145,16 +152,45 @@ class NotificationService {
           importance: Importance.defaultImportance,
         ),
       );
+      await android.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'medication_reminders',
+          'Medication Reminders',
+          importance: Importance.high,
+        ),
+      );
     } catch (_) {
       // ignore
     }
   }
 
   void _handleNotificationResponse(NotificationResponse response) {
+    if (response.actionId == _kActionRemindLater) {
+      handleRemindLater(response);
+      return;
+    }
     _handleNotificationPayload(response.payload);
   }
 
   void _handleNotificationPayload(String? payload) {
+    if (payload != null) {
+      if (payload.startsWith('{')) {
+        try {
+          final map = jsonDecode(payload) as Map<String, dynamic>;
+          final action = map['action'] as String?;
+          if (action == _kPayloadOpenMedications ||
+              (action != null && action.startsWith('open_medication'))) {
+            _onOpenMedications?.call();
+            return;
+          }
+        } catch (_) {}
+      }
+      if (payload == _kPayloadOpenMedications ||
+          payload.startsWith('open_medication')) {
+        _onOpenMedications?.call();
+        return;
+      }
+    }
     if (payload == null || payload == _kPayloadOpenTasks) {
       _onOpenTasks?.call();
     }
@@ -181,7 +217,7 @@ class NotificationService {
       final action = await channel.invokeMethod<String>(
         'getNotificationAction',
       );
-      if (action == _kPayloadOpenTasks) {
+      if (action == _kPayloadOpenTasks || action == _kPayloadOpenMedications) {
         _handleNotificationPayload(action);
       }
     } catch (_) {
@@ -231,6 +267,159 @@ class NotificationService {
     }
 
     show('Test notification', 'Notifications are working on this device.');
+  }
+
+  /// Show an immediate test notification for a medication preview, including
+  /// the "Remind me later" action button.
+  Future<void> showTestMedicationNotification({
+    String? medicationName,
+    String? dosage,
+  }) async {
+    final name = (medicationName != null && medicationName.trim().isNotEmpty)
+        ? medicationName.trim()
+        : 'Vitamin D';
+    final dose = dosage?.trim() ?? '';
+    final body = dose.isNotEmpty ? '$name ($dose)' : name;
+    const title = 'Medication reminder';
+
+    final payload = jsonEncode({
+      'action': _kPayloadOpenMedications,
+      'title': title,
+      'body': body,
+    });
+
+    if (_pluginAvailable && _plugin != null) {
+      try {
+        final id = DateTime.now().millisecondsSinceEpoch.remainder(1 << 31);
+        await _plugin!.show(
+          id: id,
+          title: title,
+          body: body,
+          notificationDetails: const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'medication_reminders',
+              'Medication Reminders',
+              importance: Importance.high,
+              priority: Priority.high,
+              icon: 'ic_launcher_monochrome',
+              actions: <AndroidNotificationAction>[
+                AndroidNotificationAction(
+                  _kActionRemindLater,
+                  'Remind me later',
+                  cancelNotification: true,
+                ),
+              ],
+            ),
+            iOS: DarwinNotificationDetails(
+              presentAlert: true,
+              presentSound: true,
+              presentBadge: true,
+            ),
+          ),
+          payload: payload,
+        );
+        return;
+      } catch (e) {
+        debugPrint('Failed to show test medication notification: $e');
+      }
+    }
+
+    show(title, body);
+  }
+
+  /// Handle "Remind me later" action by dismissing the current notification
+  /// and rescheduling it to 1 hour later.
+  Future<void> handleRemindLater(NotificationResponse response) async {
+    if (response.id != null && _pluginAvailable && _plugin != null) {
+      try {
+        await _plugin!.cancel(id: response.id!);
+      } catch (_) {}
+    }
+
+    String title = 'Medication reminder';
+    String body = 'Time to take your medication';
+    String? medicationId;
+    String? doseId;
+
+    if (response.payload != null && response.payload!.isNotEmpty) {
+      try {
+        if (response.payload!.startsWith('{')) {
+          final data = jsonDecode(response.payload!) as Map<String, dynamic>;
+          if (data['title'] != null) title = data['title'] as String;
+          if (data['body'] != null) body = data['body'] as String;
+          medicationId = data['medicationId'] as String?;
+          doseId = data['doseId'] as String?;
+        }
+      } catch (_) {}
+    }
+
+    final newTime = DateTime.now().add(const Duration(hours: 1));
+    final newId = _hashId(
+      'remind_later_${DateTime.now().millisecondsSinceEpoch}',
+    );
+
+    if (_prefs != null) {
+      final list =
+          _prefs!.getStringList(_kMedicationRemindersKey) ?? <String>[];
+      final entry = jsonEncode({
+        'medicationId': medicationId ?? 'rescheduled',
+        'doseId': doseId ?? 'snoozed_$newId',
+        'notificationId': newId,
+        'at': newTime.toUtc().toIso8601String(),
+        'title': title,
+        'body': body,
+      });
+      list.add(entry);
+      await _prefs!.setStringList(_kMedicationRemindersKey, list);
+    }
+
+    final payloadMap = <String, dynamic>{
+      'action': _kPayloadOpenMedications,
+      'title': title,
+      'body': body,
+    };
+    if (medicationId != null) payloadMap['medicationId'] = medicationId;
+    if (doseId != null) payloadMap['doseId'] = doseId;
+    final payload = jsonEncode(payloadMap);
+
+    if (_pluginAvailable && _plugin != null) {
+      try {
+        final scheduled = tz.TZDateTime.from(newTime.toUtc(), tz.local);
+        await _plugin!.zonedSchedule(
+          id: newId,
+          title: title,
+          body: body,
+          scheduledDate: scheduled,
+          notificationDetails: const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'medication_reminders',
+              'Medication Reminders',
+              importance: Importance.high,
+              priority: Priority.high,
+              icon: 'ic_launcher_monochrome',
+              actions: <AndroidNotificationAction>[
+                AndroidNotificationAction(
+                  _kActionRemindLater,
+                  'Remind me later',
+                  cancelNotification: true,
+                ),
+              ],
+            ),
+            iOS: DarwinNotificationDetails(
+              presentAlert: true,
+              presentSound: true,
+              presentBadge: true,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          payload: payload,
+        );
+      } catch (e) {
+        debugPrint('Failed to reschedule reminder 1 hour later: $e');
+      }
+    }
+
+    show('Reminder rescheduled', 'We will remind you again in 1 hour');
   }
 
   Future<void> scheduleReminder(
@@ -398,6 +587,145 @@ class NotificationService {
     }
   }
 
+  /// Schedule upcoming medication notifications for the next [daysAhead] days (default 14).
+  /// Stale notifications for this medication are first canceled.
+  Future<void> scheduleMedicationReminders(
+    Medication medication, {
+    int daysAhead = 14,
+  }) async {
+    await cancelMedicationReminders(medication.id);
+    if (!medication.isActive || medication.notificationTimes.isEmpty) return;
+    if (_prefs == null) return;
+
+    final list = _prefs!.getStringList(_kMedicationRemindersKey) ?? <String>[];
+    final now = DateTime.now();
+
+    for (var d = 0; d < daysAhead; d++) {
+      final date = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).add(Duration(days: d));
+      if (!medication.isScheduledForDate(date)) continue;
+
+      for (final time in medication.notificationTimes) {
+        final scheduledLocal = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          time.hour,
+          time.minute,
+        );
+        if (scheduledLocal.isBefore(now)) continue;
+
+        final doseId = Medication.doseIdFor(medication.id, date, time);
+        final notificationId = _hashId('med_$doseId');
+        const title = 'Medication reminder';
+        final body = medication.dosage.isNotEmpty
+            ? '${medication.name} (${medication.dosage})'
+            : medication.name;
+
+        final entry = jsonEncode({
+          'medicationId': medication.id,
+          'doseId': doseId,
+          'notificationId': notificationId,
+          'at': scheduledLocal.toUtc().toIso8601String(),
+          'title': title,
+          'body': body,
+        });
+        list.add(entry);
+
+        final payload = jsonEncode({
+          'action': _kPayloadOpenMedications,
+          'medicationId': medication.id,
+          'doseId': doseId,
+          'title': title,
+          'body': body,
+        });
+
+        if (_pluginAvailable && _plugin != null) {
+          try {
+            final scheduled = tz.TZDateTime.from(
+              scheduledLocal.toUtc(),
+              tz.local,
+            );
+            await _plugin!.zonedSchedule(
+              id: notificationId,
+              title: title,
+              body: body,
+              scheduledDate: scheduled,
+              notificationDetails: const NotificationDetails(
+                android: AndroidNotificationDetails(
+                  'medication_reminders',
+                  'Medication Reminders',
+                  importance: Importance.high,
+                  priority: Priority.high,
+                  icon: 'ic_launcher_monochrome',
+                  actions: <AndroidNotificationAction>[
+                    AndroidNotificationAction(
+                      _kActionRemindLater,
+                      'Remind me later',
+                      cancelNotification: true,
+                    ),
+                  ],
+                ),
+                iOS: DarwinNotificationDetails(
+                  presentAlert: true,
+                  presentSound: true,
+                  presentBadge: true,
+                ),
+              ),
+              androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+              payload: payload,
+            );
+          } catch (e) {
+            debugPrint('Failed to schedule platform medication reminder: $e');
+          }
+        }
+      }
+    }
+
+    await _prefs!.setStringList(_kMedicationRemindersKey, list);
+  }
+
+  /// Cancel all scheduled notifications for a given medication.
+  Future<void> cancelMedicationReminders(String medicationId) async {
+    if (_prefs == null) return;
+    final list = _prefs!.getStringList(_kMedicationRemindersKey) ?? <String>[];
+    final remaining = <String>[];
+
+    for (final s in list) {
+      try {
+        final m = jsonDecode(s) as Map<String, dynamic>;
+        if (m['medicationId'] == medicationId) {
+          final notificationId = m['notificationId'] as int?;
+          if (notificationId != null && _pluginAvailable && _plugin != null) {
+            try {
+              await _plugin!.cancel(id: notificationId);
+            } catch (_) {}
+          }
+        } else {
+          remaining.add(s);
+        }
+      } catch (_) {
+        // drop malformed entry
+      }
+    }
+
+    await _prefs!.setStringList(_kMedicationRemindersKey, remaining);
+  }
+
+  /// Reschedule all active medications.
+  Future<void> rescheduleAllMedications(List<Medication> medications) async {
+    for (final med in medications) {
+      if (med.isActive) {
+        await scheduleMedicationReminders(med);
+      } else {
+        await cancelMedicationReminders(med.id);
+      }
+    }
+  }
+
   /// Check persisted reminders and fire any that are due at or before [now].
   /// Fired reminders are removed from the persisted store.
   Future<void> checkAndFireDueReminders({DateTime? now}) async {
@@ -421,5 +749,25 @@ class NotificationService {
       }
     }
     await _prefs!.setStringList(_kRemindersKey, remaining);
+
+    final medList =
+        _prefs!.getStringList(_kMedicationRemindersKey) ?? <String>[];
+    final medRemaining = <String>[];
+    for (final s in medList) {
+      try {
+        final m = jsonDecode(s) as Map<String, dynamic>;
+        final at = DateTime.parse(m['at']).toUtc();
+        if (!at.isAfter(now)) {
+          final title = (m['title'] as String?) ?? 'Medication reminder';
+          final body = (m['body'] as String?) ?? '';
+          show(title, body, duration: const Duration(seconds: 6));
+        } else {
+          medRemaining.add(s);
+        }
+      } catch (_) {
+        // Keep malformed entries out of firing
+      }
+    }
+    await _prefs!.setStringList(_kMedicationRemindersKey, medRemaining);
   }
 }

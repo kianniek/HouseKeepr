@@ -331,6 +331,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tools'**
   String get tools;
+
+  /// Medication reminders tool title
+  ///
+  /// In en, this message translates to:
+  /// **'Medication Reminders'**
+  String get medicationReminders;
+
+  /// Widget header title in English
+  ///
+  /// In en, this message translates to:
+  /// **'Pills'**
+  String get pillWidgetTitle;
+
+  /// Morning/daytime dose section
+  ///
+  /// In en, this message translates to:
+  /// **'Daytime'**
+  String get daytimeDoses;
+
+  /// Evening/night dose section
+  ///
+  /// In en, this message translates to:
+  /// **'Evening'**
+  String get eveningDoses;
 }
 
 class _AppLocalizationsDelegate

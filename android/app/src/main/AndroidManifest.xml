@@ -30,55 +30,11 @@
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:label="housekeepr">
-        <receiver
-            android:name=".ShoppingListWidget1x1"
-            android:exported="false"
-            android:label="HouseKeepr (1x1)">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="com.kianhamidi.housekeepr.ACTION_TOGGLE_ITEM" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/shopping_list_widget_info_1x1" />
-        </receiver>
-
-        <receiver
-            android:name=".ShoppingListWidget1xN"
-            android:exported="false"
-            android:label="HouseKeepr (1xN)">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="com.kianhamidi.housekeepr.ACTION_TOGGLE_ITEM" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/shopping_list_widget_info_1xn" />
-        </receiver>
-
-        <receiver
-            android:name=".ShoppingListWidgetNx1"
-            android:exported="false"
-            android:label="HouseKeepr (Nx1)">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="com.kianhamidi.housekeepr.ACTION_TOGGLE_ITEM" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/shopping_list_widget_info_nx1" />
-        </receiver>
 
         <receiver
             android:name=".ShoppingListWidget"
             android:exported="false"
-            android:label="HouseKeepr (2x2)">
+            android:label="HouseKeepr Shopping List">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -100,6 +56,21 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/coffee_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".PillWidget"
+            android:exported="false"
+            android:label="@string/pill_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.kianhamidi.housekeepr.ACTION_TOGGLE_PILL_SLOT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/pill_widget_info" />
         </receiver>
 
         <service

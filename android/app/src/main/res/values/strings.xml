@@ -26,4 +26,11 @@
     <color name="coffee_foam_bg">#ECEFF1</color>
     <color name="coffee_milk_bg">#FFF3E0</color>
     <color name="coffee_espresso_bg">#3E2723</color>
+    <string name="pill_widget_name">Pillen</string>
+    <string name="pill_widget_description">Personal medication reminders and daily check-off widget</string>
+    <string name="pills">Pillen</string>
+    <string name="toggle_daytime_doses">Toggle daytime doses</string>
+    <string name="evening_doses">Evening doses</string>
+    <string name="toggle_evening_doses">Toggle evening doses</string>
+    <string name="daytime_doses">Daytime doses</string>
 </resources>

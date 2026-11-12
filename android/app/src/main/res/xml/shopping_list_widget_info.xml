@@ -5,7 +5,6 @@
     android:initialLayout="@layout/shopping_list_widget"
     android:minWidth="57dp"
     android:minHeight="57dp"
-    android:previewImage="@drawable/example_appwidget_preview"
     android:previewLayout="@layout/shopping_list_widget"
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="1"

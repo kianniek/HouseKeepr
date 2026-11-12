@@ -127,4 +127,16 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get tools => 'Gereedschap';
+
+  @override
+  String get medicationReminders => 'Medicatie herinneringen';
+
+  @override
+  String get pillWidgetTitle => 'Pillen';
+
+  @override
+  String get daytimeDoses => 'Overdag';
+
+  @override
+  String get eveningDoses => 'Avond';
 }

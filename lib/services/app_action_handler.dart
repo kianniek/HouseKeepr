@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:housekeepr/cubits/shopping_cubit.dart';
 import 'package:housekeepr/cubits/task_cubit.dart';
 import 'package:housekeepr/models/task.dart';
+import 'package:housekeepr/ui/features/tools/pages/medication_reminders_page.dart';
 import 'package:housekeepr/ui/features/tools/widgets/coffee_picker_page.dart';
 
 class AppActionHandler {
@@ -60,6 +61,10 @@ class AppActionHandler {
       final recipeId = path.substring('/recipe/'.length);
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => CoffeePickerPage(recipeId: recipeId)),
+      );
+    } else if (uri.host == 'medications') {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const MedicationRemindersPage()),
       );
     }
   }

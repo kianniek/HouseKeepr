@@ -121,5 +121,17 @@
   "@shopping": { "description": "Shopping tab label" },
 
   "tools": "Tools",
-  "@tools": { "description": "Tools tab label" }
+  "@tools": { "description": "Tools tab label" },
+
+  "medicationReminders": "Medication Reminders",
+  "@medicationReminders": { "description": "Medication reminders tool title" },
+
+  "pillWidgetTitle": "Pills",
+  "@pillWidgetTitle": { "description": "Widget header title in English" },
+
+  "daytimeDoses": "Daytime",
+  "@daytimeDoses": { "description": "Morning/daytime dose section" },
+
+  "eveningDoses": "Evening",
+  "@eveningDoses": { "description": "Evening/night dose section" }
 }
