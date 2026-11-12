@@ -35,11 +35,29 @@ class _BulkImportDialogState extends State<_BulkImportDialog> {
   }
 
   List<ParsedGroceryItem> _parseInput(String input) {
-    return input
-        .split(RegExp(r'[\n,]'))
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
+    final lines = input.split(RegExp(r'\r?\n'));
+    final rawItems = <String>[];
+
+    for (final rawLine in lines) {
+      final line = rawLine.trim();
+      if (line.isEmpty) continue;
+
+      // If the entire input is on a single line and has comma separation:
+      if (lines.length == 1 && line.contains(',')) {
+        // Split by commas not preceded or followed by digits to preserve decimals like 1,5 kg
+        final parts = line.split(RegExp(r'(?<!\d),(?!\d)'));
+        for (final part in parts) {
+          final trimmed = part.trim();
+          if (trimmed.isNotEmpty) rawItems.add(trimmed);
+        }
+      } else {
+        rawItems.add(line);
+      }
+    }
+
+    return rawItems
         .map((line) => GroceryParser.parseLine(line))
+        .where((item) => item.name.isNotEmpty)
         .toList();
   }
 
@@ -54,7 +72,8 @@ class _BulkImportDialogState extends State<_BulkImportDialog> {
           maxLines: 10,
           minLines: 5,
           decoration: const InputDecoration(
-            hintText: 'e.g. 1 middelgrote ui\n1 teenknoflook\n...',
+            hintText:
+                'e.g.\n2 pakken melk\n1,5 kg appels\n2 tenen knoflook\n500g gehakt',
             border: OutlineInputBorder(),
           ),
         ),

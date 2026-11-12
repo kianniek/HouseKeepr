@@ -65,7 +65,7 @@ class Task extends Equatable {
   final bool completed;
   final String? photoPath;
   final DateTime? deadline;
-  final String? room; // e.g. 'Badkamer', 'Keuken', 'Slaapkamer', 'Woonkamer'
+  final String? room;
   final bool isRepeating;
   final String? repeatRule; // e.g. 'daily', 'weekly', 'custom', or cron-like
   final List<int>?

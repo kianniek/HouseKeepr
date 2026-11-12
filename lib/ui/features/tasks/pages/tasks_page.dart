@@ -34,12 +34,17 @@ class _RepeatConfig {
 }
 
 class _TasksPageState extends State<TasksPage> {
+  String _selectedRoom = 'Everything';
+  final List<String> _rooms = [
+    'Everything',
+    'Bathroom',
+    'Kitchen',
+    'Bedroom',
+    'Living Room',
+  ];
   final TextEditingController _bulkImportController = TextEditingController();
 
   String _bulkTemplateJson() {
-    // Provide a concise template that only exposes fields users should edit.
-    // Internal/sync fields (ids, versions, timestamps) will be generated
-    // or injected during import.
     final template = [
       {
         'title': "String (e.g., 'Dweil de vloer')",
@@ -47,7 +52,7 @@ class _TasksPageState extends State<TasksPage> {
         'priority': 'Integer (0=low, 1=medium, 2=high, 3=urgent)',
         'deadline': "String (ISO 8601 format: '2026-04-20T12:00:00Z')",
         'room':
-            "String (Options: 'Badkamer', 'Keuken', 'Slaapkamer', 'Woonkamer')",
+            "String (Options: 'Bathroom', 'Kitchen', 'Bedroom', 'Living Room')",
         'isRepeating': 'Boolean (true or false)',
         'repeatRule':
             "String (Format: 'every:1:day', 'every:2:week', or 'monthly')",
@@ -109,9 +114,7 @@ class _TasksPageState extends State<TasksPage> {
             rawEntries.add(m);
             tasks.add(Task.fromMap(m));
           }
-        } catch (_) {
-          // skip malformed entry
-        }
+        } catch (_) {}
       }
 
       if (tasks.isEmpty) {
@@ -121,7 +124,6 @@ class _TasksPageState extends State<TasksPage> {
         return;
       }
 
-      // Close the sheet and show a confirmation preview page
       Navigator.of(sheetContext).pop();
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -204,23 +206,95 @@ class _TasksPageState extends State<TasksPage> {
   Widget build(BuildContext context) {
     return BlocBuilder<TaskCubit, TaskState>(
       builder: (context, state) {
-        // --- DEBUG LOGS ---
-        debugPrint(
-          'TasksPage: REBUILDING. Total tasks in Cubit: ${state.tasks.length}',
-        );
-        // ------------------
-
-        final repeatingTasksCount = state.tasks
-            .where((t) => t.isRepeating)
-            .length;
-        final regularTasksCount = state.tasks.length - repeatingTasksCount;
-
-        debugPrint('TasksPage: Regular tasks count: $regularTasksCount');
-        debugPrint('TasksPage: Repeating tasks count: $repeatingTasksCount');
-
         return Scaffold(
-          appBar: AppBar(title: const Text('Tasks')),
-          body: _buildTaskList(context, state.tasks),
+          appBar: AppBar(
+            title: const Text('Tasks'),
+            actions: [
+              BlocBuilder<TaskCubit, TaskState>(
+                builder: (context, state) {
+                  final nowUtc = DateTime.now().toUtc();
+                  final todayStr = nowUtc.toIso8601String().split('T')[0];
+
+                  // Helper to determine if a task is already done for today
+                  bool isDoneForToday(Task t) {
+                    if (t.isRepeating) {
+                      return (t.completedDates ?? []).contains(todayStr);
+                    }
+                    return t.completed;
+                  }
+
+                  // Check if there are any pending/incomplete tasks available to check off
+                  final hasTasksToCheckOff = state.tasks.any(
+                    (t) => !t.archived && !isDoneForToday(t),
+                  );
+
+                  if (!hasTasksToCheckOff) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Center(
+                        child: Text(
+                          'All tasks done',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return TextButton(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) {
+                          return AlertDialog(
+                            title: const Text('Check off all tasks?'),
+                            content: const Text(
+                              'Are you sure you want to mark all tasks as completed? This action cannot be undone.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(),
+                                child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () {
+                                  context.read<TaskCubit>().completeAllTasks();
+                                  Navigator.of(ctx).pop();
+                                },
+                                child: const Text('Confirm'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                    child: const Text('Check off all tasks'),
+                  );
+                },
+              ),
+            ],
+          ),
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Rooms',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildRoomFilters(),
+              const SizedBox(height: 8),
+              Expanded(child: _buildTaskList(context, state.tasks)),
+            ],
+          ),
           floatingActionButton: FloatingActionButton(
             onPressed: () {
               showTaskAddEditDialog(
@@ -235,6 +309,46 @@ class _TasksPageState extends State<TasksPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildRoomFilters() {
+    return SizedBox(
+      height: 40,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _rooms.length,
+        itemBuilder: (context, index) {
+          final theme = Theme.of(context);
+          final scheme = theme.colorScheme;
+          final room = _rooms[index];
+          final isSelected = room == _selectedRoom;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label: Text(room),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  _selectedRoom = room;
+                });
+              },
+              selectedColor: scheme.primaryContainer,
+              backgroundColor: scheme.surfaceContainerHighest,
+              checkmarkColor: scheme.primary,
+              labelStyle: theme.textTheme.bodySmall?.copyWith(
+                color: isSelected ? scheme.onSurface : scheme.onSurfaceVariant,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+              side: BorderSide.none,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -342,9 +456,7 @@ class _TasksPageState extends State<TasksPage> {
             );
             if (completedToday && candidate.isAtSameMomentAs(today)) continue;
             if (!candidate.isBefore(now)) return candidate;
-          } catch (_) {
-            // skip invalid day
-          }
+          } catch (_) {}
         }
       }
     }
@@ -361,10 +473,14 @@ class _TasksPageState extends State<TasksPage> {
   }
 
   Widget _buildTaskList(BuildContext context, List<Task> tasks) {
-    // Helper: determine if a repeating task is active today
+    // Filter tasks by selected room
+    var roomTasks = tasks;
+    if (_selectedRoom != 'Everything') {
+      roomTasks = tasks.where((t) => t.room == _selectedRoom).toList();
+    }
+
     bool isRepeatingActiveToday(Task t) {
       if (!t.isRepeating) return false;
-      // Respect explicit inactiveUntil flag if set — task remains inactive until then
       try {
         final iu = t.inactiveUntil;
         if (iu != null) {
@@ -425,7 +541,7 @@ class _TasksPageState extends State<TasksPage> {
     final inactiveFutureTasks = <Task>[];
     final doneTasks = <Task>[];
 
-    for (final t in tasks) {
+    for (final t in roomTasks) {
       final done = isDoneForToday(t, todayStr);
       if (done) {
         doneTasks.add(t);
@@ -449,7 +565,7 @@ class _TasksPageState extends State<TasksPage> {
     if (activeTasks.isEmpty &&
         inactiveFutureTasks.isEmpty &&
         doneTasks.isEmpty) {
-      return const Center(child: Text('No tasks yet'));
+      return const Center(child: Text('No tasks found'));
     }
 
     final listChildren = <Widget>[];
@@ -566,45 +682,29 @@ class _TasksPageState extends State<TasksPage> {
     }
 
     Future<void> putOffTask() async {
-      if (taskSection != _TaskSection.active) {
-        return;
-      }
-
-      // Move deadline to tomorrow's date.
+      if (taskSection != _TaskSection.active) return;
       final now = DateTime.now().toUtc();
       final tomorrow = DateTime.utc(now.year, now.month, now.day + 1);
-
-      // Increment putOffCount (keeps initialPriority unchanged)
       final updated = t.copyWith(
         deadline: tomorrow,
         putOffCount: t.putOffCount + 1,
       );
-
       context.read<TaskCubit>().updateTask(updated);
     }
 
     Future<void> doingItNow() async {
-      if (taskSection != _TaskSection.future) {
-        return;
-      }
-
-      // Pull task back to today's date and decrease put-off pressure.
+      if (taskSection != _TaskSection.future) return;
       final now = DateTime.now().toUtc();
       final today = DateTime.utc(now.year, now.month, now.day);
-
       final updated = t.copyWith(
         deadline: today,
         putOffCount: t.putOffCount > 0 ? t.putOffCount - 1 : 0,
       );
-
       context.read<TaskCubit>().updateTask(updated);
     }
 
     Future<void> undoDone() async {
-      if (taskSection != _TaskSection.done) {
-        return;
-      }
-
+      if (taskSection != _TaskSection.done) return;
       if (t.isRepeating) {
         await context.read<TaskCubit>().uncompleteOccurrence(t.id, todayStr);
       } else {
@@ -655,9 +755,7 @@ class _TasksPageState extends State<TasksPage> {
       if (diff == 0) return 'Today';
       if (diff == 1) return 'Tomorrow';
       if (diff > 1 && diff < 7) return 'In $diff days';
-      final datePart =
-          '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
-      return datePart;
+      return '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
     }
 
     Widget card = TaskCard(
@@ -770,7 +868,6 @@ class _TasksPageState extends State<TasksPage> {
       );
     }
 
-    // Wrap card in AnimatedSwitcher so removals/insertions animate subtly.
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 200),
       transitionBuilder: (child, anim) {
@@ -788,13 +885,12 @@ class _TasksPageState extends State<TasksPage> {
   }
 
   IconData _getTaskIcon(Task task) {
-    IconData? match;
     final title = task.title.toLowerCase();
-    match = _matchIcon(title);
-    if (match != null) return match;
     final description = (task.description ?? '').toLowerCase();
-    match = _matchIcon(description);
-    return match ?? Icons.home;
+    final match1 = _matchIcon(title);
+    if (match1 != null) return match1;
+    final match2 = _matchIcon(description);
+    return match2 ?? Icons.home;
   }
 
   IconData? _matchIcon(String text) {
@@ -954,7 +1050,6 @@ class _BulkImportConfirmationPageState
           task = task.copyWith(householdId: widget.householdId);
         }
 
-        // Task has no createdBy field, so use assignedToId as the closest local field.
         final rawCreatedBy =
             raw['createdBy']?.toString() ?? raw['created_by']?.toString();
         final fallbackCreator =

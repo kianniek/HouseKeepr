@@ -49,6 +49,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileSubtitle => 'Manage your account and data';
 
   @override
+  String get accountSection => 'Account';
+
+  @override
+  String get viewAccount => 'View Account';
+
+  @override
+  String get viewAccountSubtitle => 'View and edit profile details';
+
+  @override
+  String get logout => 'Log Out';
+
+  @override
+  String get logoutConfirmation => 'Are you sure you want to log out?';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
   String get diagnostics => 'Diagnostics';
 
   @override

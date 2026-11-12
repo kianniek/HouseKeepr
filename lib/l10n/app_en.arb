@@ -40,6 +40,24 @@
   "profileSubtitle": "Manage your account and data",
   "@profileSubtitle": { "description": "Profile list tile subtitle" },
 
+  "accountSection": "Account",
+  "@accountSection": { "description": "Account section header in settings" },
+
+  "viewAccount": "View Account",
+  "@viewAccount": { "description": "View account title" },
+
+  "viewAccountSubtitle": "View and edit profile details",
+  "@viewAccountSubtitle": { "description": "View account subtitle" },
+
+  "logout": "Log Out",
+  "@logout": { "description": "Logout button title" },
+
+  "logoutConfirmation": "Are you sure you want to log out?",
+  "@logoutConfirmation": { "description": "Logout confirmation message" },
+
+  "cancel": "Cancel",
+  "@cancel": { "description": "Cancel button label" },
+
   "diagnostics": "Diagnostics",
   "@diagnostics": { "description": "Diagnostics section label" },
 

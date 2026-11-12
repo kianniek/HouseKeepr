@@ -18,6 +18,10 @@ class GroceryItem extends Equatable {
   final bool isDeleted;
   final int? serverVersion;
 
+  /// When the item was soft-deleted. Used for the 7-day "Recently Deleted"
+  /// retention window. Null for active items (and legacy tombstones).
+  final DateTime? deletedAt;
+
   const GroceryItem({
     required this.id,
     required this.name,
@@ -31,6 +35,7 @@ class GroceryItem extends Equatable {
     DateTime? updatedAt,
     this.isDeleted = false,
     this.serverVersion,
+    this.deletedAt,
   }) : updatedAt = updatedAt ?? createdAt;
 
   GroceryItem copyWith({
@@ -46,6 +51,7 @@ class GroceryItem extends Equatable {
     DateTime? updatedAt,
     bool? isDeleted,
     int? serverVersion,
+    Object? deletedAt = _sentinel,
   }) => GroceryItem(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -61,6 +67,9 @@ class GroceryItem extends Equatable {
     updatedAt: updatedAt ?? this.updatedAt,
     isDeleted: isDeleted ?? this.isDeleted,
     serverVersion: serverVersion ?? this.serverVersion,
+    deletedAt: identical(deletedAt, _sentinel)
+        ? this.deletedAt
+        : deletedAt as DateTime?,
   );
 
   Map<String, dynamic> toMap() => {
@@ -76,6 +85,7 @@ class GroceryItem extends Equatable {
     'updatedAt': updatedAt.toIso8601String(),
     'isDeleted': isDeleted,
     'serverVersion': serverVersion,
+    'deletedAt': deletedAt?.toIso8601String(),
   };
 
   static DateTime? _parseDate(dynamic raw) {
@@ -103,6 +113,7 @@ class GroceryItem extends Equatable {
         DateTime.now(),
     isDeleted: map['isDeleted'] as bool? ?? false,
     serverVersion: map['serverVersion'] as int?,
+    deletedAt: _parseDate(map['deletedAt']),
   );
 
   String toJson() => json.encode(toMap());
@@ -116,6 +127,7 @@ class GroceryItem extends Equatable {
     name,
     note,
     quantity,
+    unit,
     category,
     checked,
     createdAt,
@@ -123,5 +135,6 @@ class GroceryItem extends Equatable {
     updatedAt,
     isDeleted,
     serverVersion,
+    deletedAt,
   ];
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
 
+import '../../../../core/extensions.dart';
 import '../../../../core/quantity_unit_formatter.dart';
 import '../../../../models/grocery_category.dart';
 import '../../../../models/grocery_item.dart';
@@ -53,10 +54,10 @@ class ShoppingListItemTile extends StatelessWidget {
         child: Icon(Icons.delete, color: scheme.onError),
       ),
       onDismissed: (_) => onDelete(),
-      child: Container(
+      child: Material(
         color: item.checked
             ? scheme.surfaceContainerHighest.withValues(alpha: 0.2)
-            : scheme.surface.withAlpha(0),
+            : Colors.transparent,
         child: ListTile(
           contentPadding: EdgeInsets.symmetric(
             horizontal: aisleMode ? 24 : 16,
@@ -190,7 +191,7 @@ class ShoppingListItemTile extends StatelessWidget {
                         Text(
                           item.quantity % 1 == 0
                               ? item.quantity.toInt().toString()
-                              : item.quantity.toString(),
+                              : item.quantity.toTrimmedFixed(2),
                           style:
                               (aisleMode
                                       ? theme.textTheme.headlineSmall

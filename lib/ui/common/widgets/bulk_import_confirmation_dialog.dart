@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:housekeepr/core/extensions.dart';
+import 'package:housekeepr/core/quantity_unit_formatter.dart';
 import '../../../core/grocery_parser.dart';
 import '../../../models/grocery_category.dart';
 
@@ -53,11 +54,20 @@ class _BulkImportConfirmationDialogState
             final item = _items[index];
             final qtyStr = item.quantity == item.quantity.floorToDouble()
                 ? item.quantity.toInt().toString()
-                : item.quantity.toTrimmedFixed(1);
+                : item.quantity.toTrimmedFixed(2);
+            final formattedUnit = formatQuantityUnit(item.unit, item.quantity);
+            final qtyWithUnit =
+                formattedUnit != null && formattedUnit.isNotEmpty
+                ? '$qtyStr $formattedUnit'
+                : qtyStr;
+            final subtitleText = item.note != null && item.note!.isNotEmpty
+                ? '$qtyWithUnit • ${item.note}'
+                : qtyWithUnit;
+
             return ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(item.name),
-              subtitle: Text('$qtyStr ${item.unit ?? ''}'.trim()),
+              subtitle: Text(subtitleText),
               trailing: DropdownButton<GroceryCategory>(
                 value: item.category,
                 underline: const SizedBox(),

@@ -49,6 +49,24 @@ class AppLocalizationsNl extends AppLocalizations {
   String get profileSubtitle => 'Beheer je account en gegevens';
 
   @override
+  String get accountSection => 'Account';
+
+  @override
+  String get viewAccount => 'Account bekijken';
+
+  @override
+  String get viewAccountSubtitle => 'Profielgegevens bekijken en bewerken';
+
+  @override
+  String get logout => 'Uitloggen';
+
+  @override
+  String get logoutConfirmation => 'Weet je zeker dat je wilt uitloggen?';
+
+  @override
+  String get cancel => 'Annuleren';
+
+  @override
   String get diagnostics => 'Diagnostiek';
 
   @override

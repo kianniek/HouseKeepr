@@ -1,10 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/extensions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/locale_provider.dart';
 import '../../../../core/settings_repository.dart';
-import '../../../../cubits/user_cubit.dart';
 import '../../../../generated/app_localizations.dart';
 import '../../../../home_screen.dart';
 import '../../../../services/notification_service.dart';
@@ -93,6 +94,46 @@ class _SettingsPageState extends State<SettingsPage> {
     await LocaleProvider.instance.setLocale(locale);
   }
 
+  Future<void> _confirmLogout(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: Text(l10n.logout),
+        content: Text(l10n.logoutConfirmation),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(dialogCtx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: Text(l10n.logout),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final navigator = Navigator.of(context);
+      navigator.popUntil((route) => route.isFirst);
+      await fb.FirebaseAuth.instance.signOut();
+      try {
+        await GoogleSignIn().signOut();
+      } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to logout: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -147,31 +188,82 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           ListTile(
             title: Text(l10n.startOfDayTime),
-            subtitle: Text(_start.format(context)),
+            subtitle: Text(formatTimeWithSystemDefault(_start, context)),
             trailing: const Icon(Icons.access_time),
             onTap: _pickStart,
           ),
           ListTile(
             title: Text(l10n.endOfDayTime),
-            subtitle: Text(_end.format(context)),
+            subtitle: Text(formatTimeWithSystemDefault(_end, context)),
             trailing: const Icon(Icons.access_time),
             onTap: _pickEnd,
           ),
-          // ── Profile ───────────────────────────────────────────────────────
-          ListTile(
-            title: Text(l10n.profile),
-            subtitle: Text(l10n.profileSubtitle),
-            leading: const Icon(Icons.person),
-            onTap: () {
-              final userCubit = context.read<UserCubit?>();
-              final user = userCubit?.state;
-              if (user != null) {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => ProfilePage(user: user)),
-                );
-              }
+          // ── Account ───────────────────────────────────────────────────────
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              l10n.accountSection,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          StreamBuilder<fb.User?>(
+            stream: fb.FirebaseAuth.instance.userChanges(),
+            initialData: fb.FirebaseAuth.instance.currentUser,
+            builder: (context, snapshot) {
+              final current =
+                  snapshot.data ?? fb.FirebaseAuth.instance.currentUser;
+              final displayName = current?.displayName?.trim();
+              final email = current?.email?.trim();
+              final subtitleText = displayName != null && displayName.isNotEmpty
+                  ? (email != null && email.isNotEmpty
+                        ? '$displayName • $email'
+                        : displayName)
+                  : (email != null && email.isNotEmpty
+                        ? email
+                        : l10n.viewAccountSubtitle);
+
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundImage: current?.photoURL != null
+                      ? NetworkImage(current!.photoURL!)
+                      : null,
+                  child: current?.photoURL == null
+                      ? const Icon(Icons.person)
+                      : null,
+                ),
+                title: Text(l10n.viewAccount),
+                subtitle: Text(subtitleText),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  final targetUser =
+                      current ?? fb.FirebaseAuth.instance.currentUser;
+                  if (targetUser != null) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ProfilePage(user: targetUser),
+                      ),
+                    );
+                  }
+                },
+              );
             },
           ),
+          ListTile(
+            leading: Icon(
+              Icons.logout,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            title: Text(
+              l10n.logout,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            onTap: () => _confirmLogout(context),
+          ),
+          const Divider(height: 1),
           // ── Diagnostics ───────────────────────────────────────────────────
           ExpansionTile(
             title: Text(l10n.diagnostics),

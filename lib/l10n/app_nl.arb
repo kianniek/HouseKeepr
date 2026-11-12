@@ -27,6 +27,18 @@
 
   "profileSubtitle": "Beheer je account en gegevens",
 
+  "accountSection": "Account",
+
+  "viewAccount": "Account bekijken",
+
+  "viewAccountSubtitle": "Profielgegevens bekijken en bewerken",
+
+  "logout": "Uitloggen",
+
+  "logoutConfirmation": "Weet je zeker dat je wilt uitloggen?",
+
+  "cancel": "Annuleren",
+
   "diagnostics": "Diagnostiek",
 
   "testNotification": "Testmelding",
