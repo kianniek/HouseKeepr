@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../widgets/coffee_picker_page.dart';
 import '../widgets/tool_personal_budget_page.dart';
@@ -42,8 +43,36 @@ enum ToolCategory {
 }
 
 class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
+  static const String _isGridViewKey = 'tools_library_is_grid_view';
+
   ToolCategory? _selectedCategory;
-  bool _isGridView = true;
+  bool _isGridView = false;
+  bool _hasUserToggledView = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadViewPreference();
+  }
+
+  Future<void> _loadViewPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedIsGridView = prefs.getBool(_isGridViewKey);
+    if (!mounted || _hasUserToggledView || savedIsGridView == null) return;
+    setState(() {
+      _isGridView = savedIsGridView;
+    });
+  }
+
+  Future<void> _toggleViewPreference() async {
+    final nextValue = !_isGridView;
+    setState(() {
+      _hasUserToggledView = true;
+      _isGridView = nextValue;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_isGridViewKey, nextValue);
+  }
 
   final List<ToolCategory> _categories = [
     ToolCategory.financeUtilities,
@@ -169,11 +198,7 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
                 ),
                 IconButton(
                   icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view),
-                  onPressed: () {
-                    setState(() {
-                      _isGridView = !_isGridView;
-                    });
-                  },
+                  onPressed: _toggleViewPreference,
                 ),
               ],
             ),

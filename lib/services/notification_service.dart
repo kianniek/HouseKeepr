@@ -25,12 +25,29 @@ import '../models/medication.dart';
 ///    the implementation platform-agnostic; you can later plug in
 ///    `flutter_local_notifications` for real scheduled platform notifications.
 
+/// Top-level background callback for notification action buttons (e.g.
+/// "Remind me later") invoked by `flutter_local_notifications` in a background
+/// isolate when `showsUserInterface` is false.
+@pragma('vm:entry-point')
+Future<void> notificationTapBackground(NotificationResponse response) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (response.actionId == NotificationService._kActionRemindLater) {
+    if (!NotificationService.instance.isInitialized) {
+      final prefs = await SharedPreferences.getInstance();
+      await NotificationService.instance.init(prefs, isBackground: true);
+    }
+    await NotificationService.instance.handleRemindLater(response);
+  }
+}
+
 class NotificationService {
   NotificationService._private();
   static final NotificationService instance = NotificationService._private();
 
   SharedPreferences? _prefs;
   GlobalKey<ScaffoldMessengerState>? _scaffoldKey;
+
+  bool get isInitialized => _prefs != null;
 
   FlutterLocalNotificationsPlugin? _plugin;
   bool _pluginAvailable = false;
@@ -63,11 +80,34 @@ class NotificationService {
     }
   }
 
+  static const _medicationNotificationDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'medication_reminders',
+      'Medication Reminders',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: 'ic_launcher_monochrome',
+      actions: <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          _kActionRemindLater,
+          'Remind me later',
+          cancelNotification: true,
+        ),
+      ],
+    ),
+    iOS: DarwinNotificationDetails(
+      presentAlert: true,
+      presentSound: true,
+      presentBadge: true,
+    ),
+  );
+
   Future<void> init(
     SharedPreferences prefs, {
     GlobalKey<ScaffoldMessengerState>? scaffoldKey,
     VoidCallback? onOpenTasks,
     VoidCallback? onOpenMedications,
+    bool isBackground = false,
   }) async {
     _prefs = prefs;
     _scaffoldKey = scaffoldKey;
@@ -87,6 +127,7 @@ class NotificationService {
         await _plugin!.initialize(
           settings: const InitializationSettings(android: android, iOS: iOS),
           onDidReceiveNotificationResponse: _handleNotificationResponse,
+          onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
         );
         await _createNotificationChannels();
         // initialize timezone data
@@ -98,8 +139,10 @@ class NotificationService {
           // ignore timezone init failures
         }
         _pluginAvailable = true;
-        await _handleLaunchAction();
-        await _handleAndroidIntentAction();
+        if (!isBackground) {
+          await _handleLaunchAction();
+          await _handleAndroidIntentAction();
+        }
       } catch (e) {
         debugPrint('Notification plugin init failed: $e');
         _pluginAvailable = false;
@@ -286,6 +329,7 @@ class NotificationService {
       'action': _kPayloadOpenMedications,
       'title': title,
       'body': body,
+      'isTest': true,
     });
 
     if (_pluginAvailable && _plugin != null) {
@@ -295,27 +339,7 @@ class NotificationService {
           id: id,
           title: title,
           body: body,
-          notificationDetails: const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'medication_reminders',
-              'Medication Reminders',
-              importance: Importance.high,
-              priority: Priority.high,
-              icon: 'ic_launcher_monochrome',
-              actions: <AndroidNotificationAction>[
-                AndroidNotificationAction(
-                  _kActionRemindLater,
-                  'Remind me later',
-                  cancelNotification: true,
-                ),
-              ],
-            ),
-            iOS: DarwinNotificationDetails(
-              presentAlert: true,
-              presentSound: true,
-              presentBadge: true,
-            ),
-          ),
+          notificationDetails: _medicationNotificationDetails,
           payload: payload,
         );
         return;
@@ -340,6 +364,7 @@ class NotificationService {
     String body = 'Time to take your medication';
     String? medicationId;
     String? doseId;
+    bool isTest = false;
 
     if (response.payload != null && response.payload!.isNotEmpty) {
       try {
@@ -349,11 +374,15 @@ class NotificationService {
           if (data['body'] != null) body = data['body'] as String;
           medicationId = data['medicationId'] as String?;
           doseId = data['doseId'] as String?;
+          isTest = data['isTest'] == true;
         }
       } catch (_) {}
     }
 
-    final newTime = DateTime.now().add(const Duration(hours: 1));
+    final delay = isTest
+        ? const Duration(seconds: 10)
+        : const Duration(hours: 1);
+    final newTime = DateTime.now().add(delay);
     final newId = _hashId(
       'remind_later_${DateTime.now().millisecondsSinceEpoch}',
     );
@@ -380,46 +409,68 @@ class NotificationService {
     };
     if (medicationId != null) payloadMap['medicationId'] = medicationId;
     if (doseId != null) payloadMap['doseId'] = doseId;
+    if (isTest) payloadMap['isTest'] = true;
     final payload = jsonEncode(payloadMap);
 
     if (_pluginAvailable && _plugin != null) {
       try {
         final scheduled = tz.TZDateTime.from(newTime.toUtc(), tz.local);
-        await _plugin!.zonedSchedule(
+        await _zonedScheduleWithFallback(
           id: newId,
           title: title,
           body: body,
           scheduledDate: scheduled,
-          notificationDetails: const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'medication_reminders',
-              'Medication Reminders',
-              importance: Importance.high,
-              priority: Priority.high,
-              icon: 'ic_launcher_monochrome',
-              actions: <AndroidNotificationAction>[
-                AndroidNotificationAction(
-                  _kActionRemindLater,
-                  'Remind me later',
-                  cancelNotification: true,
-                ),
-              ],
-            ),
-            iOS: DarwinNotificationDetails(
-              presentAlert: true,
-              presentSound: true,
-              presentBadge: true,
-            ),
-          ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          notificationDetails: _medicationNotificationDetails,
           payload: payload,
         );
       } catch (e) {
-        debugPrint('Failed to reschedule reminder 1 hour later: $e');
+        debugPrint('Failed to reschedule reminder: $e');
       }
     }
 
-    show('Reminder rescheduled', 'We will remind you again in 1 hour');
+    show(
+      'Reminder rescheduled',
+      isTest
+          ? 'We will remind you again in 10 seconds'
+          : 'We will remind you again in 1 hour',
+    );
+  }
+
+  /// Schedules a zoned notification using exact alarms when permitted, falling
+  /// back to inexact alarms on Android 14+ when exact alarm permission is denied.
+  Future<void> _zonedScheduleWithFallback({
+    required int id,
+    required String title,
+    required String body,
+    required tz.TZDateTime scheduledDate,
+    required NotificationDetails notificationDetails,
+    required String payload,
+  }) async {
+    try {
+      await _plugin!.zonedSchedule(
+        id: id,
+        title: title,
+        body: body,
+        scheduledDate: scheduledDate,
+        notificationDetails: notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: payload,
+      );
+    } on PlatformException catch (e) {
+      if (e.code == 'exact_alarms_not_permitted') {
+        await _plugin!.zonedSchedule(
+          id: id,
+          title: title,
+          body: body,
+          scheduledDate: scheduledDate,
+          notificationDetails: notificationDetails,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          payload: payload,
+        );
+      } else {
+        rethrow;
+      }
+    }
   }
 
   Future<void> scheduleReminder(
@@ -649,33 +700,12 @@ class NotificationService {
               scheduledLocal.toUtc(),
               tz.local,
             );
-            await _plugin!.zonedSchedule(
+            await _zonedScheduleWithFallback(
               id: notificationId,
               title: title,
               body: body,
               scheduledDate: scheduled,
-              notificationDetails: const NotificationDetails(
-                android: AndroidNotificationDetails(
-                  'medication_reminders',
-                  'Medication Reminders',
-                  importance: Importance.high,
-                  priority: Priority.high,
-                  icon: 'ic_launcher_monochrome',
-                  actions: <AndroidNotificationAction>[
-                    AndroidNotificationAction(
-                      _kActionRemindLater,
-                      'Remind me later',
-                      cancelNotification: true,
-                    ),
-                  ],
-                ),
-                iOS: DarwinNotificationDetails(
-                  presentAlert: true,
-                  presentSound: true,
-                  presentBadge: true,
-                ),
-              ),
-              androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+              notificationDetails: _medicationNotificationDetails,
               payload: payload,
             );
           } catch (e) {

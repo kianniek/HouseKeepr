@@ -55,7 +55,10 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     ops = [];
     queue = WriteQueue(prefs)
-      ..attachOpBuilder((op) => () async => ops.add(op));
+      ..attachOpBuilder(
+        (op) =>
+            () async => ops.add(op),
+      );
   });
 
   tearDown(() async {
@@ -87,24 +90,26 @@ void main() {
   });
 
   group('soft delete + undo', () {
-    test('deleteItem hides item, lists it as recently deleted, no hard delete',
-        () async {
-      await repo.saveItems([_item('a'), _item('b')]);
-      final cubit = await createCubit();
+    test(
+      'deleteItem hides item, lists it as recently deleted, no hard delete',
+      () async {
+        await repo.saveItems([_item('a'), _item('b')]);
+        final cubit = await createCubit();
 
-      final deleted = await cubit.deleteItem('a');
-      await pumpEventQueue();
+        final deleted = await cubit.deleteItem('a');
+        await pumpEventQueue();
 
-      expect(deleted, isNotNull);
-      expect(deleted!.isDeleted, isTrue);
-      expect(deleted.deletedAt, isNotNull);
-      expect(cubit.state.items.map((i) => i.id), ['b']);
-      expect(cubit.state.recentlyDeleted.map((i) => i.id), ['a']);
-      // Tombstone kept locally.
-      expect(repo.loadItems().any((i) => i.id == 'a' && i.isDeleted), isTrue);
-      // Only a save (tombstone) op, no remote hard delete.
-      expect(ops.map((o) => o.type), [QueueOpType.saveGrocery]);
-    });
+        expect(deleted, isNotNull);
+        expect(deleted!.isDeleted, isTrue);
+        expect(deleted.deletedAt, isNotNull);
+        expect(cubit.state.items.map((i) => i.id), ['b']);
+        expect(cubit.state.recentlyDeleted.map((i) => i.id), ['a']);
+        // Tombstone kept locally.
+        expect(repo.loadItems().any((i) => i.id == 'a' && i.isDeleted), isTrue);
+        // Only a save (tombstone) op, no remote hard delete.
+        expect(ops.map((o) => o.type), [QueueOpType.saveGrocery]);
+      },
+    );
 
     test('restoreItems keeps checked state by default (undo)', () async {
       await repo.saveItems([_item('a', checked: true)]);
@@ -141,39 +146,46 @@ void main() {
       expect(cubit.state.recentlyDeleted.single.deletedAt, original);
     });
 
-    test('clearCheckedItems returns ids and all land in recentlyDeleted',
-        () async {
-      await repo.saveItems([
-        _item('a', checked: true),
-        _item('b', checked: true),
-        _item('c'),
-      ]);
-      final cubit = await createCubit();
+    test(
+      'clearCheckedItems returns ids and all land in recentlyDeleted',
+      () async {
+        await repo.saveItems([
+          _item('a', checked: true),
+          _item('b', checked: true),
+          _item('c'),
+        ]);
+        final cubit = await createCubit();
 
-      final ids = await cubit.clearCheckedItems();
-      expect(ids.toSet(), {'a', 'b'});
-      expect(cubit.state.items.map((i) => i.id), ['c']);
-      expect(cubit.state.recentlyDeleted.map((i) => i.id).toSet(), {'a', 'b'});
+        final ids = await cubit.clearCheckedItems();
+        expect(ids.toSet(), {'a', 'b'});
+        expect(cubit.state.items.map((i) => i.id), ['c']);
+        expect(cubit.state.recentlyDeleted.map((i) => i.id).toSet(), {
+          'a',
+          'b',
+        });
 
-      await cubit.restoreItems(ids);
-      expect(cubit.state.items.length, 3);
-      expect(cubit.state.items.where((i) => i.checked).length, 2);
-    });
+        await cubit.restoreItems(ids);
+        expect(cubit.state.items.length, 3);
+        expect(cubit.state.items.where((i) => i.checked).length, 2);
+      },
+    );
 
-    test('permanentlyDelete removes locally and enqueues remote delete',
-        () async {
-      await repo.saveItems([_item('a')]);
-      final cubit = await createCubit();
-      await cubit.deleteItem('a');
-      ops.clear();
+    test(
+      'permanentlyDelete removes locally and enqueues remote delete',
+      () async {
+        await repo.saveItems([_item('a')]);
+        final cubit = await createCubit();
+        await cubit.deleteItem('a');
+        ops.clear();
 
-      await cubit.permanentlyDelete(['a']);
-      await pumpEventQueue();
+        await cubit.permanentlyDelete(['a']);
+        await pumpEventQueue();
 
-      expect(repo.loadItems(), isEmpty);
-      expect(cubit.state.recentlyDeleted, isEmpty);
-      expect(ops.map((o) => o.type), [QueueOpType.deleteGrocery]);
-    });
+        expect(repo.loadItems(), isEmpty);
+        expect(cubit.state.recentlyDeleted, isEmpty);
+        expect(ops.map((o) => o.type), [QueueOpType.deleteGrocery]);
+      },
+    );
   });
 
   group('retention purge', () {
@@ -215,24 +227,28 @@ void main() {
       );
     });
 
-    test('syncRemoteItems does not re-insert expired remote tombstones',
-        () async {
-      final cubit = await createCubit();
-      final old = DateTime.now().subtract(const Duration(days: 9));
+    test(
+      'syncRemoteItems does not re-insert expired remote tombstones',
+      () async {
+        final cubit = await createCubit();
+        final old = DateTime.now().subtract(const Duration(days: 9));
 
-      cubit.syncRemoteItems([
-        _item('remoteOld', isDeleted: true, deletedAt: old, updatedAt: old),
-        _item('remoteActive'),
-      ]);
-      await pumpEventQueue();
+        cubit.syncRemoteItems([
+          _item('remoteOld', isDeleted: true, deletedAt: old, updatedAt: old),
+          _item('remoteActive'),
+        ]);
+        await pumpEventQueue();
 
-      expect(repo.loadItems().map((i) => i.id), ['remoteActive']);
-      expect(cubit.state.recentlyDeleted, isEmpty);
-      expect(
-        ops.where((o) => o.type == QueueOpType.deleteGrocery).map((o) => o.id),
-        ['remoteOld'],
-      );
-    });
+        expect(repo.loadItems().map((i) => i.id), ['remoteActive']);
+        expect(cubit.state.recentlyDeleted, isEmpty);
+        expect(
+          ops
+              .where((o) => o.type == QueueOpType.deleteGrocery)
+              .map((o) => o.id),
+          ['remoteOld'],
+        );
+      },
+    );
 
     test('isExpiredTombstone ignores active items', () {
       final old = DateTime.now().subtract(const Duration(days: 30));
@@ -243,4 +259,3 @@ void main() {
     });
   });
 }
-

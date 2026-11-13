@@ -281,8 +281,33 @@ function Invoke-PlayInternalTrackPublish {
 
         Write-Host "Uploading app bundle from $resolvedAabPath..." -ForegroundColor Cyan
         $uploadUrl = "https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/$PackageName/edits/$editId/bundles?uploadType=media"
+
         try {
-            $uploadResponse = Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers @{ Authorization = "Bearer $token" } -ContentType 'application/octet-stream' -InFile $resolvedAabPath
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Add-Type -AssemblyName System.Net.Http
+
+            $httpClient = New-Object System.Net.Http.HttpClient
+            $httpClient.Timeout = [TimeSpan]::FromMinutes(10)
+            $httpClient.DefaultRequestHeaders.Authorization = New-Object System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", $token)
+
+            $fileStream = [System.IO.File]::OpenRead($resolvedAabPath)
+            try {
+                $streamContent = New-Object System.Net.Http.StreamContent($fileStream)
+                $streamContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/octet-stream")
+
+                $response = $httpClient.PostAsync($uploadUrl, $streamContent).GetAwaiter().GetResult()
+                $responseBody = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+
+                if (-not $response.IsSuccessStatusCode) {
+                    throw "HTTP $([int]$response.StatusCode) ($($response.ReasonPhrase)): $responseBody"
+                }
+
+                $uploadResponse = $responseBody | ConvertFrom-Json
+            }
+            finally {
+                $fileStream.Dispose()
+                $httpClient.Dispose()
+            }
         } catch {
             $details = Get-ErrorDetails -ErrorRecord $_
             if ($details -match 'Version code\s+\d+\s+has already been used') {

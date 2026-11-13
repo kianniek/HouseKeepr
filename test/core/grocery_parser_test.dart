@@ -4,37 +4,40 @@ import 'package:test/test.dart';
 
 void main() {
   group('GroceryParser', () {
-    test('does not mistakenly extract single-letter or short units from words', () {
-      final lasagne = GroceryParser.parseLine('lasagne');
-      expect(lasagne.name, 'Lasagne');
-      expect(lasagne.quantity, 1.0);
-      expect(lasagne.unit, isNull);
+    test(
+      'does not mistakenly extract single-letter or short units from words',
+      () {
+        final lasagne = GroceryParser.parseLine('lasagne');
+        expect(lasagne.name, 'Lasagne');
+        expect(lasagne.quantity, 1.0);
+        expect(lasagne.unit, isNull);
 
-      final limoen = GroceryParser.parseLine('1 limoen');
-      expect(limoen.name, 'Limoen');
-      expect(limoen.quantity, 1.0);
-      expect(limoen.unit, isNull);
+        final limoen = GroceryParser.parseLine('1 limoen');
+        expect(limoen.name, 'Limoen');
+        expect(limoen.quantity, 1.0);
+        expect(limoen.unit, isNull);
 
-      final grapefruit = GroceryParser.parseLine('2 grapefruits');
-      expect(grapefruit.name, 'Grapefruits');
-      expect(grapefruit.quantity, 2.0);
-      expect(grapefruit.unit, isNull);
+        final grapefruit = GroceryParser.parseLine('2 grapefruits');
+        expect(grapefruit.name, 'Grapefruits');
+        expect(grapefruit.quantity, 2.0);
+        expect(grapefruit.unit, isNull);
 
-      final gember = GroceryParser.parseLine('gember');
-      expect(gember.name, 'Gember');
-      expect(gember.quantity, 1.0);
-      expect(gember.unit, isNull);
+        final gember = GroceryParser.parseLine('gember');
+        expect(gember.name, 'Gember');
+        expect(gember.quantity, 1.0);
+        expect(gember.unit, isNull);
 
-      final paksoi = GroceryParser.parseLine('1 paksoi');
-      expect(paksoi.name, 'Paksoi');
-      expect(paksoi.quantity, 1.0);
-      expect(paksoi.unit, isNull);
+        final paksoi = GroceryParser.parseLine('1 paksoi');
+        expect(paksoi.name, 'Paksoi');
+        expect(paksoi.quantity, 1.0);
+        expect(paksoi.unit, isNull);
 
-      final flespompoen = GroceryParser.parseLine('1 flespompoen');
-      expect(flespompoen.name, 'Flespompoen');
-      expect(flespompoen.quantity, 1.0);
-      expect(flespompoen.unit, isNull);
-    });
+        final flespompoen = GroceryParser.parseLine('1 flespompoen');
+        expect(flespompoen.name, 'Flespompoen');
+        expect(flespompoen.quantity, 1.0);
+        expect(flespompoen.unit, isNull);
+      },
+    );
 
     test('extracts units with numbers accurately', () {
       final melk = GroceryParser.parseLine('2 pakken melk');
@@ -156,7 +159,9 @@ void main() {
       expect(withComma.quantity, 1.0);
       expect(withComma.note, 'gesnipperd');
 
-      final withParen = GroceryParser.parseLine('tomatenblokjes (blik van 400g)');
+      final withParen = GroceryParser.parseLine(
+        'tomatenblokjes (blik van 400g)',
+      );
       expect(withParen.name, 'Tomatenblokjes');
       expect(withParen.note, 'blik van 400g');
     });
@@ -177,4 +182,3 @@ void main() {
     });
   });
 }
-

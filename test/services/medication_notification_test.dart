@@ -135,10 +135,85 @@ void main() {
 
       // Check that scheduled time is roughly 1 hour in the future
       final scheduledAt = DateTime.parse(entry['at'] as String);
-      final differenceMinutes =
-          scheduledAt.difference(DateTime.now().toUtc()).inMinutes;
+      final differenceMinutes = scheduledAt
+          .difference(DateTime.now().toUtc())
+          .inMinutes;
       expect(differenceMinutes, greaterThanOrEqualTo(58));
       expect(differenceMinutes, lessThanOrEqualTo(62));
     });
+
+    test(
+      'notificationTapBackground handles remind_later and reschedules 1 hour later',
+      () async {
+        final payload = jsonEncode({
+          'action': 'open_medications',
+          'medicationId': 'med_bg_snooze',
+          'doseId': 'dose_bg_snooze',
+          'title': 'Medication reminder',
+          'body': 'Ibuprofen (200mg)',
+        });
+
+        final response = NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotificationAction,
+          actionId: 'remind_later',
+          id: 8888,
+          payload: payload,
+        );
+
+        await notificationTapBackground(response);
+
+        final list = prefs.getStringList('scheduled_medication_reminders_v1');
+        expect(list, isNotNull);
+        expect(list!.isNotEmpty, isTrue);
+
+        final entry = jsonDecode(list.last) as Map<String, dynamic>;
+        expect(entry['body'], equals('Ibuprofen (200mg)'));
+        expect(entry['medicationId'], equals('med_bg_snooze'));
+
+        final scheduledAt = DateTime.parse(entry['at'] as String);
+        final differenceMinutes = scheduledAt
+            .difference(DateTime.now().toUtc())
+            .inMinutes;
+        expect(differenceMinutes, greaterThanOrEqualTo(58));
+        expect(differenceMinutes, lessThanOrEqualTo(62));
+      },
+    );
+
+    test(
+      'handleRemindLater reschedules test notification for 10 seconds later',
+      () async {
+        final payload = jsonEncode({
+          'action': 'open_medications',
+          'title': 'Medication reminder',
+          'body': 'Vitamin D',
+          'isTest': true,
+        });
+
+        final response = NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotificationAction,
+          actionId: 'remind_later',
+          id: 7777,
+          payload: payload,
+        );
+
+        await NotificationService.instance.handleRemindLater(response);
+
+        final list = prefs.getStringList('scheduled_medication_reminders_v1');
+        expect(list, isNotNull);
+        expect(list!.isNotEmpty, isTrue);
+
+        final entry = jsonDecode(list.last) as Map<String, dynamic>;
+        expect(entry['body'], equals('Vitamin D'));
+
+        final scheduledAt = DateTime.parse(entry['at'] as String);
+        final differenceSeconds = scheduledAt
+            .difference(DateTime.now().toUtc())
+            .inSeconds;
+        expect(differenceSeconds, greaterThanOrEqualTo(8));
+        expect(differenceSeconds, lessThanOrEqualTo(12));
+      },
+    );
   });
 }
