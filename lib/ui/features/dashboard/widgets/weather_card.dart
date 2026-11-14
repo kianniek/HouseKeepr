@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../core/extensions.dart';
 import '../../../../../services/weather_service.dart';
@@ -73,6 +75,11 @@ class WeatherCard extends StatefulWidget {
 }
 
 class _WeatherCardState extends State<WeatherCard> {
+  static const String _locationKey = 'weather_card_location_v1';
+  static const String _targetTimesKey = 'weather_card_target_times_v1';
+  static const String _showMultipleForecastsKey =
+      'weather_card_show_multiple_v1';
+
   late final WeatherService _weatherService;
   WeatherLocation _location = const WeatherLocation(
     name: 'Amsterdam',
@@ -89,12 +96,86 @@ class _WeatherCardState extends State<WeatherCard> {
   Object? _error;
   bool _loading = true;
   bool _showMultipleForecasts = true;
+  bool _hasUserEdited = false;
 
   @override
   void initState() {
     super.initState();
     _weatherService = widget.weatherService ?? WeatherService();
-    _loadForecast();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    await _loadPreferences();
+    if (!mounted) return;
+    await _loadForecast();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted || _hasUserEdited) return;
+
+    WeatherLocation? savedLocation;
+    final rawLocation = prefs.getString(_locationKey);
+    if (rawLocation != null) {
+      try {
+        final decoded = jsonDecode(rawLocation);
+        if (decoded is Map<String, dynamic>) {
+          savedLocation = WeatherLocation.fromJson(decoded);
+        }
+      } catch (_) {}
+    }
+
+    List<TimeOfDay>? savedTimes;
+    final rawTimes = prefs.getStringList(_targetTimesKey);
+    if (rawTimes != null && rawTimes.isNotEmpty) {
+      final parsed = rawTimes
+          .map(_parseTimeOfDay)
+          .whereType<TimeOfDay>()
+          .toList();
+      if (parsed.isNotEmpty) {
+        savedTimes = parsed;
+      }
+    }
+
+    final savedShowMultiple = prefs.getBool(_showMultipleForecastsKey);
+
+    if (savedLocation == null &&
+        savedTimes == null &&
+        savedShowMultiple == null) {
+      return;
+    }
+
+    setState(() {
+      if (savedLocation != null) _location = savedLocation;
+      if (savedTimes != null) _targetTimes = savedTimes;
+      if (savedShowMultiple != null) _showMultipleForecasts = savedShowMultiple;
+    });
+  }
+
+  Future<void> _savePreferences(WeatherSelection selection) async {
+    final prefs = await SharedPreferences.getInstance();
+    await Future.wait([
+      prefs.setString(_locationKey, jsonEncode(selection.location.toJson())),
+      prefs.setStringList(
+        _targetTimesKey,
+        selection.targetTimes.map(_formatTimeOfDay).toList(),
+      ),
+      prefs.setBool(_showMultipleForecastsKey, selection.showMultipleForecasts),
+    ]);
+  }
+
+  static String _formatTimeOfDay(TimeOfDay time) =>
+      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+
+  static TimeOfDay? _parseTimeOfDay(String raw) {
+    final parts = raw.split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return TimeOfDay(hour: hour, minute: minute);
   }
 
   @override
@@ -137,10 +218,12 @@ class _WeatherCardState extends State<WeatherCard> {
     );
     if (!mounted || selection == null) return;
     setState(() {
+      _hasUserEdited = true;
       _location = selection.location;
       _targetTimes = selection.targetTimes;
       _showMultipleForecasts = selection.showMultipleForecasts;
     });
+    await _savePreferences(selection);
     await _loadForecast();
   }
 

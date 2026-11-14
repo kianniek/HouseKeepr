@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:housekeepr/core/extensions.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../cubits/task_cubit.dart';
@@ -34,7 +35,10 @@ class _RepeatConfig {
 }
 
 class _TasksPageState extends State<TasksPage> {
+  static const String _selectedRoomKey = 'tasks_selected_room_v1';
+
   String _selectedRoom = 'Everything';
+  bool _hasUserSelectedRoom = false;
   final List<String> _rooms = [
     'Everything',
     'Bathroom',
@@ -43,6 +47,35 @@ class _TasksPageState extends State<TasksPage> {
     'Living Room',
   ];
   final TextEditingController _bulkImportController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSelectedRoom();
+  }
+
+  Future<void> _loadSelectedRoom() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedRoom = prefs.getString(_selectedRoomKey);
+    if (!mounted ||
+        _hasUserSelectedRoom ||
+        savedRoom == null ||
+        !_rooms.contains(savedRoom)) {
+      return;
+    }
+    setState(() {
+      _selectedRoom = savedRoom;
+    });
+  }
+
+  Future<void> _selectRoom(String room) async {
+    setState(() {
+      _hasUserSelectedRoom = true;
+      _selectedRoom = room;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_selectedRoomKey, room);
+  }
 
   String _bulkTemplateJson() {
     final template = [
@@ -329,11 +362,7 @@ class _TasksPageState extends State<TasksPage> {
             child: FilterChip(
               label: Text(room),
               selected: isSelected,
-              onSelected: (selected) {
-                setState(() {
-                  _selectedRoom = room;
-                });
-              },
+              onSelected: (_) => _selectRoom(room),
               selectedColor: scheme.primaryContainer,
               backgroundColor: scheme.surfaceContainerHighest,
               checkmarkColor: scheme.primary,

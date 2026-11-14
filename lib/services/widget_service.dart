@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../core/widget_settings.dart';
 import '../models/coffee_recipe.dart';
 import '../models/grocery_item.dart';
 import '../models/medication.dart';
@@ -68,18 +70,84 @@ class WidgetService {
     await _writeAndRefresh(items);
   }
 
+  Future<WidgetSettings> _loadWidgetSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return WidgetSettingsRepository(prefs).load();
+    } catch (_) {
+      return const WidgetSettings();
+    }
+  }
+
+  /// Sync [settings] to Android's HomeWidgetPreferences and refresh all widgets.
+  Future<void> applyWidgetSettings(WidgetSettings settings) async {
+    if (!_isAndroid) return;
+    try {
+      await Future.wait([
+        HomeWidget.saveWidgetData<bool>(
+          WidgetSettingsRepository.pillHideUnusedTogglesKey,
+          settings.pillHideUnusedToggles,
+        ),
+        HomeWidget.saveWidgetData<String>(
+          WidgetSettingsRepository.pillWidgetTitleKey,
+          settings.pillWidgetTitle,
+        ),
+        HomeWidget.saveWidgetData<bool>(
+          WidgetSettingsRepository.pillShowDoseCountKey,
+          settings.pillShowDoseCount,
+        ),
+        HomeWidget.saveWidgetData<bool>(
+          WidgetSettingsRepository.shoppingHideCheckedKey,
+          settings.shoppingHideChecked,
+        ),
+        HomeWidget.saveWidgetData<bool>(
+          WidgetSettingsRepository.shoppingShowItemCountKey,
+          settings.shoppingShowItemCount,
+        ),
+        HomeWidget.saveWidgetData<bool>(
+          WidgetSettingsRepository.coffeeIncludeCustomRecipesKey,
+          settings.coffeeIncludeCustomRecipes,
+        ),
+        HomeWidget.saveWidgetData<bool>(
+          WidgetSettingsRepository.coffeeShowSubtitleKey,
+          settings.coffeeShowSubtitle,
+        ),
+      ]);
+
+      await Future.wait([
+        HomeWidget.updateWidget(androidName: _pillWidgetName),
+        HomeWidget.updateWidget(androidName: _androidWidgetName),
+        HomeWidget.updateWidget(androidName: _coffeeWidgetName),
+      ]);
+    } catch (e) {
+      debugPrint('WidgetService: failed to apply widget settings: $e');
+    }
+  }
+
   Future<void> updateCoffeeWidget(
     CoffeeRecipe recipe, {
     Iterable<CoffeeRecipe> availableRecipes = const [],
   }) async {
     if (!_isAndroid) return;
     try {
+      final settings = await _loadWidgetSettings();
+      final builtInIds = CoffeeRegistry.recipes.map((r) => r.id).toSet();
+      final filtered = settings.coffeeIncludeCustomRecipes
+          ? availableRecipes.toList()
+          : availableRecipes.where((r) => builtInIds.contains(r.id)).toList();
+      final recipesForWidget = filtered.isEmpty ? [recipe] : filtered;
+
+      await HomeWidget.saveWidgetData<bool>(
+        WidgetSettingsRepository.coffeeIncludeCustomRecipesKey,
+        settings.coffeeIncludeCustomRecipes,
+      );
+      await HomeWidget.saveWidgetData<bool>(
+        WidgetSettingsRepository.coffeeShowSubtitleKey,
+        settings.coffeeShowSubtitle,
+      );
       await HomeWidget.saveWidgetData<String>(
         _coffeeRecipeKey,
-        CoffeeRegistry.encodeForWidget(
-          recipe,
-          availableRecipes.isEmpty ? [recipe] : availableRecipes,
-        ),
+        CoffeeRegistry.encodeForWidget(recipe, recipesForWidget),
       );
       await HomeWidget.updateWidget(androidName: _coffeeWidgetName);
     } catch (e) {
@@ -90,12 +158,14 @@ class WidgetService {
   /// Push medication schedule summary to the PillWidget RemoteViews.
   Future<void> updateMedicationWidget(
     WidgetDoseSummary summary, {
-    String title = 'Pillen',
+    String? title,
   }) async {
     if (!_isAndroid) return;
     try {
+      final settings = await _loadWidgetSettings();
+      final resolvedTitle = title ?? settings.pillWidgetTitle;
       final widgetData = {
-        'title': title,
+        'title': resolvedTitle,
         'dateKey': Medication.dateToKey(summary.date),
         'hasMorning': summary.hasMorningDoses,
         'morningTaken': summary.isMorningTaken,
@@ -105,10 +175,24 @@ class WidgetService {
         'eveningCount': summary.eveningDoses.length,
       };
 
-      await HomeWidget.saveWidgetData<String>(
-        _pillDataKey,
-        json.encode(widgetData),
-      );
+      await Future.wait([
+        HomeWidget.saveWidgetData<bool>(
+          WidgetSettingsRepository.pillHideUnusedTogglesKey,
+          settings.pillHideUnusedToggles,
+        ),
+        HomeWidget.saveWidgetData<String>(
+          WidgetSettingsRepository.pillWidgetTitleKey,
+          resolvedTitle,
+        ),
+        HomeWidget.saveWidgetData<bool>(
+          WidgetSettingsRepository.pillShowDoseCountKey,
+          settings.pillShowDoseCount,
+        ),
+        HomeWidget.saveWidgetData<String>(
+          _pillDataKey,
+          json.encode(widgetData),
+        ),
+      ]);
       await HomeWidget.updateWidget(androidName: _pillWidgetName);
     } catch (e) {
       debugPrint('WidgetService: failed to update pill widget: $e');

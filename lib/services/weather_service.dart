@@ -26,6 +26,13 @@ class WeatherLocation {
       longitude: (json['longitude'] as num).toDouble(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'country': country,
+    'latitude': latitude,
+    'longitude': longitude,
+  };
 }
 
 class HourlyForecast {

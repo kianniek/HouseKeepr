@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../../../../core/extensions.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../services/calendar_service.dart';
+import '../../../../core/extensions.dart';
 
 class CalendarWidget extends StatefulWidget {
   final CalendarService? calendarService;

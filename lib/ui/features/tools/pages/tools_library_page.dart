@@ -44,23 +44,44 @@ enum ToolCategory {
 
 class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
   static const String _isGridViewKey = 'tools_library_is_grid_view';
+  static const String _selectedCategoryKey =
+      'tools_library_selected_category_v1';
 
   ToolCategory? _selectedCategory;
   bool _isGridView = false;
   bool _hasUserToggledView = false;
+  bool _hasUserSelectedCategory = false;
 
   @override
   void initState() {
     super.initState();
-    _loadViewPreference();
+    _loadPreferences();
   }
 
-  Future<void> _loadViewPreference() async {
+  Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedIsGridView = prefs.getBool(_isGridViewKey);
-    if (!mounted || _hasUserToggledView || savedIsGridView == null) return;
+    if (!mounted) return;
+
+    final savedIsGridView = _hasUserToggledView
+        ? null
+        : prefs.getBool(_isGridViewKey);
+    ToolCategory? savedCategory;
+    if (!_hasUserSelectedCategory) {
+      final rawCategory = prefs.getString(_selectedCategoryKey);
+      if (rawCategory != null) {
+        for (final category in ToolCategory.values) {
+          if (category.name == rawCategory) {
+            savedCategory = category;
+            break;
+          }
+        }
+      }
+    }
+
+    if (savedIsGridView == null && savedCategory == null) return;
     setState(() {
-      _isGridView = savedIsGridView;
+      if (savedIsGridView != null) _isGridView = savedIsGridView;
+      if (savedCategory != null) _selectedCategory = savedCategory;
     });
   }
 
@@ -72,6 +93,19 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
     });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_isGridViewKey, nextValue);
+  }
+
+  Future<void> _selectCategory(ToolCategory? category) async {
+    setState(() {
+      _hasUserSelectedCategory = true;
+      _selectedCategory = category;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    if (category == null) {
+      await prefs.remove(_selectedCategoryKey);
+    } else {
+      await prefs.setString(_selectedCategoryKey, category.name);
+    }
   }
 
   final List<ToolCategory> _categories = [
@@ -152,7 +186,7 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
                 FilterChip(
                   label: const Text('All'),
                   selected: _selectedCategory == null,
-                  onSelected: (_) => setState(() => _selectedCategory = null),
+                  onSelected: (_) => _selectCategory(null),
                 ),
                 const SizedBox(width: 8),
                 ..._categories.map((category) {
@@ -162,9 +196,7 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
                       label: Text(category.displayName),
                       selected: _selectedCategory == category,
                       onSelected: (selected) {
-                        setState(() {
-                          _selectedCategory = selected ? category : null;
-                        });
+                        _selectCategory(selected ? category : null);
                       },
                     ),
                   );

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:housekeepr/models/medication.dart';
+import 'package:housekeepr/repositories/local_medication_repository.dart';
 import 'package:housekeepr/services/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -213,6 +214,115 @@ void main() {
             .inSeconds;
         expect(differenceSeconds, greaterThanOrEqualTo(8));
         expect(differenceSeconds, lessThanOrEqualTo(12));
+      },
+    );
+
+    test(
+      'notificationTapBackground handles mark_taken for specific doseId',
+      () async {
+        final now = DateTime.now();
+        final dateKey = Medication.dateToKey(now);
+        final morningTime = MedicationTime(hour: 8, minute: 0);
+        final eveningTime = MedicationTime(hour: 20, minute: 0);
+        final med = Medication(
+          id: 'med_mark_taken',
+          name: 'Vitamin D',
+          dosage: '1000 IU',
+          startDate: now,
+          notificationTimes: [morningTime, eveningTime],
+        );
+
+        final repo = LocalMedicationRepository(prefs: prefs);
+        await repo.saveMedication(med);
+
+        final morningDoseId = Medication.doseIdFor(med.id, now, morningTime);
+        final eveningDoseId = Medication.doseIdFor(med.id, now, eveningTime);
+
+        await prefs.setStringList('scheduled_medication_reminders_v1', [
+          jsonEncode({
+            'medicationId': med.id,
+            'doseId': morningDoseId,
+            'notificationId': 111,
+            'at': now.toUtc().toIso8601String(),
+          }),
+          jsonEncode({
+            'medicationId': med.id,
+            'doseId': eveningDoseId,
+            'notificationId': 222,
+            'at': now.toUtc().toIso8601String(),
+          }),
+        ]);
+
+        final beforeUpdates =
+            NotificationService.instance.medicationUpdatesNotifier.value;
+
+        final response = NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotificationAction,
+          actionId: 'mark_taken',
+          id: 111,
+          payload: jsonEncode({
+            'action': 'open_medications',
+            'medicationId': med.id,
+            'doseId': morningDoseId,
+            'dateKey': dateKey,
+            'title': 'Medication reminder',
+            'body': 'Vitamin D (1000 IU)',
+          }),
+        );
+
+        await notificationTapBackground(response);
+
+        final doses = await repo.getDosesForDate(now);
+        final morningDose = doses.firstWhere((d) => d.id == morningDoseId);
+        final eveningDose = doses.firstWhere((d) => d.id == eveningDoseId);
+        expect(morningDose.status, DoseStatus.taken);
+        expect(eveningDose.status, DoseStatus.pending);
+
+        final remaining = prefs.getStringList(
+          'scheduled_medication_reminders_v1',
+        );
+        expect(remaining, hasLength(1));
+        expect(remaining!.single, contains(eveningDoseId));
+        expect(
+          NotificationService.instance.medicationUpdatesNotifier.value,
+          greaterThan(beforeUpdates),
+        );
+      },
+    );
+
+    test(
+      'handleMarkMedicationTaken extracts dateKey from doseId when omitted',
+      () async {
+        final now = DateTime.now();
+        final time = MedicationTime(hour: 9, minute: 30);
+        final med = Medication(
+          id: 'med_extract_date',
+          name: 'Magnesium',
+          dosage: '200 mg',
+          startDate: now,
+          notificationTimes: [time],
+        );
+        final repo = LocalMedicationRepository(prefs: prefs);
+        await repo.saveMedication(med);
+        final doseId = Medication.doseIdFor(med.id, now, time);
+
+        final response = NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotificationAction,
+          actionId: 'mark_taken',
+          id: 333,
+          payload: jsonEncode({
+            'action': 'open_medications',
+            'medicationId': med.id,
+            'doseId': doseId,
+          }),
+        );
+
+        await NotificationService.instance.handleMarkMedicationTaken(response);
+
+        final doses = await repo.getDosesForDate(now);
+        expect(doses.single.status, DoseStatus.taken);
       },
     );
   });

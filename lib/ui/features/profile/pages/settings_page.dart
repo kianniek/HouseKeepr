@@ -1,15 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/material.dart';
-import '../../../../core/extensions.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../core/extensions.dart';
 import '../../../../core/locale_provider.dart';
 import '../../../../core/settings_repository.dart';
 import '../../../../generated/app_localizations.dart';
 import '../../../../home_screen.dart';
 import '../../../../services/notification_service.dart';
 import 'profile_page.dart';
+import 'widget_settings_page.dart';
 
 /// Settings page exposing notification controls, UI preferences, and language selection.
 /// Changes are persisted via [SettingsRepository] and applied immediately.
@@ -178,6 +179,19 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: Text(l10n.floatingNavSubtitle),
             value: _useFloatingNav,
             onChanged: _toggleFloatingNav,
+          ),
+          ListTile(
+            leading: const Icon(Icons.widgets_outlined),
+            title: const Text('Home Screen Widgets'),
+            subtitle: const Text(
+              'Customize Pill Reminder, Shopping List & Coffee widgets',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const WidgetSettingsPage()),
+              );
+            },
           ),
           // ── Notifications ─────────────────────────────────────────────────
           SwitchListTile(

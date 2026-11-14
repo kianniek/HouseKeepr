@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:housekeepr/core/extensions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../../core/quantity_unit_formatter.dart';
 import '../../../../cubits/shopping_cubit.dart';
 import '../../../../models/grocery_item.dart';
-import '../../../../core/quantity_unit_formatter.dart';
 import '../../../../services/shopping_products_service.dart';
 import '../widgets/shopping_add_product_dialog.dart';
 

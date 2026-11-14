@@ -32,5 +32,7 @@
     <string name="toggle_daytime_doses">Toggle daytime doses</string>
     <string name="evening_doses">Evening doses</string>
     <string name="toggle_evening_doses">Toggle evening doses</string>
+    <string name="no_doses_today">No doses today</string>
+    <string name="all_doses_taken_today">All done today</string>
     <string name="daytime_doses">Daytime doses</string>
 </resources>

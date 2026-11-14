@@ -10,5 +10,7 @@
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="2"
     android:targetCellHeight="2"
+    android:configure="com.kianhamidi.housekeepr.MainActivity"
+    android:widgetFeatures="reconfigurable"
     android:widgetCategory="home_screen" />
 

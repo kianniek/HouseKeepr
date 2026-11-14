@@ -210,6 +210,8 @@ internal fun updateAppWidget(
     // Load data once for all layout permutations
     val prefs = context.getSharedPreferences("HomeWidgetPreferences", Context.MODE_PRIVATE)
     val json = prefs.getString("shopping_list_data", null)
+    val hideChecked = prefs.getBoolean("shopping_hide_checked_v1", false)
+    val showItemCount = prefs.getBoolean("shopping_show_item_count_v1", true)
 
     var itemsCount = 0
     var nextUncheckedItemName = "All done!"
@@ -218,7 +220,11 @@ internal fun updateAppWidget(
         if (json != null) {
             val type = object : TypeToken<List<Map<String, Any>>>() {}.type
             val rawList: List<Map<String, Any>>? = Gson().fromJson(json, type)
-            itemsCount = rawList?.size ?: 0
+            itemsCount = if (hideChecked) {
+                rawList?.count { (it["checked"] as? Boolean) == false } ?: 0
+            } else {
+                rawList?.size ?: 0
+            }
 
             // Match the sorting logic (unchecked first, then matching name)
             nextUncheckedItemName = rawList?.firstOrNull {
@@ -232,10 +238,18 @@ internal fun updateAppWidget(
     // Build sub-views configurations explicitly to support runtime transitions flawlessly
     val views1x1 = RemoteViews(context.packageName, R.layout.widget_1x1).apply {
         setTextViewText(R.id.item_count, itemsCount.toString())
+        setViewVisibility(
+            R.id.item_count,
+            if (showItemCount) android.view.View.VISIBLE else android.view.View.GONE
+        )
     }
 
     val views1xn = RemoteViews(context.packageName, R.layout.widget_1xn).apply {
         setTextViewText(R.id.item_count, itemsCount.toString())
+        setViewVisibility(
+            R.id.item_count,
+            if (showItemCount) android.view.View.VISIBLE else android.view.View.GONE
+        )
     }
 
     val viewsNx1 = RemoteViews(context.packageName, R.layout.widget_nx1).apply {
@@ -247,7 +261,10 @@ internal fun updateAppWidget(
             val itemsLeftText = if (itemsCount == 1) "1 item to go" else "$itemsCount items to go"
             setTextViewText(R.id.amount_items_left, itemsLeftText)
 
-            setViewVisibility(R.id.amount_items_left, android.view.View.VISIBLE)
+            setViewVisibility(
+                R.id.amount_items_left,
+                if (showItemCount) android.view.View.VISIBLE else android.view.View.GONE
+            )
             setViewVisibility(R.id.widget_empty_text, android.view.View.GONE)
         } else {
             setViewVisibility(R.id.amount_items_left, android.view.View.GONE)

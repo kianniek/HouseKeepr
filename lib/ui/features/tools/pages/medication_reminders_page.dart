@@ -4,6 +4,8 @@ import 'package:housekeepr/repositories/local_medication_repository.dart';
 import 'package:housekeepr/services/notification_service.dart';
 import 'package:housekeepr/services/widget_service.dart';
 import 'package:housekeepr/ui/common/widgets/empty_state.dart';
+import 'package:housekeepr/ui/features/profile/pages/widget_settings_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MedicationRemindersPage extends StatefulWidget {
   final LocalMedicationRepository? repository;
@@ -16,7 +18,7 @@ class MedicationRemindersPage extends StatefulWidget {
 }
 
 class _MedicationRemindersPageState extends State<MedicationRemindersPage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final LocalMedicationRepository _repository;
   late final TabController _tabController;
 
@@ -30,13 +32,44 @@ class _MedicationRemindersPageState extends State<MedicationRemindersPage>
     super.initState();
     _repository = widget.repository ?? LocalMedicationRepository();
     _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addObserver(this);
+    NotificationService.instance.medicationUpdatesNotifier.addListener(
+      _onMedicationNotificationUpdate,
+    );
     _loadData();
   }
 
   @override
   void dispose() {
+    NotificationService.instance.medicationUpdatesNotifier.removeListener(
+      _onMedicationNotificationUpdate,
+    );
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _reloadFromDiskAndRefresh();
+    }
+  }
+
+  void _onMedicationNotificationUpdate() {
+    if (mounted) {
+      _loadData();
+    }
+  }
+
+  Future<void> _reloadFromDiskAndRefresh() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+    } catch (_) {}
+    if (mounted) {
+      await _loadData();
+    }
   }
 
   Future<void> _loadData() async {
@@ -234,6 +267,23 @@ class _MedicationRemindersPageState extends State<MedicationRemindersPage>
               '• Tap the card header anytime to open this page.',
             ),
             const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.tune),
+              title: const Text('Widget Settings'),
+              subtitle: const Text(
+                'Hide unused toggles, customize title & dose counts',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const PillWidgetSettingsPage(),
+                  ),
+                );
+              },
+            ),
             const Divider(),
             const SizedBox(height: 12),
             Row(
@@ -288,6 +338,11 @@ class _MedicationRemindersPageState extends State<MedicationRemindersPage>
                           .showTestMedicationNotification(
                             medicationName: nextMedName,
                             dosage: nextDosage,
+                            medicationId: nextDose?.medicationId,
+                            doseId: nextDose?.id,
+                            dateKey: nextDose == null
+                                ? null
+                                : Medication.dateToKey(nextDose.scheduledDate),
                           );
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(

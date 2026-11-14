@@ -75,10 +75,15 @@ class ShoppingListRemoteViewsFactory(
                 val prefs = context.getSharedPreferences(
                     "HomeWidgetPreferences", Context.MODE_PRIVATE
                 )
+                val hideChecked = prefs.getBoolean("shopping_hide_checked_v1", false)
                 val json = prefs.getString("shopping_list_data", null)
                 if (json != null) {
                     val rawItems: List<WidgetGroceryItem> = gson.fromJson(json, itemType)
-                    items = rawItems
+                    items = if (hideChecked) {
+                        rawItems.filter { !it.checked }
+                    } else {
+                        rawItems
+                    }
                 } else {
                     items = emptyList()
                 }

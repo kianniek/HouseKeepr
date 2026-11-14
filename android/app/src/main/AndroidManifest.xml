@@ -132,6 +132,20 @@
                     android:host="tasks"
                     android:path="/add" />
             </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="housekeepr"
+                    android:host="widget-settings" />
+            </intent-filter>
         </activity>
         <!--
  Don't delete the meta-data below.

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../core/grocery_parser.dart';
@@ -23,10 +24,15 @@ class ShoppingCubit extends Cubit<ShoppingState> {
   /// How often expired soft-deleted items are purged while the app is open.
   static const Duration purgeInterval = Duration(hours: 1);
 
+  static const String _aisleModeKey = 'shopping_aisle_mode_v1';
+  static const String _flatViewKey = 'shopping_flat_view_v1';
+
   final GroceryRepository _repository;
   WriteQueue? _writeQueue;
   Future<void>? initializationFuture;
   Timer? _purgeTimer;
+  bool _hasToggledAisleMode = false;
+  bool _hasToggledFlatView = false;
 
   /// Ids for which a remote hard-delete has already been enqueued during this
   /// session, to avoid flooding the queue while snapshots catch up.
@@ -90,7 +96,35 @@ class ShoppingCubit extends Cubit<ShoppingState> {
   Future<void> _load() async {
     final items = _repository.loadItems();
     _emitSortedState(items);
+    await _loadViewPreferences();
     await purgeExpiredDeletedItems();
+  }
+
+  Future<void> _loadViewPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (isClosed) return;
+      final savedAisleMode = _hasToggledAisleMode
+          ? null
+          : prefs.getBool(_aisleModeKey);
+      final savedFlatView = _hasToggledFlatView
+          ? null
+          : prefs.getBool(_flatViewKey);
+      if (savedAisleMode == null && savedFlatView == null) return;
+      emit(
+        state.copyWith(
+          aisleModeEnabled: savedAisleMode ?? state.aisleModeEnabled,
+          flatViewEnabled: savedFlatView ?? state.flatViewEnabled,
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _saveBoolPreference(String key, bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(key, value);
+    } catch (_) {}
   }
 
   /// Synchronizes incoming records with local state data using strict deterministic timestamp evaluations.
@@ -518,12 +552,18 @@ class ShoppingCubit extends Cubit<ShoppingState> {
 
   /// Toggle aisle mode
   void toggleAisleMode() {
-    emit(state.copyWith(aisleModeEnabled: !state.aisleModeEnabled));
+    _hasToggledAisleMode = true;
+    final nextValue = !state.aisleModeEnabled;
+    emit(state.copyWith(aisleModeEnabled: nextValue));
+    unawaited(_saveBoolPreference(_aisleModeKey, nextValue));
   }
 
   /// Toggle flat view mode
   void toggleFlatView() {
-    emit(state.copyWith(flatViewEnabled: !state.flatViewEnabled));
+    _hasToggledFlatView = true;
+    final nextValue = !state.flatViewEnabled;
+    emit(state.copyWith(flatViewEnabled: nextValue));
+    unawaited(_saveBoolPreference(_flatViewKey, nextValue));
   }
 
   /// Clear all checked items (soft-delete). Returns the ids that were cleared

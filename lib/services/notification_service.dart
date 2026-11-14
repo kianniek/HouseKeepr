@@ -12,6 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import '../models/medication.dart';
+import '../repositories/local_medication_repository.dart';
+import 'widget_service.dart';
 
 /// Lightweight in-app notification service.
 ///
@@ -31,12 +33,18 @@ import '../models/medication.dart';
 @pragma('vm:entry-point')
 Future<void> notificationTapBackground(NotificationResponse response) async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (response.actionId != NotificationService._kActionRemindLater &&
+      response.actionId != NotificationService._kActionMarkTaken) {
+    return;
+  }
+  if (!NotificationService.instance.isInitialized) {
+    final prefs = await SharedPreferences.getInstance();
+    await NotificationService.instance.init(prefs, isBackground: true);
+  }
   if (response.actionId == NotificationService._kActionRemindLater) {
-    if (!NotificationService.instance.isInitialized) {
-      final prefs = await SharedPreferences.getInstance();
-      await NotificationService.instance.init(prefs, isBackground: true);
-    }
     await NotificationService.instance.handleRemindLater(response);
+  } else if (response.actionId == NotificationService._kActionMarkTaken) {
+    await NotificationService.instance.handleMarkMedicationTaken(response);
   }
 }
 
@@ -57,7 +65,12 @@ class NotificationService {
   static const _kPayloadOpenTasks = 'open_tasks';
   static const _kPayloadOpenMedications = 'open_medications';
   static const _kActionRemindLater = 'remind_later';
+  static const _kActionMarkTaken = 'mark_taken';
   static const _kAndroidIntentChannel = 'housekeepr/notification_intents';
+
+  /// Incremented whenever a notification action updates medication dose state
+  /// in the active isolate.
+  final ValueNotifier<int> medicationUpdatesNotifier = ValueNotifier<int>(0);
 
   static const _kRemindersKey = 'scheduled_reminders_v1';
   static const _kMedicationRemindersKey = 'scheduled_medication_reminders_v1';
@@ -88,6 +101,12 @@ class NotificationService {
       priority: Priority.high,
       icon: 'ic_launcher_monochrome',
       actions: <AndroidNotificationAction>[
+        AndroidNotificationAction(
+          _kActionMarkTaken,
+          'Mark as taken',
+          cancelNotification: true,
+          showsUserInterface: false,
+        ),
         AndroidNotificationAction(
           _kActionRemindLater,
           'Remind me later',
@@ -212,6 +231,10 @@ class NotificationService {
       handleRemindLater(response);
       return;
     }
+    if (response.actionId == _kActionMarkTaken) {
+      handleMarkMedicationTaken(response);
+      return;
+    }
     _handleNotificationPayload(response.payload);
   }
 
@@ -313,10 +336,13 @@ class NotificationService {
   }
 
   /// Show an immediate test notification for a medication preview, including
-  /// the "Remind me later" action button.
+  /// the "Mark as taken" and "Remind me later" action buttons.
   Future<void> showTestMedicationNotification({
     String? medicationName,
     String? dosage,
+    String? medicationId,
+    String? doseId,
+    String? dateKey,
   }) async {
     final name = (medicationName != null && medicationName.trim().isNotEmpty)
         ? medicationName.trim()
@@ -325,12 +351,16 @@ class NotificationService {
     final body = dose.isNotEmpty ? '$name ($dose)' : name;
     const title = 'Medication reminder';
 
-    final payload = jsonEncode({
+    final payloadMap = <String, dynamic>{
       'action': _kPayloadOpenMedications,
       'title': title,
       'body': body,
       'isTest': true,
-    });
+    };
+    if (medicationId != null) payloadMap['medicationId'] = medicationId;
+    if (doseId != null) payloadMap['doseId'] = doseId;
+    if (dateKey != null) payloadMap['dateKey'] = dateKey;
+    final payload = jsonEncode(payloadMap);
 
     if (_pluginAvailable && _plugin != null) {
       try {
@@ -364,6 +394,7 @@ class NotificationService {
     String body = 'Time to take your medication';
     String? medicationId;
     String? doseId;
+    String? dateKey;
     bool isTest = false;
 
     if (response.payload != null && response.payload!.isNotEmpty) {
@@ -374,6 +405,7 @@ class NotificationService {
           if (data['body'] != null) body = data['body'] as String;
           medicationId = data['medicationId'] as String?;
           doseId = data['doseId'] as String?;
+          dateKey = data['dateKey'] as String?;
           isTest = data['isTest'] == true;
         }
       } catch (_) {}
@@ -409,6 +441,7 @@ class NotificationService {
     };
     if (medicationId != null) payloadMap['medicationId'] = medicationId;
     if (doseId != null) payloadMap['doseId'] = doseId;
+    if (dateKey != null) payloadMap['dateKey'] = dateKey;
     if (isTest) payloadMap['isTest'] = true;
     final payload = jsonEncode(payloadMap);
 
@@ -434,6 +467,69 @@ class NotificationService {
           ? 'We will remind you again in 10 seconds'
           : 'We will remind you again in 1 hour',
     );
+  }
+
+  /// Handle "Mark as taken" action by dismissing the notification, recording
+  /// the dose as [DoseStatus.taken], updating the home-screen pill widget, and
+  /// notifying any mounted foreground listeners.
+  Future<void> handleMarkMedicationTaken(NotificationResponse response) async {
+    if (response.id != null && _pluginAvailable && _plugin != null) {
+      try {
+        await _plugin!.cancel(id: response.id!);
+      } catch (_) {}
+    }
+
+    String? medicationId;
+    String? doseId;
+    String? dateKey;
+
+    if (response.payload != null && response.payload!.isNotEmpty) {
+      try {
+        if (response.payload!.startsWith('{')) {
+          final data = jsonDecode(response.payload!) as Map<String, dynamic>;
+          medicationId = data['medicationId'] as String?;
+          doseId = data['doseId'] as String?;
+          dateKey = data['dateKey'] as String?;
+        }
+      } catch (_) {}
+    }
+
+    if (doseId != null && doseId.isNotEmpty && medicationId != null) {
+      final resolvedDateKey =
+          dateKey ??
+          _extractDateKeyFromDoseId(doseId) ??
+          Medication.dateToKey(DateTime.now());
+      final repo = LocalMedicationRepository(prefs: _prefs);
+      await repo.recordDoseStatus(
+        doseId: doseId,
+        medicationId: medicationId,
+        dateKey: resolvedDateKey,
+        status: DoseStatus.taken,
+      );
+
+      if (_prefs != null) {
+        final list =
+            _prefs!.getStringList(_kMedicationRemindersKey) ?? <String>[];
+        final updated = list.where((raw) {
+          try {
+            final map = jsonDecode(raw) as Map<String, dynamic>;
+            return map['doseId'] != doseId;
+          } catch (_) {
+            return true;
+          }
+        }).toList();
+        await _prefs!.setStringList(_kMedicationRemindersKey, updated);
+      }
+
+      final summary = await repo.getWidgetSummary(DateTime.now());
+      await WidgetService.instance.updateMedicationWidget(summary);
+      medicationUpdatesNotifier.value++;
+    }
+  }
+
+  String? _extractDateKeyFromDoseId(String doseId) {
+    final match = RegExp(r'_(\d{4}-\d{2}-\d{2})_\d{4}$').firstMatch(doseId);
+    return match?.group(1);
   }
 
   /// Schedules a zoned notification using exact alarms when permitted, falling
@@ -690,6 +786,7 @@ class NotificationService {
           'action': _kPayloadOpenMedications,
           'medicationId': medication.id,
           'doseId': doseId,
+          'dateKey': Medication.dateToKey(date),
           'title': title,
           'body': body,
         });

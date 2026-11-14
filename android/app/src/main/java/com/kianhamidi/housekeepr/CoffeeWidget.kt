@@ -26,6 +26,7 @@ class CoffeeWidget : AppWidgetProvider() {
         private const val ACTION_RESET = "com.kianhamidi.housekeepr.ACTION_COFFEE_RESET"
         private const val PREFS = "HomeWidgetPreferences"
         private const val STATE_KEY = "coffee_widget_state"
+        private const val SHOW_SUBTITLE_KEY = "coffee_show_subtitle_v1"
         private const val STATE_IDLE = "idle"
         private const val STATE_SPINNING = "spinning"
         private const val STATE_RECIPE = "recipe"
@@ -95,10 +96,11 @@ class CoffeeWidget : AppWidgetProvider() {
             refresh(context)
         }
 
-        private fun update(context: Context, manager: AppWidgetManager, id: Int) {
+        internal fun updateAppWidget(context: Context, manager: AppWidgetManager, id: Int) {
             val data = recipe(context)
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val state = prefs.getString(STATE_KEY, STATE_IDLE) ?: STATE_IDLE
+            val showSubtitle = prefs.getBoolean(SHOW_SUBTITLE_KEY, true)
             val views = RemoteViews(context.packageName, R.layout.coffee_widget).apply {
                 setViewVisibility(
                     R.id.coffee_idle_state,
@@ -149,6 +151,10 @@ class CoffeeWidget : AppWidgetProvider() {
                     val description = data.optString(
                         "description",
                         data.optString("description", "Latte"),
+                    )
+                    setViewVisibility(
+                        R.id.coffee_recipe_subtitle,
+                        if (showSubtitle) android.view.View.VISIBLE else android.view.View.GONE,
                     )
                     setTextViewText(
                         R.id.coffee_recipe_subtitle,
@@ -218,7 +224,7 @@ class CoffeeWidget : AppWidgetProvider() {
     }
 
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
-        ids.forEach { update(context, manager, it) }
+        ids.forEach { updateAppWidget(context, manager, it) }
     }
 
     override fun onReceive(context: Context, intent: Intent) {

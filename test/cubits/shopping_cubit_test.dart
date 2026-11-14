@@ -258,4 +258,23 @@ void main() {
       );
     });
   });
+
+  group('ShoppingCubit view preference persistence', () {
+    test('persists aisleModeEnabled and flatViewEnabled across restarts', () async {
+      final cubit = await createCubit(withQueue: false);
+      expect(cubit.state.aisleModeEnabled, isFalse);
+      expect(cubit.state.flatViewEnabled, isFalse);
+
+      cubit.toggleAisleMode();
+      cubit.toggleFlatView();
+      await pumpEventQueue();
+
+      expect(cubit.state.aisleModeEnabled, isTrue);
+      expect(cubit.state.flatViewEnabled, isTrue);
+
+      final restarted = await createCubit(withQueue: false);
+      expect(restarted.state.aisleModeEnabled, isTrue);
+      expect(restarted.state.flatViewEnabled, isTrue);
+    });
+  });
 }

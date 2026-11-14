@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
+import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONObject
 
@@ -29,6 +31,9 @@ class PillWidget : AppWidgetProvider() {
         private const val PREFS = "HomeWidgetPreferences"
         private const val DATA_KEY = "pill_widget_data"
         private const val PENDING_TOGGLES_KEY = "pill_pending_toggles"
+        private const val HIDE_UNUSED_KEY = "pill_hide_unused_toggles_v1"
+        private const val TITLE_KEY = "pill_widget_title_v1"
+        private const val SHOW_DOSE_COUNT_KEY = "pill_show_dose_count_v1"
 
         fun refresh(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
@@ -53,6 +58,8 @@ class PillWidget : AppWidgetProvider() {
             var morningTaken = false
             var hasEvening = false
             var eveningTaken = false
+            var morningCount = 0
+            var eveningCount = 0
 
             if (!rawJson.isNullOrBlank()) {
                 try {
@@ -62,13 +69,63 @@ class PillWidget : AppWidgetProvider() {
                     morningTaken = data.optBoolean("morningTaken", false)
                     hasEvening = data.optBoolean("hasEvening", false)
                     eveningTaken = data.optBoolean("eveningTaken", false)
+                    morningCount = data.optInt("morningCount", 0)
+                    eveningCount = data.optInt("eveningCount", 0)
                 } catch (_: Exception) {
                     // Fall back to defaults
                 }
             }
 
+            val hideUnused = prefs.getBoolean(HIDE_UNUSED_KEY, false)
+            val customTitle = prefs.getString(TITLE_KEY, null)
+            val resolvedTitle = customTitle ?: title
+            val showDoseCount = prefs.getBoolean(SHOW_DOSE_COUNT_KEY, false)
+
             // Set Header
-            views.setTextViewText(R.id.pill_widget_title, title)
+            if (resolvedTitle.isBlank()) {
+                views.setViewVisibility(R.id.pill_widget_title, View.GONE)
+            } else {
+                views.setViewVisibility(R.id.pill_widget_title, View.VISIBLE)
+                views.setTextViewText(R.id.pill_widget_title, resolvedTitle)
+            }
+
+            val minHeight = appWidgetManager
+                .getAppWidgetOptions(appWidgetId)
+                .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+            val isCompactHeight = minHeight in 1 until 102
+
+            val canShowMorning = !hideUnused || hasMorning
+            val canShowEvening = !hideUnused || hasEvening
+            val showMorningRow = if (isCompactHeight) {
+                canShowMorning && (!morningTaken || !canShowEvening)
+            } else {
+                canShowMorning
+            }
+            val showEveningRow = if (isCompactHeight) {
+                canShowEvening && !showMorningRow
+            } else {
+                canShowEvening
+            }
+            views.setViewVisibility(
+                R.id.row_morning,
+                if (showMorningRow) View.VISIBLE else View.GONE
+            )
+            views.setViewVisibility(
+                R.id.row_evening,
+                if (showEveningRow) View.VISIBLE else View.GONE
+            )
+            if (!showMorningRow && !showEveningRow) {
+                views.setTextViewText(
+                    R.id.pill_empty_text,
+                    context.getString(
+                        if (hasMorning || hasEvening) R.string.all_doses_taken_today
+                        else R.string.no_doses_today
+                    )
+                )
+                views.setViewVisibility(R.id.pill_empty_text, View.VISIBLE)
+            } else {
+                views.setViewVisibility(R.id.pill_empty_text, View.GONE)
+            }
 
             // Morning Switch: Set state & enabled status
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -77,6 +134,10 @@ class PillWidget : AppWidgetProvider() {
                 views.setBoolean(R.id.switch_morning, "setChecked", morningTaken)
             }
             views.setBoolean(R.id.switch_morning, "setEnabled", hasMorning)
+            views.setTextViewText(
+                R.id.switch_morning,
+                if (showDoseCount && hasMorning) "$morningCount" else ""
+            )
 
             val morningToggleIntent = Intent(context, PillWidget::class.java).apply {
                 action = ACTION_TOGGLE_SLOT
@@ -105,6 +166,10 @@ class PillWidget : AppWidgetProvider() {
                 views.setBoolean(R.id.switch_evening, "setChecked", eveningTaken)
             }
             views.setBoolean(R.id.switch_evening, "setEnabled", hasEvening)
+            views.setTextViewText(
+                R.id.switch_evening,
+                if (showDoseCount && hasEvening) "$eveningCount" else ""
+            )
 
             val eveningToggleIntent = Intent(context, PillWidget::class.java).apply {
                 action = ACTION_TOGGLE_SLOT
@@ -155,6 +220,16 @@ class PillWidget : AppWidgetProvider() {
         for (id in appWidgetIds) {
             updateAppWidget(context, appWidgetManager, id)
         }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle
+    ) {
+        updateAppWidget(context, appWidgetManager, appWidgetId)
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
     }
 
     override fun onReceive(context: Context, intent: Intent) {

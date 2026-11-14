@@ -59,6 +59,42 @@ void main() {
       expect(find.byType(ListTile), findsNWidgets(3));
       expect(find.byType(GridView), findsNothing);
     });
+
+    testWidgets('persists selected category filter across restarts', (
+      tester,
+    ) async {
+      await tester.pumpWidget(buildTestableWidget());
+      await tester.pump();
+
+      expect(find.byType(ListTile), findsNWidgets(3));
+
+      await tester.tap(find.text('Kitchen'));
+      await tester.pump();
+
+      expect(find.byType(ListTile), findsOneWidget);
+      expect(find.text('Coffee Picker'), findsOneWidget);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getString('tools_library_selected_category_v1'),
+        'kitchenUtilities',
+      );
+
+      // Simulate restart
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(buildTestableWidget());
+      await tester.pump();
+
+      expect(find.byType(ListTile), findsOneWidget);
+      expect(find.text('Coffee Picker'), findsOneWidget);
+
+      // Reset back to All
+      await tester.tap(find.text('All'));
+      await tester.pump();
+
+      expect(find.byType(ListTile), findsNWidgets(3));
+      expect(prefs.getString('tools_library_selected_category_v1'), isNull);
+    });
   });
 }
 

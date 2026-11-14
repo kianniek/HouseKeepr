@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:housekeepr/cubits/shopping_cubit.dart';
 import 'package:housekeepr/cubits/task_cubit.dart';
 import 'package:housekeepr/models/task.dart';
+import 'package:housekeepr/ui/features/profile/pages/widget_settings_page.dart';
 import 'package:housekeepr/ui/features/tools/pages/medication_reminders_page.dart';
 import 'package:housekeepr/ui/features/tools/widgets/coffee_picker_page.dart';
 
@@ -12,6 +14,10 @@ class AppActionHandler {
   static final AppActionHandler _instance = AppActionHandler._internal();
   factory AppActionHandler() => _instance;
   AppActionHandler._internal();
+
+  static const _widgetActionsChannel = MethodChannel(
+    'housekeepr/widget_actions',
+  );
 
   late final AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSubscription;
@@ -37,6 +43,31 @@ class AppActionHandler {
         debugPrint('AppActionHandler deep link error: $err');
       },
     );
+
+    // 3. Handle Android APPWIDGET_CONFIGURE launch context
+    checkWidgetConfigContext(context);
+  }
+
+  Future<void> checkWidgetConfigContext(BuildContext context) async {
+    try {
+      final result = await _widgetActionsChannel
+          .invokeMapMethod<String, dynamic>('getWidgetConfigContext');
+      if (result == null || !context.mounted) return;
+      final isWidgetConfig = result['isWidgetConfig'] == true;
+      final appWidgetId = result['appWidgetId'] as int?;
+      final section = result['section'] as String?;
+      if (!isWidgetConfig || appWidgetId == null) return;
+
+      final Widget page = switch (section) {
+        'pill' => PillWidgetSettingsPage(appWidgetId: appWidgetId),
+        'shopping' => ShoppingWidgetSettingsPage(appWidgetId: appWidgetId),
+        'coffee' => CoffeeWidgetSettingsPage(appWidgetId: appWidgetId),
+        _ => WidgetSettingsPage(appWidgetId: appWidgetId),
+      };
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    } catch (e) {
+      debugPrint('Error checking widget config context: $e');
+    }
   }
 
   void _processUri(BuildContext context, Uri uri) {
@@ -66,6 +97,15 @@ class AppActionHandler {
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const MedicationRemindersPage()),
       );
+    } else if (uri.host == 'widget-settings') {
+      final appWidgetId = int.tryParse(queryParams['appWidgetId'] ?? '');
+      final Widget page = switch (path) {
+        '/pill' => PillWidgetSettingsPage(appWidgetId: appWidgetId),
+        '/shopping' => ShoppingWidgetSettingsPage(appWidgetId: appWidgetId),
+        '/coffee' => CoffeeWidgetSettingsPage(appWidgetId: appWidgetId),
+        _ => WidgetSettingsPage(appWidgetId: appWidgetId),
+      };
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
     }
   }
 

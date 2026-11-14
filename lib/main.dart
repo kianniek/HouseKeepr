@@ -31,6 +31,7 @@ import 'repositories/grocery_repository.dart';
 import 'repositories/history_repository.dart';
 import 'repositories/local_medication_repository.dart';
 import 'repositories/task_repository.dart';
+import 'services/app_action_handler.dart';
 import 'services/firebase_messaging_service.dart';
 import 'services/firestore_sync_service.dart';
 import 'services/household_service.dart';
@@ -450,13 +451,26 @@ class _HouseholdAppContentState extends State<_HouseholdAppContent>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       processPendingToggles();
+      _syncPillWidgetOnResume();
       checkWidgetAction();
+      AppActionHandler().checkWidgetConfigContext(context);
     }
 
     if (mounted) {
       final items = context.read<ShoppingCubit>().state.items;
       WidgetService.instance.updateWidgetImmediate(items);
     }
+  }
+
+  Future<void> _syncPillWidgetOnResume() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final repo = LocalMedicationRepository(prefs: prefs);
+      await WidgetService.instance.processPendingPillToggles(repo);
+      final summary = await repo.getWidgetSummary(DateTime.now());
+      await WidgetService.instance.updateMedicationWidget(summary);
+    } catch (_) {}
   }
 
   Future<void> processPendingToggles() async {

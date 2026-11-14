@@ -108,7 +108,7 @@ try {
     # Write-Host "Running flutter pub get..." -ForegroundColor Yellow
     # flutter pub get
     Write-Host "Running: flutter run -d $deviceId --$mode --dart-define-from-file=.env" -ForegroundColor Yellow
-    flutter run -d $deviceId --$mode --dart-define-from-file=.env
+    flutter run -d $deviceId --$mode --dart-define-from-file=.env --android-skip-build-dependency-validation
 }
 finally {
     Pop-Location
