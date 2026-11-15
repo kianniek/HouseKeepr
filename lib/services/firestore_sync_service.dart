@@ -65,58 +65,36 @@ class FirestoreSyncService {
     );
 
     // 2. Shopping Listener (use household groceries if available, otherwise user groceries)
-    if (householdId != null && householdId.isNotEmpty) {
-      final shoppingCol = firestore
-          .collection('households')
-          .doc(householdId)
-          .collection('groceries');
-      _shoppingSub = shoppingCol.snapshots().listen(
-        (snap) {
-          debugPrint(
-            'FirestoreSyncService: Household groceries snapshot received. Docs: ${snap.docs.length}',
-          );
-          final items = snap.docs.map((d) {
-            final m = Map<String, dynamic>.from(d.data());
-            m['id'] = d.id;
-            final ts = d.data()['serverUpdateTimestamp'];
-            if (ts is Timestamp) {
-              m['serverVersion'] = ts.millisecondsSinceEpoch;
-            }
-            return GroceryItem.fromMap(m);
-          }).toList();
-          shoppingCubit.syncRemoteItems(items);
-        },
-        onError: (e) {
-          debugPrint('FirestoreSyncService ERROR (Household Groceries): $e');
-        },
-      );
-    } else {
-      // Fallback to user groceries if no household (should not happen in normal flow)
-      final shoppingCol = firestore
-          .collection('users')
-          .doc(userId)
-          .collection('groceries');
-      _shoppingSub = shoppingCol.snapshots().listen(
-        (snap) {
-          debugPrint(
-            'FirestoreSyncService: User groceries snapshot received. Docs: ${snap.docs.length}',
-          );
-          final items = snap.docs.map((d) {
-            final m = Map<String, dynamic>.from(d.data());
-            m['id'] = d.id;
-            final ts = d.data()['serverUpdateTimestamp'];
-            if (ts is Timestamp) {
-              m['serverVersion'] = ts.millisecondsSinceEpoch;
-            }
-            return GroceryItem.fromMap(m);
-          }).toList();
-          shoppingCubit.syncRemoteItems(items);
-        },
-        onError: (e) {
-          debugPrint('FirestoreSyncService ERROR (User Groceries): $e');
-        },
-      );
-    }
+    final isHousehold = householdId != null && householdId.isNotEmpty;
+    final shoppingCol = isHousehold
+        ? firestore
+              .collection('households')
+              .doc(householdId)
+              .collection('groceries')
+        : firestore.collection('users').doc(userId).collection('groceries');
+    final shoppingSource = isHousehold
+        ? 'Household Groceries'
+        : 'User Groceries';
+    _shoppingSub = shoppingCol.snapshots().listen(
+      (snap) {
+        debugPrint(
+          'FirestoreSyncService: $shoppingSource snapshot received. Docs: ${snap.docs.length}',
+        );
+        final items = snap.docs.map((d) {
+          final m = Map<String, dynamic>.from(d.data());
+          m['id'] = d.id;
+          final ts = d.data()['serverUpdateTimestamp'];
+          if (ts is Timestamp) {
+            m['serverVersion'] = ts.millisecondsSinceEpoch;
+          }
+          return GroceryItem.fromMap(m);
+        }).toList();
+        shoppingCubit.syncRemoteItems(items);
+      },
+      onError: (e) {
+        debugPrint('FirestoreSyncService ERROR ($shoppingSource): $e');
+      },
+    );
 
     // 3. Household Tasks Listener
     if (householdId != null && householdId.isNotEmpty) {

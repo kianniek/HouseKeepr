@@ -34,7 +34,9 @@ enum HomeTab {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final String? householdId;
+
+  const HomeScreen({super.key, this.householdId});
 
   /// Notifier that SettingsPage updates so HomeScreen reacts immediately.
   static final floatingNavNotifier = ValueNotifier<bool>(true);
@@ -55,12 +57,15 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _cachedHouseholdId = widget.householdId;
     _rebuildPages();
     HomeScreen.floatingNavNotifier.addListener(_onFloatingNavChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkForUpdates();
-      _loadHouseholdId();
+      if (_cachedHouseholdId == null) {
+        _loadHouseholdId();
+      }
       _loadFloatingNavPreference();
       _loadLastTab();
       _warmUpData();

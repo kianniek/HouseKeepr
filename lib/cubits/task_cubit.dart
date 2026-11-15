@@ -14,6 +14,7 @@ import '../repositories/history_repository.dart';
 import '../repositories/task_repository.dart';
 import '../services/notification_service.dart';
 import '../services/write_queue.dart';
+import '../ui/features/tasks/utils/task_date_utils.dart';
 
 part 'task_state.dart';
 
@@ -62,6 +63,45 @@ class TaskCubit extends Cubit<TaskState> {
     emit(state.copyWith(tasks: merged, hasMore: hasMore));
   }
 
+  Future<void> _scheduleReminderIfNeeded(
+    Task task, {
+    bool cancelExisting = false,
+  }) async {
+    try {
+      if (cancelExisting) {
+        await NotificationService.instance.cancelReminder(task.id);
+      }
+      if (task.deadline != null && task.reminderEnabled) {
+        final offset = task.reminderOffsetMinutes ?? 0;
+        final scheduled = task.deadline!.toUtc().subtract(
+          Duration(minutes: offset),
+        );
+        if (!scheduled.isBefore(DateTime.now().toUtc())) {
+          await NotificationService.instance.scheduleReminder(
+            task.id,
+            scheduled,
+            title: 'Task due',
+            body: task.title,
+            priorityLevel: task.priority.index,
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _dispatchRemote(
+    QueueOp Function() buildOp,
+    Future<void> Function() directCall,
+  ) {
+    final mode = settings?.getSyncMode() ?? SyncMode.sync;
+    if (mode == SyncMode.localOnly || remoteRepo == null) return;
+    if (writeQueue != null) {
+      writeQueue!.enqueueOp(buildOp());
+    } else {
+      unawaited(directCall());
+    }
+  }
+
   Future<void> addTask(Task task) async {
     // If we are re-adding a task (e.g. undoing a delete), clear the pending delete flag
     _pendingDeletes.remove(task.id);
@@ -72,44 +112,21 @@ class TaskCubit extends Cubit<TaskState> {
 
     try {
       NotificationService.instance.show('Task created', task.title);
-      if (pending.deadline != null && pending.reminderEnabled) {
-        final offset = pending.reminderOffsetMinutes ?? 0;
-        final scheduled = pending.deadline!.toUtc().subtract(
-          Duration(minutes: offset),
-        );
-        final now = DateTime.now().toUtc();
-        if (!scheduled.isBefore(now)) {
-          NotificationService.instance.scheduleReminder(
-            pending.id,
-            scheduled,
-            title: 'Task due',
-            body: pending.title,
-            priorityLevel: pending.priority.index,
-          );
-        }
-      }
     } catch (_) {}
-    final mode = settings?.getSyncMode() ?? SyncMode.sync;
-    if (mode != SyncMode.localOnly) {
-      if (remoteRepo != null) {
-        if (writeQueue != null) {
-          final payload = pending.toMap();
-          try {
-            payload['_isNew'] = true;
-          } catch (_) {}
-          writeQueue!.enqueueOp(
-            QueueOp(
-              type: QueueOpType.saveTask,
-              id: pending.id,
-              payload: payload,
-            ),
-          );
-        } else {
-          Future<void> op() => remoteRepo!.saveTask(task);
-          unawaited(op());
-        }
-      }
-    }
+    await _scheduleReminderIfNeeded(pending);
+
+    _dispatchRemote(() {
+      final payload = pending.toMap();
+      try {
+        payload['_isNew'] = true;
+      } catch (_) {}
+      return QueueOp(
+        type: QueueOpType.saveTask,
+        id: pending.id,
+        payload: payload,
+      );
+    }, () => remoteRepo!.saveTask(task));
+
     emit(state.copyWith(tasks: list));
   }
 
@@ -142,48 +159,20 @@ class TaskCubit extends Cubit<TaskState> {
 
     try {
       NotificationService.instance.show('Task updated', task.title);
-      await NotificationService.instance.cancelReminder(task.id);
-      if (pending.deadline != null && pending.reminderEnabled) {
-        final offset = pending.reminderOffsetMinutes ?? 0;
-        final scheduled = pending.deadline!.toUtc().subtract(
-          Duration(minutes: offset),
-        );
-        final now = DateTime.now().toUtc();
-        if (!scheduled.isBefore(now)) {
-          await NotificationService.instance.scheduleReminder(
-            pending.id,
-            scheduled,
-            title: 'Task due',
-            body: task.title,
-            priorityLevel: pending.priority.index,
-          );
-        }
-      }
     } catch (_) {}
-    final mode = settings?.getSyncMode() ?? SyncMode.sync;
-    if (mode != SyncMode.localOnly) {
-      if (remoteRepo != null) {
-        if (writeQueue != null) {
-          final payload = pending.toMap();
-          try {
-            payload['_previous'] = prev.toMap();
-          } catch (_) {}
-          writeQueue!.enqueueOp(
-            QueueOp(
-              type: QueueOpType.saveTask,
-              id: pending.id,
-              payload: payload,
-            ),
-          );
-        } else {
-          Future<void> op() => remoteRepo!.saveTask(task);
-          unawaited(op());
-        }
-      }
-    }
-    // Ensure final persisted list is emitted (may be redundant but keeps
-    // state consistent with other flows that emit after persistence).
-    emit(state.copyWith(tasks: list));
+    await _scheduleReminderIfNeeded(pending, cancelExisting: true);
+
+    _dispatchRemote(() {
+      final payload = pending.toMap();
+      try {
+        payload['_previous'] = prev.toMap();
+      } catch (_) {}
+      return QueueOp(
+        type: QueueOpType.saveTask,
+        id: pending.id,
+        payload: payload,
+      );
+    }, () => remoteRepo!.saveTask(task));
   }
 
   Future<void> replaceAll(List<Task> tasks) async {
@@ -429,41 +418,7 @@ class TaskCubit extends Cubit<TaskState> {
     // the task until that datetime. Reuse the task's repeatRule/deadline.
     DateTime? computeNext(Task task) {
       if (!task.isRepeating) return null;
-      final rawRule = task.repeatRule;
-      // parse rule similar to UI helper
-      int interval = 1;
-      String unit = 'day';
-      if (rawRule != null) {
-        final raw = rawRule.toLowerCase().trim();
-        if (raw.startsWith('every:')) {
-          final parts = raw.split(':');
-          if (parts.length >= 3) {
-            interval = int.tryParse(parts[1]) ?? 1;
-            unit = parts[2];
-          }
-        } else {
-          switch (raw) {
-            case 'daily':
-            case 'day':
-              interval = 1;
-              unit = 'day';
-              break;
-            case 'weekly':
-            case 'week':
-              interval = 1;
-              unit = 'week';
-              break;
-            case 'monthly':
-            case 'month':
-              interval = 1;
-              unit = 'month';
-              break;
-            default:
-              interval = 1;
-              unit = 'day';
-          }
-        }
-      }
+      final (:interval, :unit) = parseRepeatRule(task.repeatRule);
       final now = DateTime.now();
       final deadline = task.deadline ?? now;
       final hour = deadline.toLocal().hour;

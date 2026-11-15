@@ -130,6 +130,128 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
+/// Shared stage-progress tracker for startup and household initialization.
+/// Escalates from spinner (0–2s) to `'Loading...'` (2–5s) to the current stage
+/// label (5s+) and records a timestamped log viewable on tap.
+class _StageProgressController extends ChangeNotifier {
+  Timer? _shortTimer;
+  Timer? _longTimer;
+  String? stageLabel;
+  bool showGeneric = false;
+  bool showDetailed = false;
+  final List<String> log = [];
+
+  void start() {
+    _shortTimer?.cancel();
+    _longTimer?.cancel();
+    stageLabel = null;
+    showGeneric = false;
+    showDetailed = false;
+
+    _shortTimer = Timer(const Duration(seconds: 2), () {
+      showGeneric = true;
+      notifyListeners();
+    });
+
+    _longTimer = Timer(const Duration(seconds: 5), () {
+      showDetailed = true;
+      notifyListeners();
+    });
+  }
+
+  void stop() {
+    _shortTimer?.cancel();
+    _longTimer?.cancel();
+    stageLabel = null;
+    showGeneric = false;
+    showDetailed = false;
+    notifyListeners();
+  }
+
+  void addLog(String entry) {
+    log.add('${DateTime.now().toIso8601String()}  $entry');
+  }
+
+  void setStage(String label) {
+    addLog(label);
+    stageLabel = label;
+    notifyListeners();
+  }
+
+  void showDetailsDialog(BuildContext context, {required String title}) {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: log.length,
+              separatorBuilder: (context, index) => const Divider(height: 12),
+              itemBuilder: (context, index) => Text(log[index]),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _shortTimer?.cancel();
+    _longTimer?.cancel();
+    super.dispose();
+  }
+}
+
+class _StageLoadingScaffold extends StatelessWidget {
+  final _StageProgressController controller;
+  final String detailsTitle;
+
+  const _StageLoadingScaffold({
+    required this.controller,
+    required this.detailsTitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final stageText = controller.showDetailed
+            ? controller.stageLabel
+            : (controller.showGeneric ? 'Loading...' : null);
+        return Scaffold(
+          body: GestureDetector(
+            onTap: () =>
+                controller.showDetailsDialog(context, title: detailsTitle),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  if (stageText != null) ...[
+                    const SizedBox(height: 12),
+                    Text(stageText),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class AppRoot extends StatefulWidget {
   const AppRoot({super.key, this.initializationError});
   final Object? initializationError;
@@ -145,12 +267,7 @@ class _AppRootState extends State<AppRoot> {
   StreamSubscription<User?>? authSub;
   Object? initError0;
   bool authListenerAttached = false;
-  Timer? householdStageTimerShort;
-  Timer? householdStageTimerLong;
-  String? householdStageLabel;
-  bool showHouseholdGeneric = false;
-  bool showHouseholdDetailed = false;
-  final List<String> householdStageLog = [];
+  final _stageController = _StageProgressController();
 
   @override
   void initState() {
@@ -164,75 +281,8 @@ class _AppRootState extends State<AppRoot> {
   @override
   void dispose() {
     authSub?.cancel();
-    householdStageTimerShort?.cancel();
-    householdStageTimerLong?.cancel();
+    _stageController.dispose();
     super.dispose();
-  }
-
-  void startHouseholdStageTimers() {
-    householdStageTimerShort?.cancel();
-    householdStageTimerLong?.cancel();
-    householdStageLabel = null;
-    showHouseholdGeneric = false;
-    showHouseholdDetailed = false;
-
-    householdStageTimerShort = Timer(const Duration(seconds: 2), () {
-      if (!mounted || !checkingHousehold) return;
-      setState(() => showHouseholdGeneric = true);
-    });
-
-    householdStageTimerLong = Timer(const Duration(seconds: 5), () {
-      if (!mounted || !checkingHousehold) return;
-      setState(() => showHouseholdDetailed = true);
-    });
-  }
-
-  void stopHouseholdStageTimers() {
-    householdStageTimerShort?.cancel();
-    householdStageTimerLong?.cancel();
-    householdStageLabel = null;
-    showHouseholdGeneric = false;
-    showHouseholdDetailed = false;
-  }
-
-  void logHouseholdStage(String label) {
-    final timestamp = DateTime.now().toIso8601String();
-    householdStageLog.add('$timestamp  $label');
-  }
-
-  void setHouseholdStageLabel(String label) {
-    if (!mounted || !checkingHousehold) return;
-    logHouseholdStage(label);
-    setState(() => householdStageLabel = label);
-  }
-
-  void showHouseholdStageDetails() {
-    if (!mounted) return;
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Household loading details'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.separated(
-              shrinkWrap: true,
-              itemCount: householdStageLog.length,
-              separatorBuilder: (context, index) => const Divider(height: 12),
-              itemBuilder: (context, index) {
-                return Text(householdStageLog[index]);
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   // Consolidated initialization logic
@@ -276,14 +326,14 @@ class _AppRootState extends State<AppRoot> {
   }
 
   void onSignedIn(User user) async {
-    startHouseholdStageTimers();
-    householdStageLog.clear();
+    _stageController.start();
+    _stageController.log.clear();
     setState(() {
       this.user = user;
       checkingHousehold = true;
-      householdStageLabel = 'Saving user profile...';
+      _stageController.stageLabel = 'Saving user profile...';
     });
-    logHouseholdStage(
+    _stageController.addLog(
       'Saving user profile for user ${user.uid} (${user.email})',
     );
     try {
@@ -294,18 +344,20 @@ class _AppRootState extends State<AppRoot> {
       }, SetOptions(merge: true));
 
       final hs = HouseholdService(FirebaseFirestore.instance);
-      setHouseholdStageLabel('Fetching household membership...');
+      if (mounted && checkingHousehold) {
+        _stageController.setStage('Fetching household membership...');
+      }
       final hid = await hs.findHouseholdForUser(user.uid);
       setState(() {
         householdId = hid;
         checkingHousehold = false;
-        stopHouseholdStageTimers();
+        _stageController.stop();
       });
     } catch (e) {
       debugPrint('Sign-in processing failed: $e');
       setState(() {
         checkingHousehold = false;
-        stopHouseholdStageTimers();
+        _stageController.stop();
       });
     }
   }
@@ -344,25 +396,9 @@ class _AppRootState extends State<AppRoot> {
     }
 
     if (checkingHousehold) {
-      final stageText = showHouseholdDetailed
-          ? householdStageLabel
-          : (showHouseholdGeneric ? 'Loading...' : null);
-      return Scaffold(
-        body: GestureDetector(
-          onTap: showHouseholdStageDetails,
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(),
-                if (stageText != null) ...[
-                  const SizedBox(height: 12),
-                  Text(stageText),
-                ],
-              ],
-            ),
-          ),
-        ),
+      return _StageLoadingScaffold(
+        controller: _stageController,
+        detailsTitle: 'Household loading details',
       );
     }
 
@@ -396,11 +432,13 @@ class _HouseholdInitData {
 
 class _HouseholdAppContent extends StatefulWidget {
   final User user;
+  final String householdId;
   final FirestoreSyncService syncService;
   final GroceryRepository groceryRepository;
 
   const _HouseholdAppContent({
     required this.user,
+    required this.householdId,
     required this.syncService,
     required this.groceryRepository,
   });
@@ -493,7 +531,7 @@ class _HouseholdAppContentState extends State<_HouseholdAppContent>
 
   @override
   Widget build(BuildContext context) {
-    return HomeScreen(key: homeScreenKey);
+    return HomeScreen(key: homeScreenKey, householdId: widget.householdId);
   }
 }
 
@@ -512,96 +550,32 @@ class HouseholdApp extends StatefulWidget {
 
 class _HouseholdAppState extends State<HouseholdApp> {
   late Future<_HouseholdInitData> initFuture;
-  Timer? initStageTimerShort;
-  Timer? initStageTimerLong;
-  String? initStageLabel;
-  bool showInitGeneric = false;
-  bool showInitDetailed = false;
-  final List<String> initStageLog = [];
+  final _stageController = _StageProgressController();
 
   @override
   void initState() {
     super.initState();
-    startInitStageTimers();
-    initFuture = initialize().whenComplete(stopInitStageTimers);
+    _stageController.start();
+    initFuture = initialize().whenComplete(() {
+      if (mounted) _stageController.stop();
+    });
   }
 
   @override
   void dispose() {
-    initStageTimerShort?.cancel();
-    initStageTimerLong?.cancel();
+    _stageController.dispose();
     super.dispose();
   }
 
-  void startInitStageTimers() {
-    initStageTimerShort?.cancel();
-    initStageTimerLong?.cancel();
-    initStageLabel = null;
-    showInitGeneric = false;
-    showInitDetailed = false;
-
-    initStageTimerShort = Timer(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      setState(() => showInitGeneric = true);
-    });
-
-    initStageTimerLong = Timer(const Duration(seconds: 5), () {
-      if (!mounted) return;
-      setState(() => showInitDetailed = true);
-    });
-  }
-
-  void stopInitStageTimers() {
-    initStageTimerShort?.cancel();
-    initStageTimerLong?.cancel();
+  void _setInitStageLabel(String label) {
     if (!mounted) return;
-    setState(() {
-      initStageLabel = null;
-      showInitGeneric = false;
-      showInitDetailed = false;
-    });
+    _stageController.setStage(label);
   }
 
-  void setInitStageLabel(String label) {
-    if (!mounted) return;
-    final timestamp = DateTime.now().toIso8601String();
-    initStageLog.add('$timestamp  $label');
-    setState(() => initStageLabel = label);
-  }
-
-  void showInitStageDetails() {
-    if (!mounted) return;
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Initialization details'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.separated(
-              shrinkWrap: true,
-              itemCount: initStageLog.length,
-              separatorBuilder: (context, index) => const Divider(height: 12),
-              itemBuilder: (context, index) {
-                return Text(initStageLog[index]);
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void openTasksTab() {
+  void _openTab(HomeTab tab) {
     final homeState = homeScreenKey.currentState;
     if (homeState != null) {
-      homeState.selectTab(HomeTab.tasks);
+      homeState.selectTab(tab);
       return;
     }
     final navState = navigatorKey.currentState;
@@ -609,22 +583,7 @@ class _HouseholdAppState extends State<HouseholdApp> {
       navState.popUntil((route) => route.isFirst);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      homeScreenKey.currentState?.selectTab(HomeTab.tasks);
-    });
-  }
-
-  void openMedicationsTool() {
-    final homeState = homeScreenKey.currentState;
-    if (homeState != null) {
-      homeState.selectTab(HomeTab.tools);
-      return;
-    }
-    final navState = navigatorKey.currentState;
-    if (navState != null) {
-      navState.popUntil((route) => route.isFirst);
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      homeScreenKey.currentState?.selectTab(HomeTab.tools);
+      homeScreenKey.currentState?.selectTab(tab);
     });
   }
 
@@ -637,10 +596,10 @@ class _HouseholdAppState extends State<HouseholdApp> {
   }
 
   Future<_HouseholdInitData> initialize() async {
-    initStageLog.clear();
-    setInitStageLabel('Loading local preferences...');
+    _stageController.log.clear();
+    _setInitStageLabel('Loading local preferences...');
     final prefs = await SharedPreferences.getInstance();
-    setInitStageLabel('Opening local storage...');
+    _setInitStageLabel('Opening local storage...');
     await Hive.initFlutter();
     await Future.wait([
       Hive.openBox('tasks'),
@@ -652,21 +611,21 @@ class _HouseholdAppState extends State<HouseholdApp> {
 
     final settingsRepo = SettingsRepository(prefs);
 
-    setInitStageLabel('Initializing notifications...');
+    _setInitStageLabel('Initializing notifications...');
     await NotificationService.instance.init(
       prefs,
       scaffoldKey: scaffoldMessengerKey,
-      onOpenTasks: openTasksTab,
-      onOpenMedications: openMedicationsTool,
+      onOpenTasks: () => _openTab(HomeTab.tasks),
+      onOpenMedications: () => _openTab(HomeTab.tools),
     );
     await maybeRequestNotificationPermissions(settingsRepo);
     await NotificationService.instance.checkAndFireDueReminders();
-    setInitStageLabel('Initializing shopping products...');
+    _setInitStageLabel('Initializing shopping products...');
     await ShoppingProductsService.instance.init(prefs);
     final taskCubit = TaskCubit(TaskRepository(prefs), settings: settingsRepo);
     final shoppingCubit = ShoppingCubit(GroceryRepository());
 
-    setInitStageLabel('Initializing home widget...');
+    _setInitStageLabel('Initializing home widget...');
     await WidgetService.instance.init();
     await shoppingCubit.initializationFuture;
     await WidgetService.instance.updateWidgetImmediate(
@@ -748,7 +707,7 @@ class _HouseholdAppState extends State<HouseholdApp> {
     shoppingCubit.attachWriteQueue(writeQueue);
 
     final syncService = FirestoreSyncService(FirebaseFirestore.instance);
-    setInitStageLabel('Starting sync service...');
+    _setInitStageLabel('Starting sync service...');
     await syncService.start(
       widget.user.uid,
       taskCubit,
@@ -770,25 +729,9 @@ class _HouseholdAppState extends State<HouseholdApp> {
       future: initFuture,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          final stageText = showInitDetailed
-              ? initStageLabel
-              : (showInitGeneric ? 'Loading...' : null);
-          return Scaffold(
-            body: GestureDetector(
-              onTap: showInitStageDetails,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(),
-                    if (stageText != null) ...[
-                      const SizedBox(height: 12),
-                      Text(stageText),
-                    ],
-                  ],
-                ),
-              ),
-            ),
+          return _StageLoadingScaffold(
+            controller: _stageController,
+            detailsTitle: 'Initialization details',
           );
         }
         if (snap.hasError) {
@@ -803,11 +746,11 @@ class _HouseholdAppState extends State<HouseholdApp> {
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
-                      startInitStageTimers();
+                      _stageController.start();
                       setState(() {
-                        initFuture = initialize().whenComplete(
-                          stopInitStageTimers,
-                        );
+                        initFuture = initialize().whenComplete(() {
+                          if (mounted) _stageController.stop();
+                        });
                       });
                     },
                     child: const Text('Retry'),
@@ -827,6 +770,7 @@ class _HouseholdAppState extends State<HouseholdApp> {
             value: data.syncService,
             child: _HouseholdAppContent(
               user: widget.user,
+              householdId: widget.householdId,
               syncService: data.syncService,
               groceryRepository: data.groceryRepository,
             ),

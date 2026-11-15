@@ -58,16 +58,20 @@ class AppActionHandler {
       final section = result['section'] as String?;
       if (!isWidgetConfig || appWidgetId == null) return;
 
-      final Widget page = switch (section) {
-        'pill' => PillWidgetSettingsPage(appWidgetId: appWidgetId),
-        'shopping' => ShoppingWidgetSettingsPage(appWidgetId: appWidgetId),
-        'coffee' => CoffeeWidgetSettingsPage(appWidgetId: appWidgetId),
-        _ => WidgetSettingsPage(appWidgetId: appWidgetId),
-      };
+      final Widget page = _buildWidgetSettingsPage(section, appWidgetId);
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
     } catch (e) {
       debugPrint('Error checking widget config context: $e');
     }
+  }
+
+  Widget _buildWidgetSettingsPage(String? section, int? appWidgetId) {
+    return switch (section) {
+      'pill' => PillWidgetSettingsPage(appWidgetId: appWidgetId),
+      'shopping' => ShoppingWidgetSettingsPage(appWidgetId: appWidgetId),
+      'coffee' => CoffeeWidgetSettingsPage(appWidgetId: appWidgetId),
+      _ => WidgetSettingsPage(appWidgetId: appWidgetId),
+    };
   }
 
   void _processUri(BuildContext context, Uri uri) {
@@ -99,13 +103,12 @@ class AppActionHandler {
       );
     } else if (uri.host == 'widget-settings') {
       final appWidgetId = int.tryParse(queryParams['appWidgetId'] ?? '');
-      final Widget page = switch (path) {
-        '/pill' => PillWidgetSettingsPage(appWidgetId: appWidgetId),
-        '/shopping' => ShoppingWidgetSettingsPage(appWidgetId: appWidgetId),
-        '/coffee' => CoffeeWidgetSettingsPage(appWidgetId: appWidgetId),
-        _ => WidgetSettingsPage(appWidgetId: appWidgetId),
-      };
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+      final section = path.startsWith('/') ? path.substring(1) : path;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => _buildWidgetSettingsPage(section, appWidgetId),
+        ),
+      );
     }
   }
 

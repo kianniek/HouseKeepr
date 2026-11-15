@@ -36,17 +36,10 @@ String formatRelativeDueDate(DateTime date, {DateTime? now}) {
   return '$overdueDays days overdue';
 }
 
-/// Computes the next occurrence for a repeating [task] on or after today,
-/// or returns `task.deadline` for non-repeating tasks.
-DateTime? effectiveDueDate(Task task, {DateTime? now}) {
-  final refNow = (now ?? DateTime.now()).toUtc();
-  if (!task.isRepeating) return task.deadline;
-
-  if (task.inactiveUntil != null && refNow.isBefore(task.inactiveUntil!)) {
-    return task.inactiveUntil;
-  }
-
-  final raw = (task.repeatRule ?? '').toLowerCase().trim();
+/// Parsed repeat rule with a positive [interval] and normalized [unit]
+/// (`'day'`, `'week'`, or `'month'`).
+({int interval, String unit}) parseRepeatRule(String? rawRule) {
+  final raw = (rawRule ?? '').toLowerCase().trim();
   int interval = 1;
   String unit = 'day';
   if (raw.startsWith('every:')) {
@@ -60,6 +53,20 @@ DateTime? effectiveDueDate(Task task, {DateTime? now}) {
   } else if (raw == 'monthly' || raw == 'month') {
     unit = 'month';
   }
+  return (interval: interval, unit: unit);
+}
+
+/// Computes the next occurrence for a repeating [task] on or after today,
+/// or returns `task.deadline` for non-repeating tasks.
+DateTime? effectiveDueDate(Task task, {DateTime? now}) {
+  final refNow = (now ?? DateTime.now()).toUtc();
+  if (!task.isRepeating) return task.deadline;
+
+  if (task.inactiveUntil != null && refNow.isBefore(task.inactiveUntil!)) {
+    return task.inactiveUntil;
+  }
+
+  final (:interval, :unit) = parseRepeatRule(task.repeatRule);
 
   final deadline = (task.deadline ?? refNow).toUtc();
   final startDate = DateTime.utc(deadline.year, deadline.month, deadline.day);
@@ -138,20 +145,7 @@ TimeHorizon classifyTimeHorizon(Task task, {DateTime? now}) {
 /// Returns a concise recurrence label (e.g. `Daily`, `Weekly`, `Monthly`).
 String repeatFrequencyLabel(Task task) {
   if (!task.isRepeating) return '';
-  final raw = (task.repeatRule ?? '').toLowerCase().trim();
-  int interval = 1;
-  String unit = 'day';
-  if (raw.startsWith('every:')) {
-    final parts = raw.split(':');
-    if (parts.length >= 3) {
-      interval = (int.tryParse(parts[1]) ?? 1).clamp(1, 3650);
-      unit = parts[2];
-    }
-  } else if (raw == 'weekly' || raw == 'week') {
-    unit = 'week';
-  } else if (raw == 'monthly' || raw == 'month') {
-    unit = 'month';
-  }
+  final (:interval, :unit) = parseRepeatRule(task.repeatRule);
 
   if (interval == 1) {
     switch (unit) {
