@@ -8,6 +8,7 @@ class ParsedGroceryItem extends Equatable {
   final String? unit;
   final GroceryCategory category;
   final String? note;
+  final bool hasExplicitQuantity;
 
   const ParsedGroceryItem({
     required this.name,
@@ -15,10 +16,18 @@ class ParsedGroceryItem extends Equatable {
     this.unit,
     required this.category,
     this.note,
+    this.hasExplicitQuantity = false,
   });
 
   @override
-  List<Object?> get props => [name, quantity, unit, category, note];
+  List<Object?> get props => [
+    name,
+    quantity,
+    unit,
+    category,
+    note,
+    hasExplicitQuantity,
+  ];
 
   ParsedGroceryItem copyWith({
     String? name,
@@ -26,6 +35,7 @@ class ParsedGroceryItem extends Equatable {
     String? unit,
     GroceryCategory? category,
     String? note,
+    bool? hasExplicitQuantity,
   }) {
     return ParsedGroceryItem(
       name: name ?? this.name,
@@ -33,6 +43,7 @@ class ParsedGroceryItem extends Equatable {
       unit: unit ?? this.unit,
       category: category ?? this.category,
       note: note ?? this.note,
+      hasExplicitQuantity: hasExplicitQuantity ?? this.hasExplicitQuantity,
     );
   }
 }
@@ -340,6 +351,7 @@ class GroceryParser {
     String? unit;
     String rawName = processed;
     String? note;
+    var hasExplicitQuantity = true;
 
     // Check compound garlic: "1 teenknoflook", "2 tenen knoflook", "1 knoflookteen"
     final garlicCompoundMatch = RegExp(
@@ -426,6 +438,7 @@ class GroceryParser {
                 qty = 1.0;
                 unit = null;
                 rawName = processed;
+                hasExplicitQuantity = false;
               }
             }
           }
@@ -461,6 +474,7 @@ class GroceryParser {
       } else {
         cleanName = processed;
       }
+      hasExplicitQuantity = false;
     }
 
     // Capitalize first letter of item name
@@ -474,6 +488,7 @@ class GroceryParser {
       unit: unit,
       category: _guessCategory(cleanName),
       note: note,
+      hasExplicitQuantity: hasExplicitQuantity,
     );
   }
 

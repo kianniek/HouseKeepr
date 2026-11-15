@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/grocery_parser.dart';
+import '../../../generated/app_localizations.dart';
 
 Future<List<ParsedGroceryItem>?> showBulkImportDialog(BuildContext context) {
   return showDialog<List<ParsedGroceryItem>>(
@@ -63,27 +64,27 @@ class _BulkImportDialogState extends State<_BulkImportDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Bulk Import Groceries'),
+      title: Text(l10n.bulkImportGroceries),
       content: SizedBox(
         width: double.maxFinite,
         child: TextField(
           controller: _textController,
           maxLines: 10,
           minLines: 5,
-          decoration: const InputDecoration(
-            hintText:
-                'e.g.\n2 pakken melk\n1,5 kg appels\n2 tenen knoflook\n500g gehakt',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            hintText: l10n.bulkImportHint,
+            border: const OutlineInputBorder(),
           ),
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
-        FilledButton(onPressed: _onNext, child: const Text('Next')),
+        FilledButton(onPressed: _onNext, child: Text(l10n.next)),
       ],
     );
   }

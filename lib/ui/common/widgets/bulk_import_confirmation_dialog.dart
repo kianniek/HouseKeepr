@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:housekeepr/core/extensions.dart';
 import 'package:housekeepr/core/quantity_unit_formatter.dart';
 import '../../../core/grocery_parser.dart';
+import '../../../generated/app_localizations.dart';
 import '../../../models/grocery_category.dart';
 
 Future<List<ParsedGroceryItem>?> showBulkImportConfirmationDialog(
@@ -42,8 +43,9 @@ class _BulkImportConfirmationDialogState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Review Items'),
+      title: Text(l10n.reviewItems),
       content: SizedBox(
         width: double.maxFinite,
         child: ListView.separated(
@@ -74,7 +76,7 @@ class _BulkImportConfirmationDialogState
                 items: GroceryCategory.values.map((cat) {
                   return DropdownMenuItem(
                     value: cat,
-                    child: Text(cat.name.split('.').last),
+                    child: Text('${cat.emoji} ${cat.displayName}'),
                   );
                 }).toList(),
                 onChanged: (cat) {
@@ -90,11 +92,11 @@ class _BulkImportConfirmationDialogState
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, _items),
-          child: const Text('Add All'),
+          child: Text(l10n.addAll),
         ),
       ],
     );

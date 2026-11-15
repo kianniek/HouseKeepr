@@ -227,6 +227,14 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     String? unit,
   }) async {
     final normalizedName = _normalizeItemName(name);
+    final hasExplicitQtyOrUnit = quantity != null || unit != null;
+    final usualQtyUnit = (!hasExplicitQtyOrUnit && normalizedName.isNotEmpty)
+        ? ShoppingProductsService.instance.getUsualQuantityAndUnit(
+            normalizedName,
+          )
+        : null;
+    final finalQuantity = quantity ?? usualQtyUnit?.quantity ?? 1.0;
+    final finalUnit = unit ?? (quantity == null ? usualQtyUnit?.unit : null);
 
     // Check for existing item to merge (only if name is not empty)
     if (normalizedName.isNotEmpty) {
@@ -239,12 +247,15 @@ class ShoppingCubit extends Cubit<ShoppingState> {
       if (existingIndex != -1) {
         final existingItem = state.items[existingIndex];
         // Merge: Increment quantity and uncheck if checked
-        final addedQty = quantity ?? 1.0;
         final updatedItem = existingItem.copyWith(
-          quantity: existingItem.quantity + addedQty,
-          unit: existingItem.unit ?? unit,
+          quantity: existingItem.quantity + finalQuantity,
+          unit: existingItem.unit ?? finalUnit,
           note: note ?? existingItem.note,
+          category: (category != null && category != GroceryCategory.other)
+              ? category
+              : existingItem.category,
           checked: false,
+          checkedAt: null,
           updatedAt: DateTime.now(),
         );
 
@@ -268,11 +279,14 @@ class ShoppingCubit extends Cubit<ShoppingState> {
       }
     }
 
-    // Learn mapping if explicit category provided
-    if (finalCategory != GroceryCategory.other) {
-      await ShoppingProductsService.instance.learnProduct(
+    // Learn explicit category / quantity / unit usage
+    if (finalCategory != GroceryCategory.other || hasExplicitQtyOrUnit) {
+      await ShoppingProductsService.instance.learnProductUsage(
         normalizedName,
-        finalCategory,
+        category: finalCategory != GroceryCategory.other ? finalCategory : null,
+        quantity: hasExplicitQtyOrUnit ? finalQuantity : null,
+        unit: hasExplicitQtyOrUnit ? finalUnit : null,
+        weight: 1,
       );
     }
 
@@ -280,8 +294,8 @@ class ShoppingCubit extends Cubit<ShoppingState> {
       id: const Uuid().v4(),
       name: normalizedName,
       note: note,
-      quantity: quantity ?? 1.0,
-      unit: unit,
+      quantity: finalQuantity,
+      unit: finalUnit,
       category: finalCategory,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
@@ -321,11 +335,16 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     }).toList();
 
     if (changedItem != null) {
-      // Learn category mapping when item is checked off
+      // Learn category, quantity, and unit when item is checked off
       if (changedItem!.checked && changedItem!.name.isNotEmpty) {
-        ShoppingProductsService.instance.learnProduct(
+        await ShoppingProductsService.instance.learnProductUsage(
           changedItem!.name,
-          changedItem!.category,
+          category: changedItem!.category != GroceryCategory.other
+              ? changedItem!.category
+              : null,
+          quantity: changedItem!.quantity,
+          unit: changedItem!.unit,
+          weight: 1,
         );
       }
       _emitSortedState(items);
@@ -354,13 +373,140 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     }
   }
 
+  /// Update full item details (name, note, quantity, unit, and category).
+  Future<void> updateItemDetails(
+    String id, {
+    required String name,
+    String? note,
+    required double quantity,
+    String? unit,
+    required GroceryCategory category,
+  }) async {
+    final normalizedName = _normalizeItemName(name);
+    if (normalizedName.isEmpty) return;
+
+    final trimmedNote = note?.trim();
+    final finalNote = (trimmedNote == null || trimmedNote.isEmpty)
+        ? null
+        : trimmedNote;
+    final trimmedUnit = unit?.trim();
+    final finalUnit = (trimmedUnit == null || trimmedUnit.isEmpty)
+        ? null
+        : trimmedUnit;
+    final clampedQty = quantity.clamp(0.1, double.maxFinite);
+
+    if (category != GroceryCategory.other || clampedQty != 1.0 || finalUnit != null) {
+      await ShoppingProductsService.instance.learnProductUsage(
+        normalizedName,
+        category: category != GroceryCategory.other ? category : null,
+        quantity: clampedQty,
+        unit: finalUnit,
+        weight: 2,
+      );
+    }
+
+    GroceryItem? changedItem;
+    final items = state.items.map((item) {
+      if (item.id == id) {
+        changedItem = item.copyWith(
+          name: normalizedName,
+          note: finalNote,
+          quantity: clampedQty,
+          unit: finalUnit,
+          category: category,
+          updatedAt: DateTime.now(),
+        );
+        return changedItem!;
+      }
+      return item;
+    }).toList();
+
+    if (changedItem != null) {
+      _emitSortedState(items);
+      await _persist(changedItem!);
+    }
+  }
+
+  /// Uncheck all completed items. Returns the affected item IDs for undo.
+  Future<List<String>> uncheckAllCompleted() async {
+    final checkedIds = state.items
+        .where((item) => item.checked)
+        .map((item) => item.id)
+        .toSet();
+    if (checkedIds.isEmpty) return const [];
+
+    final now = DateTime.now();
+    final allItems = _repository.loadItems();
+    final changedItems = <GroceryItem>[];
+    final updatedItems = allItems.map((item) {
+      if (!checkedIds.contains(item.id) || item.isDeleted) return item;
+      final unchecked = item.copyWith(
+        checked: false,
+        checkedAt: null,
+        updatedAt: now,
+      );
+      changedItems.add(unchecked);
+      return unchecked;
+    }).toList();
+
+    _emitSortedState(updatedItems);
+    await _repository.saveItems(updatedItems);
+
+    for (final item in changedItems) {
+      _writeQueue?.enqueueOp(
+        QueueOp(
+          type: QueueOpType.saveGrocery,
+          id: item.id,
+          payload: item.toMap(),
+        ),
+      );
+    }
+    return changedItems.map((i) => i.id).toList();
+  }
+
+  /// Re-check items by ID (used to undo [uncheckAllCompleted]).
+  Future<void> recheckItems(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final idSet = ids.toSet();
+    final now = DateTime.now();
+    final allItems = _repository.loadItems();
+    final changedItems = <GroceryItem>[];
+    final updatedItems = allItems.map((item) {
+      if (!idSet.contains(item.id) || item.isDeleted || item.checked) {
+        return item;
+      }
+      final rechecked = item.copyWith(
+        checked: true,
+        checkedAt: now,
+        updatedAt: now,
+      );
+      changedItems.add(rechecked);
+      return rechecked;
+    }).toList();
+
+    if (changedItems.isEmpty) return;
+
+    _emitSortedState(updatedItems);
+    await _repository.saveItems(updatedItems);
+
+    for (final item in changedItems) {
+      _writeQueue?.enqueueOp(
+        QueueOp(
+          type: QueueOpType.saveGrocery,
+          id: item.id,
+          payload: item.toMap(),
+        ),
+      );
+    }
+  }
+
   /// Update quantity to an arbitrary value (clamped to a valid positive range)
   Future<void> updateQuantityAndUnit(
     String id,
     double quantity,
     String? unit,
   ) async {
-    final clampedQty = quantity.clamp(1.0, double.maxFinite);
+    final clampedQty = quantity.clamp(0.1, double.maxFinite);
     GroceryItem? changedItem;
     final items = state.items.map((item) {
       if (item.id == id) {
@@ -375,6 +521,12 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     }).toList();
 
     if (changedItem != null) {
+      await ShoppingProductsService.instance.learnProductUsage(
+        changedItem!.name,
+        quantity: clampedQty,
+        unit: unit,
+        weight: 2,
+      );
       _emitSortedState(items);
       await _persist(changedItem!);
     }
@@ -532,8 +684,12 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     GroceryItem? changedItem;
     final items = state.items.map((item) {
       if (item.id == id) {
-        // Learn this new mapping
-        ShoppingProductsService.instance.learnProduct(item.name, category);
+        // Learn this new mapping with higher weight
+        ShoppingProductsService.instance.learnProductUsage(
+          item.name,
+          category: category,
+          weight: 2,
+        );
 
         changedItem = item.copyWith(
           category: category,
@@ -695,14 +851,14 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     final learned = ShoppingProductsService.instance.getCategoryForProduct(
       text.trim(),
     );
-    final nextCategory = learned ?? state.selectedCategory;
+    final nextCategory = learned ?? GroceryCategory.other;
 
     if (nextCategory != state.selectedCategory ||
         nextSuggestedText != state.suggestedText ||
         nextSuggestionConfidence != state.suggestionConfidence) {
       emit(
         state.copyWith(
-          selectedCategory: learned ?? state.selectedCategory,
+          selectedCategory: nextCategory,
           suggestedText: nextSuggestedText,
           suggestionConfidence: nextSuggestionConfidence,
         ),

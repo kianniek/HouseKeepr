@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../generated/app_localizations.dart';
 import '../../../../services/shopping_products_service.dart';
 
 class ShoppingAddProductDialog extends StatefulWidget {
@@ -34,9 +35,10 @@ class _ShoppingAddProductDialogState extends State<ShoppingAddProductDialog> {
   }
 
   Future<void> _addProduct() async {
-    if (_selectedSection == null || _productENController.text.isEmpty) {
+    final l10n = AppLocalizations.of(context);
+    if (_selectedSection == null || _productENController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
+        SnackBar(content: Text(l10n.pleaseFillRequiredFields)),
       );
       return;
     }
@@ -45,27 +47,30 @@ class _ShoppingAddProductDialogState extends State<ShoppingAddProductDialog> {
       _selectedSection!,
     );
 
+    final enName = _productENController.text.trim();
     // Find the matching NL name if available, or use EN as fallback
     String? nlName;
-    if (_productNLController.text.isNotEmpty) {
-      nlName = _productNLController.text;
+    if (_productNLController.text.trim().isNotEmpty) {
+      nlName = _productNLController.text.trim();
     } else {
-      // Try to find a similar product for NL name
       for (final p in products) {
-        if (p.productEN.toLowerCase() ==
-            _productENController.text.toLowerCase()) {
+        if (p.productEN.toLowerCase() == enName.toLowerCase()) {
           nlName = p.productNL;
           break;
         }
       }
-      nlName ??= _productENController.text;
+      nlName ??= enName;
     }
 
+    final sectionNL = products.isNotEmpty
+        ? products.first.sectionNL
+        : _selectedSection!;
+
     final product = ShoppingProduct(
-      sectionNL: _selectedSection!, // In a full impl, map EN->NL
+      sectionNL: sectionNL,
       sectionEN: _selectedSection!,
       productNL: nlName,
-      productEN: _productENController.text.trim(),
+      productEN: enName,
     );
 
     try {
@@ -75,28 +80,29 @@ class _ShoppingAddProductDialogState extends State<ShoppingAddProductDialog> {
         _productNLController.clear();
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Product added!')));
+        ).showSnackBar(SnackBar(content: Text(l10n.productAdded)));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Add Product to Database'),
+      title: Text(l10n.addProductToDatabase),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Choose a section and enter product names.',
+              l10n.chooseSectionAndEnterProduct,
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 16),
@@ -111,19 +117,19 @@ class _ShoppingAddProductDialogState extends State<ShoppingAddProductDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _productENController,
-              decoration: const InputDecoration(
-                labelText: 'Product Name (EN)',
-                hintText: 'e.g., Apple',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.productNameEn,
+                hintText: l10n.productNameEnHint,
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _productNLController,
-              decoration: const InputDecoration(
-                labelText: 'Product Name (NL) - Optional',
-                hintText: 'e.g., Appel',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.productNameNlOptional,
+                hintText: l10n.productNameNlHint,
+                border: const OutlineInputBorder(),
               ),
             ),
           ],
@@ -132,9 +138,9 @@ class _ShoppingAddProductDialogState extends State<ShoppingAddProductDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
-        ElevatedButton(onPressed: _addProduct, child: const Text('Add')),
+        ElevatedButton(onPressed: _addProduct, child: Text(l10n.add)),
       ],
     );
   }

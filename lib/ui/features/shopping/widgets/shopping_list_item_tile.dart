@@ -3,7 +3,6 @@ import 'package:marquee/marquee.dart';
 
 import '../../../../core/extensions.dart';
 import '../../../../core/quantity_unit_formatter.dart';
-import '../../../../models/grocery_category.dart';
 import '../../../../models/grocery_item.dart';
 
 class ShoppingListItemTile extends StatelessWidget {
@@ -86,72 +85,20 @@ class ShoppingListItemTile extends StatelessWidget {
             ),
           ),
 
-          title: LayoutBuilder(
-            builder: (context, constraints) {
-              double parentWidth = constraints.maxWidth;
-              bool useMarquee = hasNote;
-
-              if (!useMarquee) {
-                final textPainter = TextPainter(
-                  text: TextSpan(text: item.name, style: titleStyle),
-                  textDirection: TextDirection.ltr,
-                  maxLines: 2,
-                )..layout(maxWidth: parentWidth);
-
-                if (textPainter.didExceedMaxLines) {
-                  useMarquee = true;
-                }
-              }
-
-              if (useMarquee) {
-                return SizedBox(
-                  height: aisleMode ? 32.0 : 24.0,
-                  child: Marquee(
-                    text: item.name,
-                    style: titleStyle,
-                    startAfter: const Duration(seconds: 3),
-                    pauseAfterRound: Duration(seconds: item.name.length),
-                    blankSpace: parentWidth,
-                    velocity: 25,
-                    accelerationCurve: Curves.linear,
-                    accelerationDuration: const Duration(seconds: 1),
-                    decelerationDuration: const Duration(seconds: 1),
-                    decelerationCurve: Curves.linear,
-                  ),
-                );
-              }
-
-              return Text(
-                item.name,
-                style: titleStyle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              );
-            },
+          title: _AutoMarqueeText(
+            text: item.name,
+            style: titleStyle,
+            maxLines: 2,
+            marqueeHeight: aisleMode ? 32.0 : 24.0,
           ),
 
-          subtitle: hasNote || item.category != GroceryCategory.other
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (hasNote)
-                      SizedBox(
-                        height: 20.0,
-                        child: Marquee(
-                          text: item.note!,
-                          style: theme.textTheme.bodySmall,
-                          startAfter: const Duration(seconds: 3),
-                          pauseAfterRound: Duration(seconds: item.note!.length),
-                          blankSpace: 20,
-                          velocity: 25,
-                          accelerationCurve: Curves.linear,
-                          accelerationDuration: const Duration(seconds: 1),
-                          decelerationDuration: const Duration(seconds: 1),
-                          decelerationCurve: Curves.linear,
-                        ),
-                      ),
-                  ],
+          subtitle: hasNote
+              ? _AutoMarqueeText(
+                  text: item.note!,
+                  style: theme.textTheme.bodySmall ?? const TextStyle(),
+                  maxLines: 1,
+                  marqueeHeight: 20.0,
+                  blankSpace: 20.0,
                 )
               : null,
 
@@ -221,6 +168,62 @@ class ShoppingListItemTile extends StatelessWidget {
           onLongPress: onLongPress,
         ),
       ),
+    );
+  }
+}
+
+class _AutoMarqueeText extends StatelessWidget {
+  final String text;
+  final TextStyle style;
+  final int maxLines;
+  final double marqueeHeight;
+  final double? blankSpace;
+
+  const _AutoMarqueeText({
+    required this.text,
+    required this.style,
+    required this.maxLines,
+    required this.marqueeHeight,
+    this.blankSpace,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final parentWidth = constraints.maxWidth;
+        final textPainter = TextPainter(
+          text: TextSpan(text: text, style: style),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          maxLines: maxLines,
+        )..layout(maxWidth: parentWidth);
+
+        if (textPainter.didExceedMaxLines) {
+          return SizedBox(
+            height: marqueeHeight,
+            child: Marquee(
+              text: text,
+              style: style,
+              startAfter: const Duration(seconds: 3),
+              pauseAfterRound: Duration(seconds: text.length),
+              blankSpace: blankSpace ?? parentWidth,
+              velocity: 25,
+              accelerationCurve: Curves.linear,
+              accelerationDuration: const Duration(seconds: 1),
+              decelerationDuration: const Duration(seconds: 1),
+              decelerationCurve: Curves.linear,
+            ),
+          );
+        }
+
+        return Text(
+          text,
+          style: style,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+        );
+      },
     );
   }
 }

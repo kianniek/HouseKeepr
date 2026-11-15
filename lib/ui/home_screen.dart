@@ -17,7 +17,6 @@ import '../services/household_service.dart';
 import 'common/widgets/profile_menu.dart';
 import 'features/households/pages/household_page.dart' show TaskListTile;
 import 'features/shopping/pages/smart_shopping_list_page.dart';
-import 'features/shopping/widgets/shopping_add_dialog.dart';
 import 'features/tasks/widgets/task_add_dialog.dart';
 
 // Helper to fetch display names for a list of user IDs
@@ -124,13 +123,6 @@ class _HomeScreenState extends State<HomeScreen> {
             householdId: householdId,
             currentUser: widget.user,
           );
-        },
-        child: const Icon(Icons.add),
-      );
-    } else if (_bottomNavIndex == 2) {
-      fab = FloatingActionButton(
-        onPressed: () {
-          showShoppingAddDialog(context);
         },
         child: const Icon(Icons.add),
       );

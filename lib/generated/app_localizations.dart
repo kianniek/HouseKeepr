@@ -355,6 +355,402 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Evening'**
   String get eveningDoses;
+
+  /// Recently deleted page and menu title
+  ///
+  /// In en, this message translates to:
+  /// **'Recently Deleted'**
+  String get recentlyDeleted;
+
+  /// Completed items section header
+  ///
+  /// In en, this message translates to:
+  /// **'Completed ({count})'**
+  String completedCount(int count);
+
+  /// Suffix showing active category in quick add
+  ///
+  /// In en, this message translates to:
+  /// **'in {category}'**
+  String inCategory(String category);
+
+  /// Undo toast message when unnamed item deleted
+  ///
+  /// In en, this message translates to:
+  /// **'Item deleted'**
+  String get itemDeleted;
+
+  /// Undo toast message when named item deleted
+  ///
+  /// In en, this message translates to:
+  /// **'\"{name}\" deleted'**
+  String namedItemDeleted(String name);
+
+  /// Undo toast when 1 checked item cleared
+  ///
+  /// In en, this message translates to:
+  /// **'1 item cleared'**
+  String get oneItemCleared;
+
+  /// Undo toast when multiple checked items cleared
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items cleared'**
+  String itemsCleared(int count);
+
+  /// Empty shopping list sub-message
+  ///
+  /// In en, this message translates to:
+  /// **'Type an item above or use Bulk Add to get started.'**
+  String get noItemsSubMessage;
+
+  /// Title for add product dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Add Product to Database'**
+  String get addProductToDatabase;
+
+  /// Helper text in add product dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a section and enter product names.'**
+  String get chooseSectionAndEnterProduct;
+
+  /// English product name field label
+  ///
+  /// In en, this message translates to:
+  /// **'Product Name (EN)'**
+  String get productNameEn;
+
+  /// English product name hint
+  ///
+  /// In en, this message translates to:
+  /// **'e.g., Apple'**
+  String get productNameEnHint;
+
+  /// Dutch product name field label
+  ///
+  /// In en, this message translates to:
+  /// **'Product Name (NL) - Optional'**
+  String get productNameNlOptional;
+
+  /// Dutch product name hint
+  ///
+  /// In en, this message translates to:
+  /// **'e.g., Appel'**
+  String get productNameNlHint;
+
+  /// Validation message in add product dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Please fill in all required fields'**
+  String get pleaseFillRequiredFields;
+
+  /// Confirmation snackbar when product added
+  ///
+  /// In en, this message translates to:
+  /// **'Product added!'**
+  String get productAdded;
+
+  /// Generic Add button label
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get add;
+
+  /// Restore all recently deleted items
+  ///
+  /// In en, this message translates to:
+  /// **'Restore all'**
+  String get restoreAll;
+
+  /// Empty recently deleted list action
+  ///
+  /// In en, this message translates to:
+  /// **'Empty'**
+  String get empty;
+
+  /// Confirmation dialog title for emptying trash
+  ///
+  /// In en, this message translates to:
+  /// **'Empty Recently Deleted?'**
+  String get emptyRecentlyDeletedTitle;
+
+  /// Confirmation text for 1 item
+  ///
+  /// In en, this message translates to:
+  /// **'1 item will be permanently deleted. This cannot be undone.'**
+  String get emptyRecentlyDeletedSingle;
+
+  /// Confirmation text for multiple items
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items will be permanently deleted. This cannot be undone.'**
+  String emptyRecentlyDeletedMultiple(int count);
+
+  /// Permanent delete button/label
+  ///
+  /// In en, this message translates to:
+  /// **'Delete forever'**
+  String get deleteForever;
+
+  /// Confirmation dialog title for single permanent delete
+  ///
+  /// In en, this message translates to:
+  /// **'Delete item forever?'**
+  String get deleteItemForeverTitle;
+
+  /// Confirmation dialog body for single permanent delete
+  ///
+  /// In en, this message translates to:
+  /// **'\"{name}\" will be permanently deleted. This cannot be undone.'**
+  String deleteItemForeverMessage(String name);
+
+  /// Retention banner in recently deleted page
+  ///
+  /// In en, this message translates to:
+  /// **'Items are permanently deleted after 7 days.'**
+  String get recentlyDeletedRetentionBanner;
+
+  /// Empty state title in recently deleted page
+  ///
+  /// In en, this message translates to:
+  /// **'No recently deleted items'**
+  String get noRecentlyDeletedItems;
+
+  /// Empty state subtitle in recently deleted page
+  ///
+  /// In en, this message translates to:
+  /// **'Items you delete from your shopping list show up here for 7 days.'**
+  String get noRecentlyDeletedSubMessage;
+
+  /// Undo toast when unnamed item restored
+  ///
+  /// In en, this message translates to:
+  /// **'Item restored'**
+  String get itemRestored;
+
+  /// Undo toast when named item restored
+  ///
+  /// In en, this message translates to:
+  /// **'\"{name}\" restored to your list'**
+  String namedItemRestored(String name);
+
+  /// Undo toast when 1 item restored
+  ///
+  /// In en, this message translates to:
+  /// **'1 item restored'**
+  String get oneItemRestored;
+
+  /// Undo toast when multiple items restored
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items restored'**
+  String itemsRestored(int count);
+
+  /// Restore button tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get restore;
+
+  /// Fallback label for unnamed item
+  ///
+  /// In en, this message translates to:
+  /// **'(unnamed)'**
+  String get unnamedItem;
+
+  /// Relative deletion timestamp
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted {time}'**
+  String deletedTimeAgo(String time);
+
+  /// Relative time: just now
+  ///
+  /// In en, this message translates to:
+  /// **'just now'**
+  String get justNow;
+
+  /// Relative time: minutes ago
+  ///
+  /// In en, this message translates to:
+  /// **'{count} min ago'**
+  String minutesAgo(int count);
+
+  /// Relative time: hours ago
+  ///
+  /// In en, this message translates to:
+  /// **'{count} h ago'**
+  String hoursAgo(int count);
+
+  /// Relative time: 1 day ago
+  ///
+  /// In en, this message translates to:
+  /// **'1 day ago'**
+  String get oneDayAgo;
+
+  /// Relative time: days ago
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days ago'**
+  String daysAgo(int count);
+
+  /// Retention countdown: 1 day left
+  ///
+  /// In en, this message translates to:
+  /// **'1 day left'**
+  String get oneDayLeft;
+
+  /// Retention countdown: days left
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days left'**
+  String daysLeft(int count);
+
+  /// Retention countdown: hours left
+  ///
+  /// In en, this message translates to:
+  /// **'{count} h left'**
+  String hoursLeft(int count);
+
+  /// Retention countdown: less than an hour left
+  ///
+  /// In en, this message translates to:
+  /// **'less than an hour left'**
+  String get lessThanHourLeft;
+
+  /// Quantity picker dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Set Quantity & Unit'**
+  String get setQuantityAndUnit;
+
+  /// Unit dropdown label
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get unit;
+
+  /// No unit selected option
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get none;
+
+  /// OK button label
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get ok;
+
+  /// Category picker dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Change category'**
+  String get changeCategory;
+
+  /// Bulk import dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Bulk Import Groceries'**
+  String get bulkImportGroceries;
+
+  /// Bulk import text field hint
+  ///
+  /// In en, this message translates to:
+  /// **'e.g.\n2 cartons milk\n1.5 kg apples\n2 cloves garlic\n500g minced meat'**
+  String get bulkImportHint;
+
+  /// Next button label
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get next;
+
+  /// Bulk import confirmation dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Review Items'**
+  String get reviewItems;
+
+  /// Add all items button label
+  ///
+  /// In en, this message translates to:
+  /// **'Add All'**
+  String get addAll;
+
+  /// Edit shopping item dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Item'**
+  String get editItem;
+
+  /// Item name field label
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get itemName;
+
+  /// Validation error when item name is empty
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter an item name'**
+  String get itemNameRequired;
+
+  /// Optional note field label
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get noteOptional;
+
+  /// Hint for item note field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g., organic, brand, etc.'**
+  String get noteHint;
+
+  /// Category field label
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get category;
+
+  /// Quantity field label
+  ///
+  /// In en, this message translates to:
+  /// **'Quantity'**
+  String get quantity;
+
+  /// Save button label
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get save;
+
+  /// Uncheck all completed items action
+  ///
+  /// In en, this message translates to:
+  /// **'Uncheck all'**
+  String get uncheckAll;
+
+  /// Undo toast when 1 completed item is unchecked
+  ///
+  /// In en, this message translates to:
+  /// **'1 item unchecked'**
+  String get oneItemUnchecked;
+
+  /// Undo toast when multiple completed items are unchecked
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items unchecked'**
+  String itemsUnchecked(int count);
+
+  /// Share shopping list menu item
+  ///
+  /// In en, this message translates to:
+  /// **'Share List'**
+  String get shareList;
 }
 
 class _AppLocalizationsDelegate

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:housekeepr/core/extensions.dart';
+import 'package:housekeepr/core/quantity_unit_formatter.dart';
+import 'package:housekeepr/generated/app_localizations.dart';
 
 /// Shows a dialog for picking a quantity with +/- buttons and a unit selection.
 /// Returns a record with the selected quantity and unit, or null if cancelled.
@@ -84,13 +86,14 @@ class _QuantityPickerDialogState extends State<_QuantityPickerDialog> {
   void _decrement() {
     if (_quantity > widget.min) {
       HapticFeedback.lightImpact();
-      setState(() => _quantity -= 1);
+      setState(() => _quantity = (_quantity - 1).clamp(widget.min, widget.max));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     // If there's a custom unit not in commonUnits, add it.
     final dropdownItems = <String?>[null, ...commonUnits];
@@ -99,7 +102,7 @@ class _QuantityPickerDialogState extends State<_QuantityPickerDialog> {
     }
 
     return AlertDialog(
-      title: const Text('Set Quantity & Unit'),
+      title: Text(l10n.setQuantityAndUnit),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -157,14 +160,17 @@ class _QuantityPickerDialogState extends State<_QuantityPickerDialog> {
           const SizedBox(height: 24),
           DropdownButtonFormField<String?>(
             initialValue: _unit,
-            decoration: const InputDecoration(
-              labelText: 'Unit',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l10n.unit,
+              border: const OutlineInputBorder(),
             ),
             items: dropdownItems.map((unitStr) {
+              final label = unitStr == null
+                  ? l10n.none
+                  : (formatQuantityUnit(unitStr, _quantity) ?? unitStr);
               return DropdownMenuItem<String?>(
                 value: unitStr,
-                child: Text(unitStr ?? 'None'),
+                child: Text(label),
               );
             }).toList(),
             onChanged: (val) {
@@ -178,11 +184,11 @@ class _QuantityPickerDialogState extends State<_QuantityPickerDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, (_quantity, _unit)),
-          child: const Text('OK'),
+          child: Text(l10n.ok),
         ),
       ],
     );

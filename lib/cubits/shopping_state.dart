@@ -1,6 +1,8 @@
 part of 'shopping_cubit.dart';
 
 class ShoppingState extends Equatable {
+  static const Object _sentinel = Object();
+
   final List<GroceryItem> items;
 
   /// Soft-deleted items still inside the retention window, newest first.
@@ -37,11 +39,11 @@ class ShoppingState extends Equatable {
     bool? aisleModeEnabled,
     bool? flatViewEnabled,
     bool? isLoading,
-    String? error,
+    Object? error = _sentinel,
     GroceryCategory? selectedCategory,
     bool? manualCategoryOverride,
     String? manualOverrideText,
-    String? suggestedText,
+    Object? suggestedText = _sentinel,
     double? suggestionConfidence,
   }) => ShoppingState(
     items: items ?? this.items,
@@ -49,12 +51,14 @@ class ShoppingState extends Equatable {
     aisleModeEnabled: aisleModeEnabled ?? this.aisleModeEnabled,
     flatViewEnabled: flatViewEnabled ?? this.flatViewEnabled,
     isLoading: isLoading ?? this.isLoading,
-    error: error ?? this.error,
+    error: identical(error, _sentinel) ? this.error : error as String?,
     selectedCategory: selectedCategory ?? this.selectedCategory,
     manualCategoryOverride:
         manualCategoryOverride ?? this.manualCategoryOverride,
     manualOverrideText: manualOverrideText ?? this.manualOverrideText,
-    suggestedText: suggestedText ?? this.suggestedText,
+    suggestedText: identical(suggestedText, _sentinel)
+        ? this.suggestedText
+        : suggestedText as String?,
     suggestionConfidence: suggestionConfidence ?? this.suggestionConfidence,
   );
 

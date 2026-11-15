@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../generated/app_localizations.dart';
 import '../../../models/grocery_category.dart';
 
 Future<GroceryCategory?> showCategoryPickerDialog(
@@ -9,8 +10,9 @@ Future<GroceryCategory?> showCategoryPickerDialog(
   return showDialog<GroceryCategory>(
     context: context,
     builder: (context) {
+      final l10n = AppLocalizations.of(context);
       return AlertDialog(
-        title: const Text('Change category'),
+        title: Text(l10n.changeCategory),
         content: SizedBox(
           width: double.maxFinite,
           child: SingleChildScrollView(
@@ -43,7 +45,7 @@ Future<GroceryCategory?> showCategoryPickerDialog(
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
         ],
       );

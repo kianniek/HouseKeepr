@@ -1,16 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../../../core/extensions.dart';
+import '../../../../core/grocery_parser.dart';
+import '../../../../core/quantity_unit_formatter.dart';
 import '../../../../cubits/shopping_cubit.dart';
+import '../../../../generated/app_localizations.dart';
 import '../../../../models/grocery_category.dart';
 import '../../../../models/grocery_item.dart';
 import '../../../../services/firestore_sync_service.dart';
+import '../../../../services/shopping_products_service.dart';
 import '../../../common/widgets/bulk_import_confirmation_dialog.dart';
 import '../../../common/widgets/bulk_import_dialog.dart';
-import '../../../common/widgets/category_picker_dialog.dart';
+import '../../../common/widgets/empty_state.dart';
 import '../../../common/widgets/quantity_picker_dialog.dart';
 import '../../../common/widgets/undo_toast.dart';
+import '../widgets/shopping_add_product_dialog.dart';
+import '../widgets/shopping_edit_item_dialog.dart';
 import '../widgets/shopping_list_item_tile.dart';
 import 'recently_deleted_page.dart';
 
@@ -22,9 +31,15 @@ class SmartShoppingListPage extends StatefulWidget {
 }
 
 class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
+  static const String _completedExpandedKey =
+      'shopping_completed_expanded_v1';
+
   final TextEditingController _itemController = TextEditingController();
+  final TextEditingController _ghostController = TextEditingController();
   final FocusNode _itemFocusNode = FocusNode();
   bool _showCategoryChips = false;
+  bool _completedExpanded = true;
+  bool _hasToggledCompletedExpanded = false;
   // Scroll FAB state
   final ScrollController _scrollController = ScrollController();
   bool _showScrollDownFab = false;
@@ -36,7 +51,34 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
     super.initState();
     _itemController.addListener(_onTextChanged);
     _scrollController.addListener(_onScroll);
+    if (context.read<ShoppingCubit>().state.aisleModeEnabled) {
+      WakelockPlus.enable();
+    }
+    _loadCompletedExpandedPreference();
     WidgetsBinding.instance.addPostFrameCallback((_) => _updateFabVisibility());
+  }
+
+  Future<void> _loadCompletedExpandedPreference() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted || _hasToggledCompletedExpanded) return;
+      final saved = prefs.getBool(_completedExpandedKey);
+      if (saved != null && saved != _completedExpanded) {
+        setState(() => _completedExpanded = saved);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleCompletedExpanded() async {
+    final nextValue = !_completedExpanded;
+    setState(() {
+      _hasToggledCompletedExpanded = true;
+      _completedExpanded = nextValue;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_completedExpandedKey, nextValue);
+    } catch (_) {}
   }
 
   void _onTextChanged() {
@@ -47,6 +89,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
   void dispose() {
     _itemController.removeListener(_onTextChanged);
     _itemController.dispose();
+    _ghostController.dispose();
     _itemFocusNode.dispose();
     _scrollController.dispose();
     // Disable wake lock when leaving the page
@@ -107,17 +150,102 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
   }
 
   void _addItem() {
-    final text = _toPascalCase(_itemController.text);
-    if (text.isEmpty) return;
+    final rawText = _itemController.text.trim();
+    if (rawText.isEmpty) return;
 
-    context.read<ShoppingCubit>().addItem(text);
+    final cubit = context.read<ShoppingCubit>();
+    final parsed = GroceryParser.parseLine(rawText);
+    if (parsed.name.isEmpty) return;
+
+    final category = cubit.state.manualCategoryOverride
+        ? cubit.state.selectedCategory
+        : parsed.category;
+
+    cubit.addItem(
+      parsed.name,
+      note: parsed.note,
+      quantity: parsed.hasExplicitQuantity ? parsed.quantity : null,
+      unit: parsed.hasExplicitQuantity ? parsed.unit : null,
+      category: category,
+    );
 
     _itemController.clear();
     _itemFocusNode.requestFocus();
   }
 
+  Future<void> _editItem(BuildContext context, GroceryItem item) async {
+    final cubit = context.read<ShoppingCubit>();
+    final result = await showShoppingEditItemDialog(context, item: item);
+    if (result == null || !mounted) return;
+    await cubit.updateItemDetails(
+      item.id,
+      name: result.name,
+      note: result.note,
+      quantity: result.quantity,
+      unit: result.unit,
+      category: result.category,
+    );
+  }
+
+  Future<void> _uncheckAllWithUndo(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final cubit = context.read<ShoppingCubit>();
+    final ids = await cubit.uncheckAllCompleted();
+    if (ids.isEmpty || !mounted) return;
+    showUndoToast(
+      this.context,
+      icon: Icons.undo,
+      message: ids.length == 1
+          ? l10n.oneItemUnchecked
+          : l10n.itemsUnchecked(ids.length),
+      onUndo: () => cubit.recheckItems(ids),
+    );
+  }
+
+  void _shareList(BuildContext context, ShoppingState state) {
+    final l10n = AppLocalizations.of(context);
+    final unchecked = state.items.where((i) => !i.checked).toList();
+    if (unchecked.isEmpty) return;
+
+    String formatItemLine(GroceryItem item) {
+      final qtyStr = item.quantity % 1 == 0
+          ? item.quantity.toInt().toString()
+          : item.quantity.toTrimmedFixed(2);
+      final unitLabel = formatQuantityUnit(item.unit, item.quantity);
+      final qtyPart = unitLabel != null && unitLabel.isNotEmpty
+          ? '$qtyStr $unitLabel'
+          : (item.quantity == 1.0 ? '' : '${qtyStr}x');
+      final prefix = qtyPart.isNotEmpty ? '- $qtyPart ' : '- ';
+      final notePart = (item.note != null && item.note!.isNotEmpty)
+          ? ' (${item.note})'
+          : '';
+      return '$prefix${item.name}$notePart';
+    }
+
+    final buffer = StringBuffer('${l10n.shoppingList}\n');
+    if (state.flatViewEnabled) {
+      for (final item in unchecked) {
+        buffer.writeln(formatItemLine(item));
+      }
+    } else {
+      final grouped = <GroceryCategory, List<GroceryItem>>{};
+      for (final item in unchecked) {
+        grouped.putIfAbsent(item.category, () => []).add(item);
+      }
+      for (final entry in grouped.entries) {
+        buffer.writeln('\n${entry.key.emoji} ${entry.key.displayName}');
+        for (final item in entry.value) {
+          buffer.writeln(formatItemLine(item));
+        }
+      }
+    }
+
+    SharePlus.instance.share(ShareParams(text: buffer.toString().trim()));
+  }
+
   /// Soft-delete an item and offer an undo toast.
   Future<void> _deleteWithUndo(BuildContext context, String id) async {
+    final l10n = AppLocalizations.of(context);
     final cubit = context.read<ShoppingCubit>();
     final deleted = await cubit.deleteItem(id);
     if (deleted == null || !mounted) return;
@@ -125,14 +253,15 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
       this.context,
       icon: Icons.delete_outline,
       message: deleted.name.isEmpty
-          ? 'Item deleted'
-          : '"${deleted.name}" deleted',
+          ? l10n.itemDeleted
+          : l10n.namedItemDeleted(deleted.name),
       onUndo: () => cubit.restoreItems([id]),
     );
   }
 
   /// Clear all checked items and offer an undo toast.
   Future<void> _clearCheckedWithUndo(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
     final cubit = context.read<ShoppingCubit>();
     final ids = await cubit.clearCheckedItems();
     if (ids.isEmpty || !mounted) return;
@@ -140,9 +269,20 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
       this.context,
       icon: Icons.playlist_remove,
       message: ids.length == 1
-          ? '1 item cleared'
-          : '${ids.length} items cleared',
+          ? l10n.oneItemCleared
+          : l10n.itemsCleared(ids.length),
       onUndo: () => cubit.restoreItems(ids),
+    );
+  }
+
+  Future<void> _openAddProductDialog(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    final service = ShoppingProductsService.instance;
+    await service.init(prefs);
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => ShoppingAddProductDialog(productsService: service),
     );
   }
 
@@ -158,23 +298,10 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
     );
   }
 
-  String _toPascalCase(String input) {
-    final collapsed = input.trim().replaceAll(RegExp(r'\s+'), ' ');
-    if (collapsed.isEmpty) return '';
-    return collapsed
-        .split(' ')
-        .where((word) => word.isNotEmpty)
-        .map(
-          (word) => word.length == 1
-              ? word.toUpperCase()
-              : '${word[0].toUpperCase()}${word.substring(1)}',
-        )
-        .join(' ');
-  }
-
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
+    final l10n = AppLocalizations.of(context);
 
     return BlocListener<ShoppingCubit, ShoppingState>(
       listenWhen: (prev, curr) =>
@@ -189,7 +316,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
-          title: const Text('Shopping List'),
+          title: Text(l10n.shoppingList),
           elevation: 0,
           actions: [
             BlocBuilder<ShoppingCubit, ShoppingState>(
@@ -207,104 +334,138 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
               },
             ),
             BlocBuilder<ShoppingCubit, ShoppingState>(
-              builder: (context, state) => PopupMenuButton(
-                onSelected: (value) async {
-                  if (value == 'clear') {
-                    _clearCheckedWithUndo(context);
-                  } else if (value == 'recentlyDeleted') {
-                    _openRecentlyDeleted(context);
-                  } else if (value == 'mode') {
-                    context.read<ShoppingCubit>().toggleAisleMode();
-                  } else if (value == 'flat') {
-                    context.read<ShoppingCubit>().toggleFlatView();
-                  } else if (value == 'refresh') {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final syncService =
-                        RepositoryProvider.of<FirestoreSyncService>(context);
-                    final cubit = context.read<ShoppingCubit>();
-                    try {
-                      await cubit.reloadItemsFromServer(syncService);
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('Shopping list reloaded from server'),
-                        ),
-                      );
-                    } catch (e) {
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('Failed to reload: $e')),
-                      );
+              builder: (context, state) {
+                final hasChecked = state.items.any((i) => i.checked);
+                final hasUnchecked = state.items.any((i) => !i.checked);
+                return PopupMenuButton(
+                  onSelected: (value) async {
+                    if (value == 'clear') {
+                      _clearCheckedWithUndo(context);
+                    } else if (value == 'share') {
+                      _shareList(context, state);
+                    } else if (value == 'recentlyDeleted') {
+                      _openRecentlyDeleted(context);
+                    } else if (value == 'addProduct') {
+                      _openAddProductDialog(context);
+                    } else if (value == 'mode') {
+                      context.read<ShoppingCubit>().toggleAisleMode();
+                    } else if (value == 'flat') {
+                      context.read<ShoppingCubit>().toggleFlatView();
+                    } else if (value == 'refresh') {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final syncService =
+                          RepositoryProvider.of<FirestoreSyncService>(context);
+                      final cubit = context.read<ShoppingCubit>();
+                      try {
+                        await cubit.reloadItemsFromServer(syncService);
+                        messenger.showSnackBar(
+                          SnackBar(content: Text(l10n.shoppingListReloaded)),
+                        );
+                      } catch (e) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text(l10n.failedToReload('$e'))),
+                        );
+                      }
                     }
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'mode',
-                    child: Row(
-                      children: [
-                        Icon(
-                          state.aisleModeEnabled
-                              ? Icons.check_box
-                              : Icons.check_box_outline_blank,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          state.aisleModeEnabled
-                              ? 'Aisle Mode: On'
-                              : 'Aisle Mode: Off',
-                        ),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'flat',
-                    child: Row(
-                      children: [
-                        Icon(
-                          state.flatViewEnabled
-                              ? Icons.check_box
-                              : Icons.check_box_outline_blank,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          state.flatViewEnabled
-                              ? 'Flat View: On'
-                              : 'Flat View: Off',
-                        ),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'refresh',
-                    child: Row(
-                      children: [
-                        Icon(Icons.refresh, size: 20),
-                        SizedBox(width: 8),
-                        Text('Force Reload'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'clear',
-                    child: Text('Clear Checked Items'),
-                  ),
-                  PopupMenuItem(
-                    value: 'recentlyDeleted',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.restore_from_trash, size: 20),
-                        const SizedBox(width: 8),
-                        const Text('Recently Deleted'),
-                        if (state.recentlyDeleted.isNotEmpty) ...[
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'mode',
+                      child: Row(
+                        children: [
+                          Icon(
+                            state.aisleModeEnabled
+                                ? Icons.check_box
+                                : Icons.check_box_outline_blank,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
-                          Badge(label: Text('${state.recentlyDeleted.length}')),
+                          Text(
+                            state.aisleModeEnabled
+                                ? l10n.aisleModeOn
+                                : l10n.aisleModeOff,
+                          ),
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                    PopupMenuItem(
+                      value: 'flat',
+                      child: Row(
+                        children: [
+                          Icon(
+                            state.flatViewEnabled
+                                ? Icons.check_box
+                                : Icons.check_box_outline_blank,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            state.flatViewEnabled
+                                ? l10n.flatViewOn
+                                : l10n.flatViewOff,
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'refresh',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.refresh, size: 20),
+                          const SizedBox(width: 8),
+                          Text(l10n.forceReload),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'share',
+                      enabled: hasUnchecked,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.share, size: 20),
+                          const SizedBox(width: 8),
+                          Text(l10n.shareList),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'clear',
+                      enabled: hasChecked,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.clear_all, size: 20),
+                          const SizedBox(width: 8),
+                          Text(l10n.clearCheckedItems),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'recentlyDeleted',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.restore_from_trash, size: 20),
+                          const SizedBox(width: 8),
+                          Text(l10n.recentlyDeleted),
+                          if (state.recentlyDeleted.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Badge(label: Text('${state.recentlyDeleted.length}')),
+                          ],
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'addProduct',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.library_add, size: 20),
+                          const SizedBox(width: 8),
+                          Text(l10n.addProductToDatabase),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -333,12 +494,14 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                 .read<ShoppingCubit>()
                                 .reloadItemsFromServer(syncService);
                           },
-                          child: const CustomScrollView(
-                            physics: AlwaysScrollableScrollPhysics(),
+                          child: CustomScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
                             slivers: [
                               SliverFillRemaining(
-                                child: Center(
-                                  child: Text('No items yet. Start adding!'),
+                                child: EmptyStateWidget(
+                                  icon: Icons.shopping_cart_outlined,
+                                  message: l10n.noItemsYet,
+                                  subMessage: l10n.noItemsSubMessage,
                                 ),
                               ),
                             ],
@@ -382,12 +545,6 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                 if (notification is ScrollStartNotification ||
                                     notification is UserScrollNotification) {
                                   FocusScope.of(context).unfocus();
-                                  if (_showScrollDownFab || _showScrollUpFab) {
-                                    setState(() {
-                                      _showScrollDownFab = false;
-                                      _showScrollUpFab = false;
-                                    });
-                                  }
                                 }
                                 return false;
                               },
@@ -434,23 +591,8 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                                   );
                                             }
                                           },
-                                          onLongPress: () async {
-                                            final newCat =
-                                                await showCategoryPickerDialog(
-                                                  context,
-                                                  currentCategory:
-                                                      item.category,
-                                                );
-                                            if (newCat != null &&
-                                                context.mounted) {
-                                              context
-                                                  .read<ShoppingCubit>()
-                                                  .updateCategory(
-                                                    item.id,
-                                                    newCat,
-                                                  );
-                                            }
-                                          },
+                                          onLongPress: () =>
+                                              _editItem(context, item),
                                         );
                                       }, childCount: flatSortedItems.length),
                                     )
@@ -477,7 +619,8 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                         ),
                                       ),
                                     ),
-                                  if (checkedItems.isNotEmpty)
+                                  if (checkedItems.isNotEmpty &&
+                                      _completedExpanded)
                                     SliverList(
                                       delegate: SliverChildBuilderDelegate(
                                         (
@@ -521,24 +664,10 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                                   );
                                             }
                                           },
-                                          onLongPress: () async {
-                                            final newCat =
-                                                await showCategoryPickerDialog(
-                                                  context,
-                                                  currentCategory:
-                                                      checkedItems[index]
-                                                          .category,
-                                                );
-                                            if (newCat != null &&
-                                                context.mounted) {
-                                              context
-                                                  .read<ShoppingCubit>()
-                                                  .updateCategory(
-                                                    checkedItems[index].id,
-                                                    newCat,
-                                                  );
-                                            }
-                                          },
+                                          onLongPress: () => _editItem(
+                                            context,
+                                            checkedItems[index],
+                                          ),
                                         ),
                                         childCount: checkedItems.length,
                                       ),
@@ -595,12 +724,12 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                             // Scroll Up FAB (appears when at bottom)
                             Positioned(
                               right: 16,
-                              top: 16,
+                              bottom: 16,
                               child: AnimatedSlide(
                                 duration: _fabAnimDur,
                                 offset: _showScrollUpFab
                                     ? Offset.zero
-                                    : const Offset(0, -1),
+                                    : const Offset(0, 1),
                                 child: AnimatedOpacity(
                                   duration: _fabAnimDur,
                                   opacity: _showScrollUpFab ? 1.0 : 0.0,
@@ -653,6 +782,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
           prev.suggestionConfidence != curr.suggestionConfidence ||
           prev.manualCategoryOverride != curr.manualCategoryOverride,
       builder: (context, state) {
+        final l10n = AppLocalizations.of(context);
         const inputPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 12);
         final inputTextStyle = Theme.of(context).textTheme.bodyLarge;
 
@@ -670,6 +800,9 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
         if (showGhost) {
           displaySuggestedText =
               currentText + displaySuggestedText.substring(currentLower.length);
+          if (_ghostController.text != displaySuggestedText) {
+            _ghostController.text = displaySuggestedText;
+          }
         }
 
         return Padding(
@@ -682,9 +815,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                   if (showGhost)
                     IgnorePointer(
                       child: TextField(
-                        controller: TextEditingController(
-                          text: displaySuggestedText,
-                        ),
+                        controller: _ghostController,
                         style: inputTextStyle?.copyWith(
                           color: Theme.of(
                             context,
@@ -736,10 +867,12 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                               }
                             },
                             decoration: InputDecoration(
-                              hintText: 'Add item...',
+                              hintText: l10n.addItem,
                               suffixText: showGhost
                                   ? null
-                                  : 'in ${state.selectedCategory.displayName}',
+                                  : l10n.inCategory(
+                                      state.selectedCategory.displayName,
+                                    ),
                               suffixStyle: Theme.of(
                                 context,
                               ).textTheme.labelSmall,
@@ -776,7 +909,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                             }
                           },
                           icon: const Icon(Icons.playlist_add),
-                          tooltip: 'Bulk Add',
+                          tooltip: l10n.bulkAdd,
                         ),
                       ],
                     ),
@@ -981,15 +1114,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                   );
                 }
               },
-              onLongPress: () async {
-                final newCat = await showCategoryPickerDialog(
-                  context,
-                  currentCategory: item.category,
-                );
-                if (newCat != null && context.mounted) {
-                  context.read<ShoppingCubit>().updateCategory(item.id, newCat);
-                }
-              },
+              onLongPress: () => _editItem(context, item),
             );
           }, childCount: items.length),
         ),
@@ -998,24 +1123,38 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
   }
 
   Widget _buildCompletedHeader(int count) {
-    return Container(
-      color: Theme.of(context).colorScheme.surface,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Icon(
-            Icons.check_circle,
-            color: Theme.of(context).colorScheme.primary,
+    final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surface,
+      child: InkWell(
+        onTap: _toggleCompletedExpanded,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Icon(Icons.check_circle, color: scheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.completedCount(count),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: scheme.primary,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _uncheckAllWithUndo(context),
+                child: Text(l10n.uncheckAll),
+              ),
+              Icon(
+                _completedExpanded ? Icons.expand_less : Icons.expand_more,
+                color: scheme.onSurfaceVariant,
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text(
-            'Completed ($count)',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

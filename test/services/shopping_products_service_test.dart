@@ -55,4 +55,41 @@ void main() {
 
     expect(scores.containsKey(GroceryCategory.other), isFalse);
   });
+
+  test('frequency-based category learning picks most frequent and breaks ties by recency', () async {
+    await service.learnProductUsage('Oat Milk', category: GroceryCategory.dairy);
+    await service.learnProductUsage('Oat Milk', category: GroceryCategory.dairy);
+    await service.learnProductUsage('Oat Milk', category: GroceryCategory.beverages);
+    expect(service.getCategoryForProduct('oat milk'), GroceryCategory.dairy);
+
+    // Tie: beverages reaches 2 and is most recent
+    await service.learnProductUsage('Oat Milk', category: GroceryCategory.beverages);
+    expect(service.getCategoryForProduct('oat milk'), GroceryCategory.beverages);
+  });
+
+  test('legacy String entry in learning_products is read and upgraded', () async {
+    await Hive.box('learning_products').put('cheese', 'dairy');
+    expect(service.getCategoryForProduct('cheese'), GroceryCategory.dairy);
+
+    await service.learnProductUsage('Cheese', quantity: 250, unit: 'g');
+    expect(service.getCategoryForProduct('cheese'), GroceryCategory.dairy);
+    final usual = service.getUsualQuantityAndUnit('cheese');
+    expect(usual?.quantity, 250.0);
+    expect(usual?.unit, 'g');
+  });
+
+  test('getUsualQuantityAndUnit returns most frequent pair and handles null unit', () async {
+    await service.learnProductUsage('Milk', quantity: 1, unit: 'pak');
+    await service.learnProductUsage('Milk', quantity: 2, unit: 'L');
+    await service.learnProductUsage('Milk', quantity: 2, unit: 'L');
+
+    final usual = service.getUsualQuantityAndUnit('milk');
+    expect(usual?.quantity, 2.0);
+    expect(usual?.unit, 'L');
+
+    await service.learnProductUsage('Eggs', quantity: 6, unit: null);
+    final eggsUsual = service.getUsualQuantityAndUnit('eggs');
+    expect(eggsUsual?.quantity, 6.0);
+    expect(eggsUsual?.unit, isNull);
+  });
 }

@@ -141,10 +141,48 @@ class ShoppingProductsService {
     String productName,
     GroceryCategory category,
   ) async {
-    if (_learningBox == null) return;
+    await learnProductUsage(productName, category: category, weight: 1);
+  }
+
+  /// Record a product usage observation (category, quantity, and/or unit)
+  /// with an optional [weight] (e.g. higher weight for explicit user edits).
+  Future<void> learnProductUsage(
+    String productName, {
+    GroceryCategory? category,
+    double? quantity,
+    String? unit,
+    int weight = 1,
+  }) async {
+    if (_learningBox == null || !_learningBox!.isOpen) return;
     final key = _normalizeText(productName);
-    if (key.isEmpty) return;
-    await _learningBox!.put(key, category.name);
+    if (key.isEmpty || weight <= 0) return;
+    if (category == null && quantity == null) return;
+
+    final stats = _LearnedProductStats.fromRaw(_learningBox!.get(key));
+    if (category != null) {
+      stats.recordCategory(category, weight: weight);
+    }
+    if (quantity != null) {
+      final trimmedUnit = unit?.trim();
+      final finalUnit =
+          (trimmedUnit == null || trimmedUnit.isEmpty) ? null : trimmedUnit;
+      stats.recordQtyUnit(quantity, finalUnit, weight: weight);
+    }
+    await _learningBox!.put(key, stats.toMap());
+  }
+
+  /// Returns the most frequently used (quantity, unit) pair for [productName]
+  /// using exact normalized matching, or null if nothing has been learned yet.
+  ({double quantity, String? unit})? getUsualQuantityAndUnit(
+    String productName,
+  ) {
+    if (_learningBox == null || !_learningBox!.isOpen) return null;
+    final key = _normalizeText(productName);
+    if (key.isEmpty) return null;
+
+    final raw = _learningBox!.get(key);
+    if (raw == null) return null;
+    return _LearnedProductStats.fromRaw(raw).bestQtyUnit();
   }
 
   /// Get a learned category or fallback to CSV data.
@@ -226,8 +264,9 @@ class ShoppingProductsService {
 
     for (final rawKey in _learningBox!.keys) {
       if (rawKey is! String) continue;
-      final categoryName = _learningBox!.get(rawKey) as String?;
-      final category = GroceryCategory.fromString(categoryName);
+      final stats = _LearnedProductStats.fromRaw(_learningBox!.get(rawKey));
+      final category = stats.bestCategory();
+      if (category == null) continue;
       final score = _learnedMatchConfidence(normalized, rawKey);
       if (score <= 0) continue;
 
@@ -489,4 +528,117 @@ class ProductSuggestion {
   final double confidence;
 
   ProductSuggestion(this.product, this.confidence);
+}
+
+class _LearnedProductStats {
+  final Map<String, int> categoryCounts;
+  final Map<String, int> qtyUnitCounts;
+  String? lastCategory;
+  String? lastQtyUnit;
+  DateTime updatedAt;
+
+  _LearnedProductStats({
+    Map<String, int>? categoryCounts,
+    Map<String, int>? qtyUnitCounts,
+    this.lastCategory,
+    this.lastQtyUnit,
+    DateTime? updatedAt,
+  }) : categoryCounts = categoryCounts ?? {},
+       qtyUnitCounts = qtyUnitCounts ?? {},
+       updatedAt = updatedAt ?? DateTime.now();
+
+  factory _LearnedProductStats.fromRaw(dynamic raw) {
+    if (raw is String) {
+      return _LearnedProductStats(
+        categoryCounts: {raw: 1},
+        lastCategory: raw,
+      );
+    }
+    if (raw is Map) {
+      final rawCats = raw['categoryCounts'];
+      final catCounts = <String, int>{};
+      if (rawCats is Map) {
+        rawCats.forEach((k, v) {
+          if (k is String && v is num) {
+            catCounts[k] = v.toInt();
+          }
+        });
+      }
+      final rawQtyUnits = raw['qtyUnitCounts'];
+      final qtyUnitCounts = <String, int>{};
+      if (rawQtyUnits is Map) {
+        rawQtyUnits.forEach((k, v) {
+          if (k is String && v is num) {
+            qtyUnitCounts[k] = v.toInt();
+          }
+        });
+      }
+      return _LearnedProductStats(
+        categoryCounts: catCounts,
+        qtyUnitCounts: qtyUnitCounts,
+        lastCategory: raw['lastCategory'] as String?,
+        lastQtyUnit: raw['lastQtyUnit'] as String?,
+        updatedAt:
+            DateTime.tryParse(raw['updatedAt'] as String? ?? '') ??
+            DateTime.now(),
+      );
+    }
+    return _LearnedProductStats();
+  }
+
+  Map<String, dynamic> toMap() => {
+    'categoryCounts': categoryCounts,
+    'qtyUnitCounts': qtyUnitCounts,
+    'lastCategory': lastCategory,
+    'lastQtyUnit': lastQtyUnit,
+    'updatedAt': updatedAt.toIso8601String(),
+  };
+
+  void recordCategory(GroceryCategory category, {int weight = 1}) {
+    final key = category.name;
+    categoryCounts[key] = (categoryCounts[key] ?? 0) + weight;
+    lastCategory = key;
+    updatedAt = DateTime.now();
+  }
+
+  void recordQtyUnit(double quantity, String? unit, {int weight = 1}) {
+    final key = '${quantity.toDouble()}|${unit ?? ''}';
+    qtyUnitCounts[key] = (qtyUnitCounts[key] ?? 0) + weight;
+    lastQtyUnit = key;
+    updatedAt = DateTime.now();
+  }
+
+  GroceryCategory? bestCategory() {
+    if (categoryCounts.isEmpty) return null;
+    String? bestKey;
+    var bestCount = -1;
+    categoryCounts.forEach((key, count) {
+      if (count > bestCount ||
+          (count == bestCount && key == lastCategory)) {
+        bestCount = count;
+        bestKey = key;
+      }
+    });
+    if (bestKey == null) return null;
+    return GroceryCategory.fromString(bestKey);
+  }
+
+  ({double quantity, String? unit})? bestQtyUnit() {
+    if (qtyUnitCounts.isEmpty) return null;
+    String? bestKey;
+    var bestCount = -1;
+    qtyUnitCounts.forEach((key, count) {
+      if (count > bestCount || (count == bestCount && key == lastQtyUnit)) {
+        bestCount = count;
+        bestKey = key;
+      }
+    });
+    if (bestKey == null) return null;
+    final sep = bestKey!.indexOf('|');
+    if (sep == -1) return null;
+    final qty = double.tryParse(bestKey!.substring(0, sep));
+    if (qty == null) return null;
+    final rawUnit = bestKey!.substring(sep + 1);
+    return (quantity: qty, unit: rawUnit.isEmpty ? null : rawUnit);
+  }
 }

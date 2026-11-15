@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/extensions.dart';
 import '../../../../core/quantity_unit_formatter.dart';
 import '../../../../cubits/shopping_cubit.dart';
+import '../../../../generated/app_localizations.dart';
 import '../../../../models/grocery_item.dart';
 import '../../../common/widgets/empty_state.dart';
 import '../../../common/widgets/undo_toast.dart';
@@ -14,6 +16,7 @@ class RecentlyDeletedPage extends StatelessWidget {
   const RecentlyDeletedPage({super.key});
 
   Future<void> _restore(BuildContext context, GroceryItem item) async {
+    final l10n = AppLocalizations.of(context);
     final cubit = context.read<ShoppingCubit>();
     final originalDeletedAt = ShoppingCubit.deletedMoment(item);
     await cubit.restoreItems([item.id], uncheck: true);
@@ -22,8 +25,8 @@ class RecentlyDeletedPage extends StatelessWidget {
       context,
       icon: Icons.restore,
       message: item.name.isEmpty
-          ? 'Item restored'
-          : '"${item.name}" restored to your list',
+          ? l10n.itemRestored
+          : l10n.namedItemRestored(item.name),
       onUndo: () => cubit.deleteItem(item.id, deletedAt: originalDeletedAt),
     );
   }
@@ -32,6 +35,7 @@ class RecentlyDeletedPage extends StatelessWidget {
     BuildContext context,
     List<GroceryItem> items,
   ) async {
+    final l10n = AppLocalizations.of(context);
     final cubit = context.read<ShoppingCubit>();
     final originals = {
       for (final i in items) i.id: ShoppingCubit.deletedMoment(i),
@@ -42,8 +46,8 @@ class RecentlyDeletedPage extends StatelessWidget {
       context,
       icon: Icons.restore,
       message: items.length == 1
-          ? '1 item restored'
-          : '${items.length} items restored',
+          ? l10n.oneItemRestored
+          : l10n.itemsRestored(items.length),
       onUndo: () async {
         for (final entry in originals.entries) {
           await cubit.deleteItem(entry.key, deletedAt: entry.value);
@@ -53,21 +57,21 @@ class RecentlyDeletedPage extends StatelessWidget {
   }
 
   Future<void> _emptyAll(BuildContext context, List<GroceryItem> items) async {
+    final l10n = AppLocalizations.of(context);
     final cubit = context.read<ShoppingCubit>();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Empty Recently Deleted?'),
+        title: Text(l10n.emptyRecentlyDeletedTitle),
         content: Text(
           items.length == 1
-              ? '1 item will be permanently deleted. This cannot be undone.'
-              : '${items.length} items will be permanently deleted. '
-                    'This cannot be undone.',
+              ? l10n.emptyRecentlyDeletedSingle
+              : l10n.emptyRecentlyDeletedMultiple(items.length),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
@@ -75,7 +79,7 @@ class RecentlyDeletedPage extends StatelessWidget {
               foregroundColor: Theme.of(ctx).colorScheme.onError,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete forever'),
+            child: Text(l10n.deleteForever),
           ),
         ],
       ),
@@ -87,13 +91,14 @@ class RecentlyDeletedPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return BlocBuilder<ShoppingCubit, ShoppingState>(
       buildWhen: (prev, curr) => prev.recentlyDeleted != curr.recentlyDeleted,
       builder: (context, state) {
         final items = state.recentlyDeleted;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Recently Deleted'),
+            title: Text(l10n.recentlyDeleted),
             actions: [
               if (items.isNotEmpty)
                 PopupMenuButton<String>(
@@ -104,14 +109,14 @@ class RecentlyDeletedPage extends StatelessWidget {
                       _emptyAll(context, items);
                     }
                   },
-                  itemBuilder: (context) => const [
+                  itemBuilder: (context) => [
                     PopupMenuItem(
                       value: 'restoreAll',
                       child: Row(
                         children: [
-                          Icon(Icons.restore, size: 20),
-                          SizedBox(width: 8),
-                          Text('Restore all'),
+                          const Icon(Icons.restore, size: 20),
+                          const SizedBox(width: 8),
+                          Text(l10n.restoreAll),
                         ],
                       ),
                     ),
@@ -119,9 +124,9 @@ class RecentlyDeletedPage extends StatelessWidget {
                       value: 'empty',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_forever, size: 20),
-                          SizedBox(width: 8),
-                          Text('Empty'),
+                          const Icon(Icons.delete_forever, size: 20),
+                          const SizedBox(width: 8),
+                          Text(l10n.empty),
                         ],
                       ),
                     ),
@@ -135,12 +140,10 @@ class RecentlyDeletedPage extends StatelessWidget {
                 const _RetentionBanner(),
                 Expanded(
                   child: items.isEmpty
-                      ? const EmptyStateWidget(
+                      ? EmptyStateWidget(
                           icon: Icons.delete_outline,
-                          message: 'No recently deleted items',
-                          subMessage:
-                              'Items you delete from your shopping list '
-                              'show up here for 7 days.',
+                          message: l10n.noRecentlyDeletedItems,
+                          subMessage: l10n.noRecentlyDeletedSubMessage,
                         )
                       : ListView.separated(
                           itemCount: items.length,
@@ -183,7 +186,7 @@ class _RetentionBanner extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Items are permanently deleted after 7 days.',
+              AppLocalizations.of(context).recentlyDeletedRetentionBanner,
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
@@ -207,23 +210,50 @@ class _RecentlyDeletedTile extends StatelessWidget {
     required this.onDeleteForever,
   });
 
-  static String _formatAgo(Duration d) {
-    if (d.inMinutes < 1) return 'just now';
-    if (d.inHours < 1) return '${d.inMinutes} min ago';
-    if (d.inDays < 1) return '${d.inHours} h ago';
-    return d.inDays == 1 ? '1 day ago' : '${d.inDays} days ago';
+  static String _formatAgo(AppLocalizations l10n, Duration d) {
+    if (d.inMinutes < 1) return l10n.justNow;
+    if (d.inHours < 1) return l10n.minutesAgo(d.inMinutes);
+    if (d.inDays < 1) return l10n.hoursAgo(d.inHours);
+    return d.inDays == 1 ? l10n.oneDayAgo : l10n.daysAgo(d.inDays);
   }
 
-  static String _formatLeft(Duration d) {
+  static String _formatLeft(AppLocalizations l10n, Duration d) {
     if (d.inDays >= 1) {
-      return d.inDays == 1 ? '1 day left' : '${d.inDays} days left';
+      return d.inDays == 1 ? l10n.oneDayLeft : l10n.daysLeft(d.inDays);
     }
-    if (d.inHours >= 1) return '${d.inHours} h left';
-    return 'less than an hour left';
+    if (d.inHours >= 1) return l10n.hoursLeft(d.inHours);
+    return l10n.lessThanHourLeft;
+  }
+
+  Future<bool?> _confirmPermanentDelete(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final displayName = item.name.isEmpty ? l10n.unnamedItem : item.name;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.deleteItemForeverTitle),
+        content: Text(l10n.deleteItemForeverMessage(displayName)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.deleteForever),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final now = DateTime.now();
     final deletedAt = ShoppingCubit.deletedMoment(item);
@@ -232,13 +262,14 @@ class _RecentlyDeletedTile extends StatelessWidget {
 
     final qty = item.quantity % 1 == 0
         ? item.quantity.toInt().toString()
-        : item.quantity.toString();
+        : item.quantity.toTrimmedFixed(2);
     final unit = formatQuantityUnit(item.unit, item.quantity);
     final qtyLabel = unit == null || unit.isEmpty ? '×$qty' : '$qty $unit';
 
     return Dismissible(
       key: ValueKey('dismiss_${item.id}'),
       direction: DismissDirection.endToStart,
+      confirmDismiss: (_) => _confirmPermanentDelete(context),
       background: Container(
         alignment: Alignment.centerRight,
         color: scheme.error,
@@ -246,7 +277,7 @@ class _RecentlyDeletedTile extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Text('Delete forever', style: TextStyle(color: scheme.onError)),
+            Text(l10n.deleteForever, style: TextStyle(color: scheme.onError)),
             const SizedBox(width: 8),
             Icon(Icons.delete_forever, color: scheme.onError),
           ],
@@ -259,17 +290,17 @@ class _RecentlyDeletedTile extends StatelessWidget {
           child: Text(item.category.emoji),
         ),
         title: Text(
-          item.name.isEmpty ? '(unnamed)' : item.name,
+          item.name.isEmpty ? l10n.unnamedItem : item.name,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          '$qtyLabel · Deleted ${_formatAgo(ago)} · ${_formatLeft(left)}',
+          '$qtyLabel · ${l10n.deletedTimeAgo(_formatAgo(l10n, ago))} · ${_formatLeft(l10n, left)}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         trailing: IconButton(
-          tooltip: 'Restore',
+          tooltip: l10n.restore,
           icon: const Icon(Icons.restore),
           onPressed: onRestore,
         ),

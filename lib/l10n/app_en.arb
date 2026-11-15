@@ -133,5 +133,248 @@
   "@daytimeDoses": { "description": "Morning/daytime dose section" },
 
   "eveningDoses": "Evening",
-  "@eveningDoses": { "description": "Evening/night dose section" }
+  "@eveningDoses": { "description": "Evening/night dose section" },
+
+  "recentlyDeleted": "Recently Deleted",
+  "@recentlyDeleted": { "description": "Recently deleted page and menu title" },
+
+  "completedCount": "Completed ({count})",
+  "@completedCount": {
+    "description": "Completed items section header",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "inCategory": "in {category}",
+  "@inCategory": {
+    "description": "Suffix showing active category in quick add",
+    "placeholders": { "category": { "type": "String" } }
+  },
+
+  "itemDeleted": "Item deleted",
+  "@itemDeleted": { "description": "Undo toast message when unnamed item deleted" },
+
+  "namedItemDeleted": "\"{name}\" deleted",
+  "@namedItemDeleted": {
+    "description": "Undo toast message when named item deleted",
+    "placeholders": { "name": { "type": "String" } }
+  },
+
+  "oneItemCleared": "1 item cleared",
+  "@oneItemCleared": { "description": "Undo toast when 1 checked item cleared" },
+
+  "itemsCleared": "{count} items cleared",
+  "@itemsCleared": {
+    "description": "Undo toast when multiple checked items cleared",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "noItemsSubMessage": "Type an item above or use Bulk Add to get started.",
+  "@noItemsSubMessage": { "description": "Empty shopping list sub-message" },
+
+  "addProductToDatabase": "Add Product to Database",
+  "@addProductToDatabase": { "description": "Title for add product dialog" },
+
+  "chooseSectionAndEnterProduct": "Choose a section and enter product names.",
+  "@chooseSectionAndEnterProduct": { "description": "Helper text in add product dialog" },
+
+  "productNameEn": "Product Name (EN)",
+  "@productNameEn": { "description": "English product name field label" },
+
+  "productNameEnHint": "e.g., Apple",
+  "@productNameEnHint": { "description": "English product name hint" },
+
+  "productNameNlOptional": "Product Name (NL) - Optional",
+  "@productNameNlOptional": { "description": "Dutch product name field label" },
+
+  "productNameNlHint": "e.g., Appel",
+  "@productNameNlHint": { "description": "Dutch product name hint" },
+
+  "pleaseFillRequiredFields": "Please fill in all required fields",
+  "@pleaseFillRequiredFields": { "description": "Validation message in add product dialog" },
+
+  "productAdded": "Product added!",
+  "@productAdded": { "description": "Confirmation snackbar when product added" },
+
+  "add": "Add",
+  "@add": { "description": "Generic Add button label" },
+
+  "restoreAll": "Restore all",
+  "@restoreAll": { "description": "Restore all recently deleted items" },
+
+  "empty": "Empty",
+  "@empty": { "description": "Empty recently deleted list action" },
+
+  "emptyRecentlyDeletedTitle": "Empty Recently Deleted?",
+  "@emptyRecentlyDeletedTitle": { "description": "Confirmation dialog title for emptying trash" },
+
+  "emptyRecentlyDeletedSingle": "1 item will be permanently deleted. This cannot be undone.",
+  "@emptyRecentlyDeletedSingle": { "description": "Confirmation text for 1 item" },
+
+  "emptyRecentlyDeletedMultiple": "{count} items will be permanently deleted. This cannot be undone.",
+  "@emptyRecentlyDeletedMultiple": {
+    "description": "Confirmation text for multiple items",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "deleteForever": "Delete forever",
+  "@deleteForever": { "description": "Permanent delete button/label" },
+
+  "deleteItemForeverTitle": "Delete item forever?",
+  "@deleteItemForeverTitle": { "description": "Confirmation dialog title for single permanent delete" },
+
+  "deleteItemForeverMessage": "\"{name}\" will be permanently deleted. This cannot be undone.",
+  "@deleteItemForeverMessage": {
+    "description": "Confirmation dialog body for single permanent delete",
+    "placeholders": { "name": { "type": "String" } }
+  },
+
+  "recentlyDeletedRetentionBanner": "Items are permanently deleted after 7 days.",
+  "@recentlyDeletedRetentionBanner": { "description": "Retention banner in recently deleted page" },
+
+  "noRecentlyDeletedItems": "No recently deleted items",
+  "@noRecentlyDeletedItems": { "description": "Empty state title in recently deleted page" },
+
+  "noRecentlyDeletedSubMessage": "Items you delete from your shopping list show up here for 7 days.",
+  "@noRecentlyDeletedSubMessage": { "description": "Empty state subtitle in recently deleted page" },
+
+  "itemRestored": "Item restored",
+  "@itemRestored": { "description": "Undo toast when unnamed item restored" },
+
+  "namedItemRestored": "\"{name}\" restored to your list",
+  "@namedItemRestored": {
+    "description": "Undo toast when named item restored",
+    "placeholders": { "name": { "type": "String" } }
+  },
+
+  "oneItemRestored": "1 item restored",
+  "@oneItemRestored": { "description": "Undo toast when 1 item restored" },
+
+  "itemsRestored": "{count} items restored",
+  "@itemsRestored": {
+    "description": "Undo toast when multiple items restored",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "restore": "Restore",
+  "@restore": { "description": "Restore button tooltip" },
+
+  "unnamedItem": "(unnamed)",
+  "@unnamedItem": { "description": "Fallback label for unnamed item" },
+
+  "deletedTimeAgo": "Deleted {time}",
+  "@deletedTimeAgo": {
+    "description": "Relative deletion timestamp",
+    "placeholders": { "time": { "type": "String" } }
+  },
+
+  "justNow": "just now",
+  "@justNow": { "description": "Relative time: just now" },
+
+  "minutesAgo": "{count} min ago",
+  "@minutesAgo": {
+    "description": "Relative time: minutes ago",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "hoursAgo": "{count} h ago",
+  "@hoursAgo": {
+    "description": "Relative time: hours ago",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "oneDayAgo": "1 day ago",
+  "@oneDayAgo": { "description": "Relative time: 1 day ago" },
+
+  "daysAgo": "{count} days ago",
+  "@daysAgo": {
+    "description": "Relative time: days ago",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "oneDayLeft": "1 day left",
+  "@oneDayLeft": { "description": "Retention countdown: 1 day left" },
+
+  "daysLeft": "{count} days left",
+  "@daysLeft": {
+    "description": "Retention countdown: days left",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "hoursLeft": "{count} h left",
+  "@hoursLeft": {
+    "description": "Retention countdown: hours left",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "lessThanHourLeft": "less than an hour left",
+  "@lessThanHourLeft": { "description": "Retention countdown: less than an hour left" },
+
+  "setQuantityAndUnit": "Set Quantity & Unit",
+  "@setQuantityAndUnit": { "description": "Quantity picker dialog title" },
+
+  "unit": "Unit",
+  "@unit": { "description": "Unit dropdown label" },
+
+  "none": "None",
+  "@none": { "description": "No unit selected option" },
+
+  "ok": "OK",
+  "@ok": { "description": "OK button label" },
+
+  "changeCategory": "Change category",
+  "@changeCategory": { "description": "Category picker dialog title" },
+
+  "bulkImportGroceries": "Bulk Import Groceries",
+  "@bulkImportGroceries": { "description": "Bulk import dialog title" },
+
+  "bulkImportHint": "e.g.\n2 cartons milk\n1.5 kg apples\n2 cloves garlic\n500g minced meat",
+  "@bulkImportHint": { "description": "Bulk import text field hint" },
+
+  "next": "Next",
+  "@next": { "description": "Next button label" },
+
+  "reviewItems": "Review Items",
+  "@reviewItems": { "description": "Bulk import confirmation dialog title" },
+
+  "addAll": "Add All",
+  "@addAll": { "description": "Add all items button label" },
+
+  "editItem": "Edit Item",
+  "@editItem": { "description": "Edit shopping item dialog title" },
+
+  "itemName": "Name",
+  "@itemName": { "description": "Item name field label" },
+
+  "itemNameRequired": "Please enter an item name",
+  "@itemNameRequired": { "description": "Validation error when item name is empty" },
+
+  "noteOptional": "Note (optional)",
+  "@noteOptional": { "description": "Optional note field label" },
+
+  "noteHint": "e.g., organic, brand, etc.",
+  "@noteHint": { "description": "Hint for item note field" },
+
+  "category": "Category",
+  "@category": { "description": "Category field label" },
+
+  "quantity": "Quantity",
+  "@quantity": { "description": "Quantity field label" },
+
+  "save": "Save",
+  "@save": { "description": "Save button label" },
+
+  "uncheckAll": "Uncheck all",
+  "@uncheckAll": { "description": "Uncheck all completed items action" },
+
+  "oneItemUnchecked": "1 item unchecked",
+  "@oneItemUnchecked": { "description": "Undo toast when 1 completed item is unchecked" },
+
+  "itemsUnchecked": "{count} items unchecked",
+  "@itemsUnchecked": {
+    "description": "Undo toast when multiple completed items are unchecked",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "shareList": "Share List",
+  "@shareList": { "description": "Share shopping list menu item" }
 }

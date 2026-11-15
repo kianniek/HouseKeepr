@@ -2,9 +2,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:housekeepr/core/grocery_parser.dart';
 import 'package:housekeepr/cubits/shopping_cubit.dart';
+import 'package:housekeepr/models/grocery_category.dart';
 import 'package:housekeepr/models/grocery_item.dart';
 import 'package:housekeepr/repositories/grocery_repository.dart';
+import 'package:housekeepr/services/shopping_products_service.dart';
 import 'package:housekeepr/services/write_queue.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -53,6 +56,8 @@ void main() {
 
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
+    await ShoppingProductsService.instance.init(prefs);
+    await Hive.box('learning_products').clear();
     ops = [];
     queue = WriteQueue(prefs)
       ..attachOpBuilder(
@@ -275,6 +280,196 @@ void main() {
       final restarted = await createCubit(withQueue: false);
       expect(restarted.state.aisleModeEnabled, isTrue);
       expect(restarted.state.flatViewEnabled, isTrue);
+    });
+  });
+
+  group('Phase 1 state & quantity fixes', () {
+    test('GroceryItem.copyWith can clear unit to null', () {
+      final item = _item('a').copyWith(unit: 'kg');
+      expect(item.unit, 'kg');
+      expect(item.copyWith(unit: null).unit, isNull);
+      expect(item.copyWith().unit, 'kg');
+    });
+
+    test('ShoppingState.copyWith can clear suggestedText and error', () {
+      const state = ShoppingState(
+        suggestedText: 'Milk',
+        error: 'Network error',
+      );
+      final cleared = state.copyWith(suggestedText: null, error: null);
+      expect(cleared.suggestedText, isNull);
+      expect(cleared.error, isNull);
+    });
+
+    test('updateQuantityAndUnit preserves 0.5 and can clear unit', () async {
+      await repo.saveItems([_item('a').copyWith(quantity: 2, unit: 'kg')]);
+      final cubit = await createCubit();
+
+      await cubit.updateQuantityAndUnit('a', 0.5, null);
+      final updated = cubit.state.items.single;
+      expect(updated.quantity, 0.5);
+      expect(updated.unit, isNull);
+    });
+
+    test('addItem duplicate merge clears checkedAt when unchecking', () async {
+      final checked = _item('a', checked: true).copyWith(name: 'Milk');
+      await repo.saveItems([checked]);
+      final cubit = await createCubit();
+
+      await cubit.addItem('Milk');
+      final merged = cubit.state.items.single;
+      expect(merged.checked, isFalse);
+      expect(merged.checkedAt, isNull);
+      expect(merged.quantity, 2.0);
+    });
+
+    test('updateDraftText clears suggestedText and resets category', () async {
+      final cubit = await createCubit(withQueue: false);
+      cubit.setManualCategory(GroceryCategory.dairy, 'Milk');
+      expect(cubit.state.selectedCategory, GroceryCategory.dairy);
+
+      cubit.updateDraftText('');
+      expect(cubit.state.selectedCategory, GroceryCategory.other);
+      expect(cubit.state.suggestedText, isNull);
+    });
+  });
+
+  group('Phase 3 item editing, uncheck-all, and parser integration', () {
+    test('updateItemDetails updates name, note, quantity, unit, and category',
+        () async {
+      await repo.saveItems([
+        _item('a').copyWith(
+          name: 'Milk',
+          note: 'Old note',
+          quantity: 1,
+          unit: 'pak',
+          category: GroceryCategory.dairy,
+        ),
+      ]);
+      final cubit = await createCubit();
+
+      await cubit.updateItemDetails(
+        'a',
+        name: 'oat milk',
+        note: '  Barista  ',
+        quantity: 2.5,
+        unit: 'L',
+        category: GroceryCategory.beverages,
+      );
+
+      final updated = cubit.state.items.single;
+      expect(updated.name, 'Oat Milk');
+      expect(updated.note, 'Barista');
+      expect(updated.quantity, 2.5);
+      expect(updated.unit, 'L');
+      expect(updated.category, GroceryCategory.beverages);
+
+      // Verify clearing note and unit to null works
+      await cubit.updateItemDetails(
+        'a',
+        name: 'Oat Milk',
+        note: '   ',
+        quantity: 1,
+        unit: null,
+        category: GroceryCategory.beverages,
+      );
+      final cleared = cubit.state.items.single;
+      expect(cleared.note, isNull);
+      expect(cleared.unit, isNull);
+    });
+
+    test('uncheckAllCompleted and recheckItems round-trip', () async {
+      await repo.saveItems([
+        _item('a', checked: true),
+        _item('b', checked: true),
+        _item('c', checked: false),
+      ]);
+      final cubit = await createCubit();
+
+      final ids = await cubit.uncheckAllCompleted();
+      expect(ids.toSet(), {'a', 'b'});
+      expect(cubit.state.items.every((i) => !i.checked), isTrue);
+      expect(cubit.state.items.every((i) => i.checkedAt == null), isTrue);
+
+      await cubit.recheckItems(ids);
+      final byId = {for (final i in cubit.state.items) i.id: i};
+      expect(byId['a']!.checked, isTrue);
+      expect(byId['b']!.checked, isTrue);
+      expect(byId['c']!.checked, isFalse);
+    });
+
+    test('GroceryParser.parseLine integrates with ShoppingCubit.addItem',
+        () async {
+      final cubit = await createCubit();
+      final parsed = GroceryParser.parseLine('2 pakken melk');
+      await cubit.addItem(
+        parsed.name,
+        note: parsed.note,
+        quantity: parsed.quantity,
+        unit: parsed.unit,
+        category: parsed.category,
+      );
+
+      final added = cubit.state.items.single;
+      expect(added.name, 'Melk');
+      expect(added.quantity, 2.0);
+      expect(added.unit, 'pak');
+    });
+  });
+
+  group('Learning system integration', () {
+    test('addItem applies learned category, quantity, and unit when omitted',
+        () async {
+      await ShoppingProductsService.instance.learnProductUsage(
+        'Halfvolle Melk',
+        category: GroceryCategory.dairy,
+        quantity: 2.0,
+        unit: 'L',
+      );
+      final cubit = await createCubit();
+
+      await cubit.addItem('halfvolle melk');
+      final item = cubit.state.items.single;
+      expect(item.category, GroceryCategory.dairy);
+      expect(item.quantity, 2.0);
+      expect(item.unit, 'L');
+    });
+
+    test('addItem respects explicit quantity/unit over learned defaults',
+        () async {
+      await ShoppingProductsService.instance.learnProductUsage(
+        'Halfvolle Melk',
+        category: GroceryCategory.dairy,
+        quantity: 2.0,
+        unit: 'L',
+      );
+      final cubit = await createCubit();
+
+      await cubit.addItem('halfvolle melk', quantity: 1.0, unit: 'pak');
+      final item = cubit.state.items.single;
+      expect(item.quantity, 1.0);
+      expect(item.unit, 'pak');
+    });
+
+    test('checking off and editing an item records usage for future adds',
+        () async {
+      final cubit = await createCubit();
+      await cubit.addItem('Koffiebonen', category: GroceryCategory.coffeeAndTea);
+      final id = cubit.state.items.single.id;
+
+      await cubit.updateQuantityAndUnit(id, 500, 'g');
+      await cubit.toggleItem(id);
+      await pumpEventQueue();
+
+      final usual = ShoppingProductsService.instance.getUsualQuantityAndUnit(
+        'koffiebonen',
+      );
+      expect(usual?.quantity, 500.0);
+      expect(usual?.unit, 'g');
+      expect(
+        ShoppingProductsService.instance.getCategoryForProduct('koffiebonen'),
+        GroceryCategory.coffeeAndTea,
+      );
     });
   });
 }
