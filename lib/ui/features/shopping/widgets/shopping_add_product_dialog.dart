@@ -37,9 +37,9 @@ class _ShoppingAddProductDialogState extends State<ShoppingAddProductDialog> {
   Future<void> _addProduct() async {
     final l10n = AppLocalizations.of(context);
     if (_selectedSection == null || _productENController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.pleaseFillRequiredFields)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.pleaseFillRequiredFields)));
       return;
     }
 

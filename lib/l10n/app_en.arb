@@ -376,5 +376,74 @@
   },
 
   "shareList": "Share List",
-  "@shareList": { "description": "Share shopping list menu item" }
+  "@shareList": { "description": "Share shopping list menu item" },
+
+  "importRecipe": "Import Recipe",
+  "@importRecipe": { "description": "Button or dialog title to import a recipe from a URL" },
+
+  "recipeUrlHint": "Paste a recipe link (e.g. ah.nl, jumbo.com, ...)",
+  "@recipeUrlHint": { "description": "Hint text for recipe URL input" },
+
+  "fetchRecipe": "Fetch Recipe",
+  "@fetchRecipe": { "description": "Button label to fetch and parse recipe URL" },
+
+  "fetchingRecipe": "Fetching recipe...",
+  "@fetchingRecipe": { "description": "Loading label while fetching recipe webpage" },
+
+  "recipeTitleLabel": "Recipe name",
+  "@recipeTitleLabel": { "description": "Label for recipe title field" },
+
+  "servingsCount": "{count} servings",
+  "@servingsCount": {
+    "description": "Servings count label",
+    "placeholders": { "count": { "type": "int" } }
+  },
+
+  "addRecipe": "Add Recipe",
+  "@addRecipe": { "description": "Confirm button to add recipe and ingredients to shopping list" },
+
+  "recipesSectionTitle": "Recipes",
+  "@recipesSectionTitle": { "description": "Section header for recipe parent containers" },
+
+  "openRecipeLink": "Open recipe",
+  "@openRecipeLink": { "description": "Tooltip for button to open original recipe URL" },
+
+  "recipeIngredientsProgress": "{checked}/{total}",
+  "@recipeIngredientsProgress": {
+    "description": "Checked out of total ingredients counter",
+    "placeholders": {
+      "checked": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+
+  "recipeDeleted": "{name} deleted",
+  "@recipeDeleted": {
+    "description": "Undo toast message when a recipe container is deleted",
+    "placeholders": { "name": { "type": "String" } }
+  },
+
+  "recipeImportFailed": "Could not import recipe: {error}",
+  "@recipeImportFailed": {
+    "description": "Error message when recipe import fails",
+    "placeholders": { "error": { "type": "String" } }
+  },
+
+  "selectAllIngredients": "Select all",
+  "@selectAllIngredients": { "description": "Select all ingredients toggle" },
+
+  "pasteIngredientsManually": "Paste ingredients manually",
+  "@pasteIngredientsManually": { "description": "Fallback button when recipe URL returns 403 or fails" },
+
+  "pasteIngredientsHint": "Paste the recipe's ingredients here, one per line",
+  "@pasteIngredientsHint": { "description": "Hint for manual ingredient paste field" },
+
+  "parseIngredients": "Continue",
+  "@parseIngredients": { "description": "Button to parse manually pasted ingredients" },
+
+  "extractRecipe": "Extract Recipe",
+  "@extractRecipe": { "description": "Button in WebView extractor to parse the loaded recipe page" },
+
+  "openInWebView": "Open in browser view",
+  "@openInWebView": { "description": "Button to open recipe URL in in-app WebView" }
 }

@@ -472,4 +472,123 @@ void main() {
       );
     });
   });
+
+  group('recipe parent containers', () {
+    test('addRecipe creates parent and isolated child ingredients', () async {
+      final cubit = await createCubit();
+
+      // Pre-existing standalone item with the same name as a recipe ingredient
+      await cubit.addItem('Spaghetti', quantity: 500, unit: 'g');
+
+      final recipe = await cubit.addRecipe(
+        title: 'Spaghetti Carbonara',
+        url: 'https://www.ah.nl/allerhande/recept/R-R12345/carbonara',
+        sourceName: 'Albert Heijn',
+        servings: 4,
+        ingredients: const [
+          ParsedGroceryItem(
+            name: 'Spaghetti',
+            quantity: 400,
+            unit: 'g',
+            category: GroceryCategory.international,
+          ),
+          ParsedGroceryItem(
+            name: 'Eieren',
+            quantity: 4,
+            category: GroceryCategory.dairy,
+          ),
+        ],
+      );
+
+      expect(recipe.isRecipe, isTrue);
+      expect(recipe.recipeSource, 'Albert Heijn');
+      expect(recipe.recipeServings, 4);
+
+      // Standalone Spaghetti should remain 500g (not merged)
+      final standalone = cubit.state.items.firstWhere(
+        (i) => !i.isRecipe && i.parentRecipeId == null,
+      );
+      expect(standalone.quantity, 500);
+
+      final children = cubit.state.items
+          .where((i) => i.parentRecipeId == recipe.id)
+          .toList();
+      expect(children.length, 2);
+      expect(children.map((c) => c.name), containsAll(['Spaghetti', 'Eieren']));
+    });
+
+    test('toggling recipe parent toggles all children and vice versa', () async {
+      final cubit = await createCubit();
+      final recipe = await cubit.addRecipe(
+        title: 'Pannenkoeken',
+        url: 'https://www.jumbo.com/recepten/pannenkoeken',
+        sourceName: 'Jumbo',
+        ingredients: const [
+          ParsedGroceryItem(
+            name: 'Bloem',
+            quantity: 250,
+            unit: 'g',
+            category: GroceryCategory.baking,
+          ),
+          ParsedGroceryItem(
+            name: 'Melk',
+            quantity: 500,
+            unit: 'ml',
+            category: GroceryCategory.dairy,
+          ),
+        ],
+      );
+
+      // Toggle parent -> checks both children
+      await cubit.toggleItem(recipe.id);
+      var parent = cubit.state.items.firstWhere((i) => i.id == recipe.id);
+      var children = cubit.state.items
+          .where((i) => i.parentRecipeId == recipe.id)
+          .toList();
+      expect(parent.checked, isTrue);
+      expect(children.every((c) => c.checked), isTrue);
+
+      // Uncheck one child -> unchecks parent too
+      await cubit.toggleItem(children.first.id);
+      parent = cubit.state.items.firstWhere((i) => i.id == recipe.id);
+      expect(parent.checked, isFalse);
+
+      // Re-check that child -> all children checked -> parent becomes checked
+      await cubit.toggleItem(children.first.id);
+      parent = cubit.state.items.firstWhere((i) => i.id == recipe.id);
+      expect(parent.checked, isTrue);
+    });
+
+    test('deleteRecipeWithChildren soft-deletes and restoreItems restores group',
+        () async {
+      final cubit = await createCubit();
+      final recipe = await cubit.addRecipe(
+        title: 'Appeltaart',
+        url: 'https://rutgerbakt.nl/appeltaart',
+        sourceName: 'rutgerbakt.nl',
+        ingredients: const [
+          ParsedGroceryItem(
+            name: 'Appels',
+            quantity: 6,
+            category: GroceryCategory.fruit,
+          ),
+          ParsedGroceryItem(
+            name: 'Boter',
+            quantity: 200,
+            unit: 'g',
+            category: GroceryCategory.dairy,
+          ),
+        ],
+      );
+
+      final deleted = await cubit.deleteRecipeWithChildren(recipe.id);
+      expect(deleted.length, 3);
+      expect(cubit.state.items, isEmpty);
+      expect(cubit.state.recentlyDeleted.length, 3);
+
+      await cubit.restoreItems(deleted.map((i) => i.id).toList());
+      expect(cubit.state.items.length, 3);
+      expect(cubit.state.recentlyDeleted, isEmpty);
+    });
+  });
 }

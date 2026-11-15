@@ -236,12 +236,14 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     final finalQuantity = quantity ?? usualQtyUnit?.quantity ?? 1.0;
     final finalUnit = unit ?? (quantity == null ? usualQtyUnit?.unit : null);
 
-    // Check for existing item to merge (only if name is not empty)
+    // Check for existing standalone item to merge (only if name is not empty)
     if (normalizedName.isNotEmpty) {
       final existingIndex = state.items.indexWhere(
         (i) =>
+            !i.isRecipe &&
+            i.parentRecipeId == null &&
             _normalizeItemName(i.name).toLowerCase() ==
-            normalizedName.toLowerCase(),
+                normalizedName.toLowerCase(),
       );
 
       if (existingIndex != -1) {
@@ -319,36 +321,199 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     }
   }
 
-  /// Toggle item checked status and apply bottom-sort
-  Future<void> toggleItem(String id) async {
-    GroceryItem? changedItem;
-    final items = state.items.map((item) {
-      if (item.id == id) {
-        changedItem = item.copyWith(
-          checked: !item.checked,
-          checkedAt: !item.checked ? DateTime.now() : null,
-          updatedAt: DateTime.now(),
-        );
-        return changedItem!;
-      }
-      return item;
-    }).toList();
+  /// Add an imported recipe as a parent container with nested child ingredients.
+  /// Child ingredients are kept isolated inside the recipe container and are
+  /// not merged with standalone items or other recipes.
+  Future<GroceryItem> addRecipe({
+    required String title,
+    required String url,
+    String? sourceName,
+    int? servings,
+    String? imageUrl,
+    required List<ParsedGroceryItem> ingredients,
+  }) async {
+    final now = DateTime.now();
+    const uuid = Uuid();
+    final recipeId = uuid.v4();
+    final trimmedTitle = title.trim().isEmpty
+        ? (sourceName ?? 'Recipe')
+        : title.trim();
 
-    if (changedItem != null) {
-      // Learn category, quantity, and unit when item is checked off
-      if (changedItem!.checked && changedItem!.name.isNotEmpty) {
+    final parentRecipe = GroceryItem(
+      id: recipeId,
+      name: trimmedTitle,
+      quantity: 1.0,
+      category: GroceryCategory.other,
+      createdAt: now,
+      updatedAt: now,
+      isRecipe: true,
+      recipeUrl: url.trim(),
+      recipeSource: sourceName,
+      recipeServings: servings,
+      recipeImageUrl: imageUrl,
+    );
+
+    final createdItems = <GroceryItem>[parentRecipe];
+
+    for (var i = 0; i < ingredients.length; i++) {
+      final ing = ingredients[i];
+      final normalizedName = _normalizeItemName(ing.name);
+      if (normalizedName.isEmpty) continue;
+
+      GroceryCategory finalCategory = ing.category;
+      if (finalCategory == GroceryCategory.other) {
+        final learned = ShoppingProductsService.instance.getCategoryForProduct(
+          normalizedName,
+        );
+        if (learned != null) {
+          finalCategory = learned;
+        }
+      }
+
+      final childItem = GroceryItem(
+        id: uuid.v4(),
+        name: normalizedName,
+        note: ing.note,
+        quantity: ing.quantity,
+        unit: ing.unit,
+        category: finalCategory,
+        createdAt: now.add(Duration(milliseconds: i + 1)),
+        updatedAt: now,
+        parentRecipeId: recipeId,
+      );
+      createdItems.add(childItem);
+    }
+
+    final allItems = List<GroceryItem>.from(_repository.loadItems())
+      ..addAll(createdItems);
+    _emitSortedState(allItems);
+    await _repository.saveItems(allItems);
+
+    for (final item in createdItems) {
+      _writeQueue?.enqueueOp(
+        QueueOp(
+          type: QueueOpType.saveGrocery,
+          id: item.id,
+          payload: item.toMap(),
+        ),
+      );
+    }
+
+    return parentRecipe;
+  }
+
+  /// Toggle item checked status and apply bottom-sort.
+  /// Toggling a recipe parent toggles all its children; toggling a child
+  /// updates its parent recipe's checked state when all children are checked.
+  Future<void> toggleItem(String id) async {
+    final targetIndex = state.items.indexWhere((i) => i.id == id);
+    if (targetIndex == -1) return;
+
+    final target = state.items[targetIndex];
+    final now = DateTime.now();
+    final newChecked = !target.checked;
+    final changedItems = <GroceryItem>[];
+
+    List<GroceryItem> updatedActiveItems;
+
+    if (target.isRecipe) {
+      updatedActiveItems = state.items.map((item) {
+        if (item.id == id || item.parentRecipeId == id) {
+          final updated = item.copyWith(
+            checked: newChecked,
+            checkedAt: newChecked ? now : null,
+            updatedAt: now,
+          );
+          changedItems.add(updated);
+          return updated;
+        }
+        return item;
+      }).toList();
+    } else if (target.parentRecipeId != null) {
+      final parentId = target.parentRecipeId!;
+      final toggledItems = state.items.map((item) {
+        if (item.id == id) {
+          final updated = item.copyWith(
+            checked: newChecked,
+            checkedAt: newChecked ? now : null,
+            updatedAt: now,
+          );
+          changedItems.add(updated);
+          return updated;
+        }
+        return item;
+      }).toList();
+
+      final siblings = toggledItems
+          .where((item) => item.parentRecipeId == parentId)
+          .toList();
+      final allChildrenChecked =
+          siblings.isNotEmpty && siblings.every((item) => item.checked);
+
+      updatedActiveItems = toggledItems.map((item) {
+        if (item.id == parentId && item.checked != allChildrenChecked) {
+          final updatedParent = item.copyWith(
+            checked: allChildrenChecked,
+            checkedAt: allChildrenChecked ? now : null,
+            updatedAt: now,
+          );
+          changedItems.add(updatedParent);
+          return updatedParent;
+        }
+        return item;
+      }).toList();
+    } else {
+      updatedActiveItems = state.items.map((item) {
+        if (item.id == id) {
+          final updated = item.copyWith(
+            checked: newChecked,
+            checkedAt: newChecked ? now : null,
+            updatedAt: now,
+          );
+          changedItems.add(updated);
+          return updated;
+        }
+        return item;
+      }).toList();
+    }
+
+    if (changedItems.isEmpty) return;
+
+    // Learn category, quantity, and unit for newly checked non-recipe items
+    for (final changed in changedItems) {
+      if (!changed.isRecipe && changed.checked && changed.name.isNotEmpty) {
         await ShoppingProductsService.instance.learnProductUsage(
-          changedItem!.name,
-          category: changedItem!.category != GroceryCategory.other
-              ? changedItem!.category
+          changed.name,
+          category: changed.category != GroceryCategory.other
+              ? changed.category
               : null,
-          quantity: changedItem!.quantity,
-          unit: changedItem!.unit,
+          quantity: changed.quantity,
+          unit: changed.unit,
           weight: 1,
         );
       }
-      _emitSortedState(items);
-      await _persist(changedItem!);
+    }
+
+    // Merge active updates back with any soft-deleted tombstones in repository
+    final changedById = {for (final item in changedItems) item.id: item};
+    final allRepoItems = _repository.loadItems().map((item) {
+      return changedById[item.id] ?? item;
+    }).toList();
+    final itemsToSave = allRepoItems.isNotEmpty
+        ? allRepoItems
+        : updatedActiveItems;
+
+    _emitSortedState(itemsToSave);
+    await _repository.saveItems(itemsToSave);
+
+    for (final item in changedItems) {
+      _writeQueue?.enqueueOp(
+        QueueOp(
+          type: QueueOpType.saveGrocery,
+          id: item.id,
+          payload: item.toMap(),
+        ),
+      );
     }
   }
 
@@ -395,7 +560,9 @@ class ShoppingCubit extends Cubit<ShoppingState> {
         : trimmedUnit;
     final clampedQty = quantity.clamp(0.1, double.maxFinite);
 
-    if (category != GroceryCategory.other || clampedQty != 1.0 || finalUnit != null) {
+    if (category != GroceryCategory.other ||
+        clampedQty != 1.0 ||
+        finalUnit != null) {
       await ShoppingProductsService.instance.learnProductUsage(
         normalizedName,
         category: category != GroceryCategory.other ? category : null,
@@ -532,41 +699,66 @@ class ShoppingCubit extends Cubit<ShoppingState> {
     }
   }
 
-  /// Soft-delete an item. It stays in "Recently Deleted" for
-  /// [deletedRetention] before being purged. Returns the deleted item (so the
-  /// UI can offer undo) or null if it was not found.
+  /// Soft-delete an item (and its child ingredients if it is a recipe parent).
+  /// It stays in "Recently Deleted" for [deletedRetention] before being purged.
+  /// Returns the deleted item (so the UI can offer undo) or null if not found.
   ///
   /// [deletedAt] can be passed to keep an item's original deletion time (used
   /// when undoing a restore from "Recently Deleted").
   Future<GroceryItem?> deleteItem(String id, {DateTime? deletedAt}) async {
-    GroceryItem? deletedItem;
+    final deleted = await deleteRecipeWithChildren(id, deletedAt: deletedAt);
+    return deleted.isEmpty ? null : deleted.first;
+  }
+
+  /// Soft-delete an item and, if it is a recipe parent, all of its active
+  /// child ingredients. Returns all soft-deleted items (parent first) for Undo.
+  Future<List<GroceryItem>> deleteRecipeWithChildren(
+    String id, {
+    DateTime? deletedAt,
+  }) async {
     final now = DateTime.now();
-    final items = _repository.loadItems().map((item) {
-      if (item.id == id && !item.isDeleted) {
-        deletedItem = item.copyWith(
+    final effectiveDeletedAt = deletedAt ?? now;
+    final deletedItems = <GroceryItem>[];
+
+    final allItems = _repository.loadItems();
+    final targetExists = allItems.any(
+      (item) => item.id == id && !item.isDeleted,
+    );
+    if (!targetExists) return const [];
+
+    final target = allItems.firstWhere((item) => item.id == id);
+    final updatedItems = allItems.map((item) {
+      final shouldDelete =
+          !item.isDeleted &&
+          (item.id == id || (target.isRecipe && item.parentRecipeId == id));
+      if (shouldDelete) {
+        final tombstone = item.copyWith(
           isDeleted: true,
-          deletedAt: deletedAt ?? now,
+          deletedAt: effectiveDeletedAt,
           updatedAt: now,
         );
-        return deletedItem!;
+        deletedItems.add(tombstone);
+        return tombstone;
       }
       return item;
     }).toList();
 
-    if (deletedItem == null) return null;
+    if (deletedItems.isEmpty) return const [];
 
     // Emit synchronously first: a dismissed Dismissible must leave the tree
     // before the next frame.
-    _emitSortedState(items);
-    await _repository.saveItems(items);
-    _writeQueue?.enqueueOp(
-      QueueOp(
-        type: QueueOpType.saveGrocery,
-        id: deletedItem!.id,
-        payload: deletedItem!.toMap(),
-      ),
-    );
-    return deletedItem;
+    _emitSortedState(updatedItems);
+    await _repository.saveItems(updatedItems);
+    for (final item in deletedItems) {
+      _writeQueue?.enqueueOp(
+        QueueOp(
+          type: QueueOpType.saveGrocery,
+          id: item.id,
+          payload: item.toMap(),
+        ),
+      );
+    }
+    return deletedItems;
   }
 
   /// Restore soft-deleted items. When [uncheck] is true the restored items are

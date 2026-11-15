@@ -373,4 +373,68 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get shareList => 'Lijst delen';
+
+  @override
+  String get importRecipe => 'Recept importeren';
+
+  @override
+  String get recipeUrlHint =>
+      'Plak een receptlink (bijv. ah.nl, jumbo.com, ...)';
+
+  @override
+  String get fetchRecipe => 'Recept ophalen';
+
+  @override
+  String get fetchingRecipe => 'Recept ophalen...';
+
+  @override
+  String get recipeTitleLabel => 'Receptnaam';
+
+  @override
+  String servingsCount(int count) {
+    return '$count personen';
+  }
+
+  @override
+  String get addRecipe => 'Recept toevoegen';
+
+  @override
+  String get recipesSectionTitle => 'Recepten';
+
+  @override
+  String get openRecipeLink => 'Recept openen';
+
+  @override
+  String recipeIngredientsProgress(int checked, int total) {
+    return '$checked/$total';
+  }
+
+  @override
+  String recipeDeleted(String name) {
+    return '$name verwijderd';
+  }
+
+  @override
+  String recipeImportFailed(String error) {
+    return 'Kan recept niet importeren: $error';
+  }
+
+  @override
+  String get selectAllIngredients => 'Alles selecteren';
+
+  @override
+  String get pasteIngredientsManually => 'Ingrediënten handmatig plakken';
+
+  @override
+  String get pasteIngredientsHint =>
+      'Plak hier de ingrediënten van het recept, één per regel';
+
+  @override
+  String get parseIngredients => 'Volgende';
+
+  @override
+  String get extractRecipe => 'Recept ophalen';
+
+  @override
+  String get openInWebView => 'Openen in browserweergave';
 }

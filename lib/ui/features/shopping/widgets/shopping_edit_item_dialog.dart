@@ -80,7 +80,9 @@ class _ShoppingEditItemDialogState extends State<_ShoppingEditItemDialog> {
   void _decrement() {
     if (_quantity > _minQty) {
       HapticFeedback.lightImpact();
-      setState(() => _quantity = (_quantity - 1).clamp(_minQty, double.maxFinite));
+      setState(
+        () => _quantity = (_quantity - 1).clamp(_minQty, double.maxFinite),
+      );
     }
   }
 
@@ -146,7 +148,8 @@ class _ShoppingEditItemDialogState extends State<_ShoppingEditItemDialog> {
                 suffixIcon: _noteController.text.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () => setState(() => _noteController.clear()),
+                        onPressed: () =>
+                            setState(() => _noteController.clear()),
                       )
                     : null,
               ),

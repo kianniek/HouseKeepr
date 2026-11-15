@@ -22,6 +22,24 @@ class GroceryItem extends Equatable {
   /// retention window. Null for active items (and legacy tombstones).
   final DateTime? deletedAt;
 
+  /// Whether this item is a recipe parent container.
+  final bool isRecipe;
+
+  /// ID of the parent recipe [GroceryItem] when this item is a recipe ingredient.
+  final String? parentRecipeId;
+
+  /// Source URL for a recipe parent container.
+  final String? recipeUrl;
+
+  /// Friendly source/website name for a recipe (e.g. "Albert Heijn", "Jumbo").
+  final String? recipeSource;
+
+  /// Number of servings for a recipe parent container.
+  final int? recipeServings;
+
+  /// Optional thumbnail image URL for a recipe parent container.
+  final String? recipeImageUrl;
+
   const GroceryItem({
     required this.id,
     required this.name,
@@ -36,6 +54,12 @@ class GroceryItem extends Equatable {
     this.isDeleted = false,
     this.serverVersion,
     this.deletedAt,
+    this.isRecipe = false,
+    this.parentRecipeId,
+    this.recipeUrl,
+    this.recipeSource,
+    this.recipeServings,
+    this.recipeImageUrl,
   }) : updatedAt = updatedAt ?? createdAt;
 
   GroceryItem copyWith({
@@ -52,6 +76,12 @@ class GroceryItem extends Equatable {
     bool? isDeleted,
     int? serverVersion,
     Object? deletedAt = _sentinel,
+    bool? isRecipe,
+    Object? parentRecipeId = _sentinel,
+    Object? recipeUrl = _sentinel,
+    Object? recipeSource = _sentinel,
+    Object? recipeServings = _sentinel,
+    Object? recipeImageUrl = _sentinel,
   }) => GroceryItem(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -70,6 +100,22 @@ class GroceryItem extends Equatable {
     deletedAt: identical(deletedAt, _sentinel)
         ? this.deletedAt
         : deletedAt as DateTime?,
+    isRecipe: isRecipe ?? this.isRecipe,
+    parentRecipeId: identical(parentRecipeId, _sentinel)
+        ? this.parentRecipeId
+        : parentRecipeId as String?,
+    recipeUrl: identical(recipeUrl, _sentinel)
+        ? this.recipeUrl
+        : recipeUrl as String?,
+    recipeSource: identical(recipeSource, _sentinel)
+        ? this.recipeSource
+        : recipeSource as String?,
+    recipeServings: identical(recipeServings, _sentinel)
+        ? this.recipeServings
+        : recipeServings as int?,
+    recipeImageUrl: identical(recipeImageUrl, _sentinel)
+        ? this.recipeImageUrl
+        : recipeImageUrl as String?,
   );
 
   Map<String, dynamic> toMap() => {
@@ -86,6 +132,12 @@ class GroceryItem extends Equatable {
     'isDeleted': isDeleted,
     'serverVersion': serverVersion,
     'deletedAt': deletedAt?.toIso8601String(),
+    if (isRecipe) 'isRecipe': isRecipe,
+    if (parentRecipeId != null) 'parentRecipeId': parentRecipeId,
+    if (recipeUrl != null) 'recipeUrl': recipeUrl,
+    if (recipeSource != null) 'recipeSource': recipeSource,
+    if (recipeServings != null) 'recipeServings': recipeServings,
+    if (recipeImageUrl != null) 'recipeImageUrl': recipeImageUrl,
   };
 
   static DateTime? _parseDate(dynamic raw) {
@@ -114,6 +166,12 @@ class GroceryItem extends Equatable {
     isDeleted: map['isDeleted'] as bool? ?? false,
     serverVersion: map['serverVersion'] as int?,
     deletedAt: _parseDate(map['deletedAt']),
+    isRecipe: map['isRecipe'] as bool? ?? false,
+    parentRecipeId: map['parentRecipeId'] as String?,
+    recipeUrl: map['recipeUrl'] as String?,
+    recipeSource: map['recipeSource'] as String?,
+    recipeServings: (map['recipeServings'] as num?)?.toInt(),
+    recipeImageUrl: map['recipeImageUrl'] as String?,
   );
 
   String toJson() => json.encode(toMap());
@@ -136,5 +194,11 @@ class GroceryItem extends Equatable {
     isDeleted,
     serverVersion,
     deletedAt,
+    isRecipe,
+    parentRecipeId,
+    recipeUrl,
+    recipeSource,
+    recipeServings,
+    recipeImageUrl,
   ];
 }

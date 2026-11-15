@@ -12,12 +12,15 @@ import '../../../../generated/app_localizations.dart';
 import '../../../../models/grocery_category.dart';
 import '../../../../models/grocery_item.dart';
 import '../../../../services/firestore_sync_service.dart';
+import '../../../../services/recipe_import_service.dart';
 import '../../../../services/shopping_products_service.dart';
 import '../../../common/widgets/bulk_import_confirmation_dialog.dart';
 import '../../../common/widgets/bulk_import_dialog.dart';
 import '../../../common/widgets/empty_state.dart';
 import '../../../common/widgets/quantity_picker_dialog.dart';
 import '../../../common/widgets/undo_toast.dart';
+import '../widgets/recipe_import_dialog.dart';
+import '../widgets/recipe_shopping_list_tile.dart';
 import '../widgets/shopping_add_product_dialog.dart';
 import '../widgets/shopping_edit_item_dialog.dart';
 import '../widgets/shopping_list_item_tile.dart';
@@ -31,8 +34,7 @@ class SmartShoppingListPage extends StatefulWidget {
 }
 
 class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
-  static const String _completedExpandedKey =
-      'shopping_completed_expanded_v1';
+  static const String _completedExpandedKey = 'shopping_completed_expanded_v1';
 
   final TextEditingController _itemController = TextEditingController();
   final TextEditingController _ghostController = TextEditingController();
@@ -153,6 +155,11 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
     final rawText = _itemController.text.trim();
     if (rawText.isEmpty) return;
 
+    if (RecipeImportService.isRecipeUrl(rawText)) {
+      _importRecipe(context, initialUrl: rawText);
+      return;
+    }
+
     final cubit = context.read<ShoppingCubit>();
     final parsed = GroceryParser.parseLine(rawText);
     if (parsed.name.isEmpty) return;
@@ -171,6 +178,28 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
 
     _itemController.clear();
     _itemFocusNode.requestFocus();
+  }
+
+  Future<void> _importRecipe(BuildContext context, {String? initialUrl}) async {
+    final cubit = context.read<ShoppingCubit>();
+    final result = await showRecipeImportDialog(
+      context,
+      initialUrl: initialUrl,
+    );
+    if (result == null || !mounted) return;
+
+    await cubit.addRecipe(
+      title: result.title,
+      url: result.url,
+      sourceName: result.sourceName,
+      servings: result.servings,
+      imageUrl: result.imageUrl,
+      ingredients: result.ingredients,
+    );
+
+    if (initialUrl != null) {
+      _itemController.clear();
+    }
   }
 
   Future<void> _editItem(BuildContext context, GroceryItem item) async {
@@ -256,6 +285,25 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
           ? l10n.itemDeleted
           : l10n.namedItemDeleted(deleted.name),
       onUndo: () => cubit.restoreItems([id]),
+    );
+  }
+
+  /// Soft-delete a recipe parent container and all of its child ingredients,
+  /// offering an undo toast that restores the whole group.
+  Future<void> _deleteRecipeWithUndo(
+    BuildContext context,
+    GroceryItem recipe,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final cubit = context.read<ShoppingCubit>();
+    final deleted = await cubit.deleteRecipeWithChildren(recipe.id);
+    if (deleted.isEmpty || !mounted) return;
+    final ids = deleted.map((i) => i.id).toList();
+    showUndoToast(
+      this.context,
+      icon: Icons.delete_outline,
+      message: l10n.recipeDeleted(recipe.name),
+      onUndo: () => cubit.restoreItems(ids),
     );
   }
 
@@ -448,7 +496,9 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                           Text(l10n.recentlyDeleted),
                           if (state.recentlyDeleted.isNotEmpty) ...[
                             const SizedBox(width: 8),
-                            Badge(label: Text('${state.recentlyDeleted.length}')),
+                            Badge(
+                              label: Text('${state.recentlyDeleted.length}'),
+                            ),
                           ],
                         ],
                       ),
@@ -509,16 +559,43 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                         );
                       }
 
-                      // Group items by category (for unchecked items)
-                      final uncheckedItems = state.items
+                      // Partition recipe child ingredients from top-level items
+                      final childrenByRecipeId = <String, List<GroceryItem>>{};
+                      final topLevelItems = <GroceryItem>[];
+                      for (final item in state.items) {
+                        if (item.parentRecipeId != null) {
+                          childrenByRecipeId
+                              .putIfAbsent(item.parentRecipeId!, () => [])
+                              .add(item);
+                        } else {
+                          topLevelItems.add(item);
+                        }
+                      }
+                      for (final children in childrenByRecipeId.values) {
+                        children.sort((a, b) {
+                          if (a.checked != b.checked) {
+                            return a.checked ? 1 : -1;
+                          }
+                          return a.createdAt.compareTo(b.createdAt);
+                        });
+                      }
+
+                      final uncheckedItems = topLevelItems
                           .where((i) => !i.checked)
                           .toList();
-                      final checkedItems = state.items
+                      final checkedItems = topLevelItems
                           .where((i) => i.checked)
                           .toList();
 
+                      final uncheckedRecipes = uncheckedItems
+                          .where((i) => i.isRecipe)
+                          .toList();
+                      final uncheckedStandalone = uncheckedItems
+                          .where((i) => !i.isRecipe)
+                          .toList();
+
                       final categories = <GroceryCategory, List<GroceryItem>>{};
-                      for (final item in uncheckedItems) {
+                      for (final item in uncheckedStandalone) {
                         categories.putIfAbsent(item.category, () => []);
                         categories[item.category]!.add(item);
                       }
@@ -561,42 +638,23 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                         index,
                                       ) {
                                         final item = flatSortedItems[index];
-                                        return ShoppingListItemTile(
-                                          item: item,
-                                          aisleMode: state.aisleModeEnabled,
-                                          onCheck: () => context
-                                              .read<ShoppingCubit>()
-                                              .toggleItem(item.id),
-                                          onDelete: () =>
-                                              _deleteWithUndo(context, item.id),
-                                          onQuantity: () => context
-                                              .read<ShoppingCubit>()
-                                              .cycleQuantity(item.id),
-                                          onQuantityLongPress: () async {
-                                            final newQtyUnit =
-                                                await showQuantityPickerDialog(
-                                                  context,
-                                                  currentQuantity:
-                                                      item.quantity,
-                                                  currentUnit: item.unit,
-                                                );
-                                            if (newQtyUnit != null &&
-                                                context.mounted) {
-                                              context
-                                                  .read<ShoppingCubit>()
-                                                  .updateQuantityAndUnit(
-                                                    item.id,
-                                                    newQtyUnit.$1,
-                                                    newQtyUnit.$2,
-                                                  );
-                                            }
-                                          },
-                                          onLongPress: () =>
-                                              _editItem(context, item),
+                                        return _buildTileForItem(
+                                          context,
+                                          item,
+                                          childrenByRecipeId,
+                                          state.aisleModeEnabled,
                                         );
                                       }, childCount: flatSortedItems.length),
                                     )
-                                  else
+                                  else ...[
+                                    // Dedicated Recipes section at top in Category View
+                                    if (uncheckedRecipes.isNotEmpty)
+                                      _buildRecipesSection(
+                                        context,
+                                        uncheckedRecipes,
+                                        childrenByRecipeId,
+                                        state.aisleModeEnabled,
+                                      ),
                                     // Grouped by category
                                     ...categories.entries.map((entry) {
                                       final category = entry.key;
@@ -608,6 +666,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                         state.aisleModeEnabled,
                                       );
                                     }),
+                                  ],
 
                                   // Checked items section
                                   if (checkedItems.isNotEmpty)
@@ -623,51 +682,12 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                       _completedExpanded)
                                     SliverList(
                                       delegate: SliverChildBuilderDelegate(
-                                        (
+                                        (context, index) => _buildTileForItem(
                                           context,
-                                          index,
-                                        ) => ShoppingListItemTile(
-                                          item: checkedItems[index],
-                                          aisleMode: state.aisleModeEnabled,
-                                          onCheck: () => context
-                                              .read<ShoppingCubit>()
-                                              .toggleItem(
-                                                checkedItems[index].id,
-                                              ),
-                                          onDelete: () => _deleteWithUndo(
-                                            context,
-                                            checkedItems[index].id,
-                                          ),
-                                          onQuantity: () => context
-                                              .read<ShoppingCubit>()
-                                              .cycleQuantity(
-                                                checkedItems[index].id,
-                                              ),
-                                          onQuantityLongPress: () async {
-                                            final newQtyUnit =
-                                                await showQuantityPickerDialog(
-                                                  context,
-                                                  currentQuantity:
-                                                      checkedItems[index]
-                                                          .quantity,
-                                                  currentUnit:
-                                                      checkedItems[index].unit,
-                                                );
-                                            if (newQtyUnit != null &&
-                                                context.mounted) {
-                                              context
-                                                  .read<ShoppingCubit>()
-                                                  .updateQuantityAndUnit(
-                                                    checkedItems[index].id,
-                                                    newQtyUnit.$1,
-                                                    newQtyUnit.$2,
-                                                  );
-                                            }
-                                          },
-                                          onLongPress: () => _editItem(
-                                            context,
-                                            checkedItems[index],
-                                          ),
+                                          checkedItems[index],
+                                          childrenByRecipeId,
+                                          state.aisleModeEnabled,
+                                          initiallyExpanded: false,
                                         ),
                                         childCount: checkedItems.length,
                                       ),
@@ -889,6 +909,12 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                         ),
                         const SizedBox(width: 8),
                         IconButton.filledTonal(
+                          onPressed: () => _importRecipe(context),
+                          icon: const Icon(Icons.restaurant_menu),
+                          tooltip: l10n.importRecipe,
+                        ),
+                        const SizedBox(width: 6),
+                        IconButton.filledTonal(
                           onPressed: () async {
                             final parsedItems = await showBulkImportDialog(
                               context,
@@ -1032,6 +1058,136 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildTileForItem(
+    BuildContext context,
+    GroceryItem item,
+    Map<String, List<GroceryItem>> childrenByRecipeId,
+    bool aisleMode, {
+    bool initiallyExpanded = true,
+  }) {
+    if (item.isRecipe) {
+      return RecipeShoppingListTile(
+        recipe: item,
+        ingredients: childrenByRecipeId[item.id] ?? const [],
+        aisleMode: aisleMode,
+        initiallyExpanded: initiallyExpanded,
+        onToggleRecipe: () => context.read<ShoppingCubit>().toggleItem(item.id),
+        onDeleteRecipe: () => _deleteRecipeWithUndo(context, item),
+        onToggleIngredient: (ing) =>
+            context.read<ShoppingCubit>().toggleItem(ing.id),
+        onDeleteIngredient: (ing) => _deleteWithUndo(context, ing.id),
+        onIngredientQuantity: (ing) =>
+            context.read<ShoppingCubit>().cycleQuantity(ing.id),
+        onIngredientQuantityLongPress: (ing) async {
+          final newQtyUnit = await showQuantityPickerDialog(
+            context,
+            currentQuantity: ing.quantity,
+            currentUnit: ing.unit,
+          );
+          if (newQtyUnit != null && context.mounted) {
+            context.read<ShoppingCubit>().updateQuantityAndUnit(
+              ing.id,
+              newQtyUnit.$1,
+              newQtyUnit.$2,
+            );
+          }
+        },
+        onIngredientLongPress: (ing) => _editItem(context, ing),
+      );
+    }
+
+    return ShoppingListItemTile(
+      item: item,
+      aisleMode: aisleMode,
+      onCheck: () => context.read<ShoppingCubit>().toggleItem(item.id),
+      onDelete: () => _deleteWithUndo(context, item.id),
+      onQuantity: () => context.read<ShoppingCubit>().cycleQuantity(item.id),
+      onQuantityLongPress: () async {
+        final newQtyUnit = await showQuantityPickerDialog(
+          context,
+          currentQuantity: item.quantity,
+          currentUnit: item.unit,
+        );
+        if (newQtyUnit != null && context.mounted) {
+          context.read<ShoppingCubit>().updateQuantityAndUnit(
+            item.id,
+            newQtyUnit.$1,
+            newQtyUnit.$2,
+          );
+        }
+      },
+      onLongPress: () => _editItem(context, item),
+    );
+  }
+
+  Widget _buildRecipesSection(
+    BuildContext context,
+    List<GroceryItem> recipes,
+    Map<String, List<GroceryItem>> childrenByRecipeId,
+    bool aisleMode,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _SectionHeaderDelegate(
+            height: 48,
+            child: Container(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    '🍳',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleLarge?.copyWith(fontSize: 24),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.recipesSectionTitle,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      recipes.length.toString(),
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SliverList(
+          delegate: SliverChildBuilderDelegate((context, index) {
+            return _buildTileForItem(
+              context,
+              recipes[index],
+              childrenByRecipeId,
+              aisleMode,
+            );
+          }, childCount: recipes.length),
+        ),
+      ],
     );
   }
 

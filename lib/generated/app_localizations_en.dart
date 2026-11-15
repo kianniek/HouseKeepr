@@ -373,4 +373,68 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shareList => 'Share List';
+
+  @override
+  String get importRecipe => 'Import Recipe';
+
+  @override
+  String get recipeUrlHint =>
+      'Paste a recipe link (e.g. ah.nl, jumbo.com, ...)';
+
+  @override
+  String get fetchRecipe => 'Fetch Recipe';
+
+  @override
+  String get fetchingRecipe => 'Fetching recipe...';
+
+  @override
+  String get recipeTitleLabel => 'Recipe name';
+
+  @override
+  String servingsCount(int count) {
+    return '$count servings';
+  }
+
+  @override
+  String get addRecipe => 'Add Recipe';
+
+  @override
+  String get recipesSectionTitle => 'Recipes';
+
+  @override
+  String get openRecipeLink => 'Open recipe';
+
+  @override
+  String recipeIngredientsProgress(int checked, int total) {
+    return '$checked/$total';
+  }
+
+  @override
+  String recipeDeleted(String name) {
+    return '$name deleted';
+  }
+
+  @override
+  String recipeImportFailed(String error) {
+    return 'Could not import recipe: $error';
+  }
+
+  @override
+  String get selectAllIngredients => 'Select all';
+
+  @override
+  String get pasteIngredientsManually => 'Paste ingredients manually';
+
+  @override
+  String get pasteIngredientsHint =>
+      'Paste the recipe\'s ingredients here, one per line';
+
+  @override
+  String get parseIngredients => 'Continue';
+
+  @override
+  String get extractRecipe => 'Extract Recipe';
+
+  @override
+  String get openInWebView => 'Open in browser view';
 }

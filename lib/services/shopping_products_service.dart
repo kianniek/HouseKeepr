@@ -164,8 +164,9 @@ class ShoppingProductsService {
     }
     if (quantity != null) {
       final trimmedUnit = unit?.trim();
-      final finalUnit =
-          (trimmedUnit == null || trimmedUnit.isEmpty) ? null : trimmedUnit;
+      final finalUnit = (trimmedUnit == null || trimmedUnit.isEmpty)
+          ? null
+          : trimmedUnit;
       stats.recordQtyUnit(quantity, finalUnit, weight: weight);
     }
     await _learningBox!.put(key, stats.toMap());
@@ -549,10 +550,7 @@ class _LearnedProductStats {
 
   factory _LearnedProductStats.fromRaw(dynamic raw) {
     if (raw is String) {
-      return _LearnedProductStats(
-        categoryCounts: {raw: 1},
-        lastCategory: raw,
-      );
+      return _LearnedProductStats(categoryCounts: {raw: 1}, lastCategory: raw);
     }
     if (raw is Map) {
       final rawCats = raw['categoryCounts'];
@@ -613,8 +611,7 @@ class _LearnedProductStats {
     String? bestKey;
     var bestCount = -1;
     categoryCounts.forEach((key, count) {
-      if (count > bestCount ||
-          (count == bestCount && key == lastCategory)) {
+      if (count > bestCount || (count == bestCount && key == lastCategory)) {
         bestCount = count;
         bestKey = key;
       }

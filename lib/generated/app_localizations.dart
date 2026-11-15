@@ -751,6 +751,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Share List'**
   String get shareList;
+
+  /// Button or dialog title to import a recipe from a URL
+  ///
+  /// In en, this message translates to:
+  /// **'Import Recipe'**
+  String get importRecipe;
+
+  /// Hint text for recipe URL input
+  ///
+  /// In en, this message translates to:
+  /// **'Paste a recipe link (e.g. ah.nl, jumbo.com, ...)'**
+  String get recipeUrlHint;
+
+  /// Button label to fetch and parse recipe URL
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch Recipe'**
+  String get fetchRecipe;
+
+  /// Loading label while fetching recipe webpage
+  ///
+  /// In en, this message translates to:
+  /// **'Fetching recipe...'**
+  String get fetchingRecipe;
+
+  /// Label for recipe title field
+  ///
+  /// In en, this message translates to:
+  /// **'Recipe name'**
+  String get recipeTitleLabel;
+
+  /// Servings count label
+  ///
+  /// In en, this message translates to:
+  /// **'{count} servings'**
+  String servingsCount(int count);
+
+  /// Confirm button to add recipe and ingredients to shopping list
+  ///
+  /// In en, this message translates to:
+  /// **'Add Recipe'**
+  String get addRecipe;
+
+  /// Section header for recipe parent containers
+  ///
+  /// In en, this message translates to:
+  /// **'Recipes'**
+  String get recipesSectionTitle;
+
+  /// Tooltip for button to open original recipe URL
+  ///
+  /// In en, this message translates to:
+  /// **'Open recipe'**
+  String get openRecipeLink;
+
+  /// Checked out of total ingredients counter
+  ///
+  /// In en, this message translates to:
+  /// **'{checked}/{total}'**
+  String recipeIngredientsProgress(int checked, int total);
+
+  /// Undo toast message when a recipe container is deleted
+  ///
+  /// In en, this message translates to:
+  /// **'{name} deleted'**
+  String recipeDeleted(String name);
+
+  /// Error message when recipe import fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not import recipe: {error}'**
+  String recipeImportFailed(String error);
+
+  /// Select all ingredients toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get selectAllIngredients;
+
+  /// Fallback button when recipe URL returns 403 or fails
+  ///
+  /// In en, this message translates to:
+  /// **'Paste ingredients manually'**
+  String get pasteIngredientsManually;
+
+  /// Hint for manual ingredient paste field
+  ///
+  /// In en, this message translates to:
+  /// **'Paste the recipe\'s ingredients here, one per line'**
+  String get pasteIngredientsHint;
+
+  /// Button to parse manually pasted ingredients
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get parseIngredients;
+
+  /// Button in WebView extractor to parse the loaded recipe page
+  ///
+  /// In en, this message translates to:
+  /// **'Extract Recipe'**
+  String get extractRecipe;
+
+  /// Button to open recipe URL in in-app WebView
+  ///
+  /// In en, this message translates to:
+  /// **'Open in browser view'**
+  String get openInWebView;
 }
 
 class _AppLocalizationsDelegate
