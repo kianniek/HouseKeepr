@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 
-enum AppThemeType { classic, midnight, forest, sunset }
+enum AppThemeType { orange, strawberry, blueberry, lime, grape }
 
 extension AppThemeTypeX on AppThemeType {
   String get label {
     switch (this) {
-      case AppThemeType.classic:
-        return 'Classic';
-      case AppThemeType.midnight:
-        return 'Midnight';
-      case AppThemeType.forest:
-        return 'Forest';
-      case AppThemeType.sunset:
-        return 'Sunset';
+      case AppThemeType.orange:
+        return 'Orange';
+      case AppThemeType.strawberry:
+        return 'Strawberry';
+      case AppThemeType.blueberry:
+        return 'Blueberry';
+      case AppThemeType.lime:
+        return 'Lime';
+      case AppThemeType.grape:
+        return 'Grape';
     }
   }
 }
@@ -111,14 +113,27 @@ class AppThemePalette {
 
   static AppThemePalette forType(AppThemeType t) => _palettes[t]!;
 
-  /// Lookup palette by enum name, falling back to [AppThemeType.classic].
-  static AppThemePalette forName(String? name) {
-    final type = AppThemeType.values.firstWhere(
-      (e) => e.name == name,
-      orElse: () => AppThemeType.classic,
-    );
-    return forType(type);
+  /// Lookup [AppThemeType] by enum or legacy name, falling back to [AppThemeType.orange].
+  static AppThemeType typeFromName(String? name) {
+    switch (name) {
+      case 'classic':
+        return AppThemeType.orange;
+      case 'midnight':
+        return AppThemeType.blueberry;
+      case 'forest':
+        return AppThemeType.lime;
+      case 'sunset':
+        return AppThemeType.strawberry;
+      default:
+        return AppThemeType.values.firstWhere(
+          (e) => e.name == name,
+          orElse: () => AppThemeType.orange,
+        );
+    }
   }
+
+  /// Lookup palette by enum name, falling back to [AppThemeType.orange].
+  static AppThemePalette forName(String? name) => forType(typeFromName(name));
 
   /// Exports ARGB color integers for Android home-screen widgets.
   Map<String, int> toWidgetColorsMap(Brightness brightness) {
@@ -137,8 +152,8 @@ class AppThemePalette {
   }
 
   static const Map<AppThemeType, AppThemePalette> _palettes = {
-    AppThemeType.classic: AppThemePalette._(
-      type: AppThemeType.classic,
+    AppThemeType.orange: AppThemePalette._(
+      type: AppThemeType.orange,
       seed: Color(0xFFF68801),
       // Light (WCAG AA >= 4.5:1 onPrimary/primary)
       lightPrimary: Color(0xFFC65102),
@@ -163,83 +178,109 @@ class AppThemePalette {
       darkOnSurface: Color(0xFFECECEC),
       darkOutline: Color(0xFF333333),
     ),
-    AppThemeType.midnight: AppThemePalette._(
-      type: AppThemeType.midnight,
-      seed: Color(0xFF0D47A1),
+    AppThemeType.strawberry: AppThemePalette._(
+      type: AppThemeType.strawberry,
+      seed: Color(0xFFE53935),
       // Light
-      lightPrimary: Color(0xFF0D47A1),
+      lightPrimary: Color(0xFFC62828),
+      lightOnPrimary: Color(0xFFFFFFFF),
+      lightPrimaryContainer: Color(0xFFFFCDD2),
+      lightOnPrimaryContainer: Color(0xFF410002),
+      lightSecondary: Color(0xFF00897B),
+      lightTertiary: Color(0xFFFF7043),
+      lightSurface: Color(0xFFFFFFFF),
+      lightError: Color(0xFFB00020),
+      lightOnSurface: Color(0xFF1F1F1F),
+      lightOutline: Color(0xFFBDBDBD),
+      // Dark
+      darkPrimary: Color(0xFFFF6B6B),
+      darkOnPrimary: Color(0xFF2B0000),
+      darkPrimaryContainer: Color(0xFF7F1D1D),
+      darkOnPrimaryContainer: Color(0xFFFFDAD6),
+      darkSecondary: Color(0xFF4DB6AC),
+      darkTertiary: Color(0xFFFFAB91),
+      darkSurface: Color(0xFF121212),
+      darkError: Color(0xFFCF6679),
+      darkOnSurface: Color(0xFFECECEC),
+      darkOutline: Color(0xFF3A3A3A),
+    ),
+    AppThemeType.blueberry: AppThemePalette._(
+      type: AppThemeType.blueberry,
+      seed: Color(0xFF1E88E5),
+      // Light
+      lightPrimary: Color(0xFF1565C0),
       lightOnPrimary: Color(0xFFFFFFFF),
       lightPrimaryContainer: Color(0xFFBBDEFB),
-      lightOnPrimaryContainer: Color(0xFF001F3F),
-      lightSecondary: Color(0xFF6A1B9A),
+      lightOnPrimaryContainer: Color(0xFF001D36),
+      lightSecondary: Color(0xFF7B1FA2),
       lightTertiary: Color(0xFF00ACC1),
       lightSurface: Color(0xFFFFFFFF),
       lightError: Color(0xFFB00020),
       lightOnSurface: Color(0xFF191919),
       lightOutline: Color(0xFFB0BEC5),
       // Dark
-      darkPrimary: Color(0xFF82B1FF),
-      darkOnPrimary: Color(0xFF001233),
-      darkPrimaryContainer: Color(0xFF0B3B6F),
-      darkOnPrimaryContainer: Color(0xFFDAECFF),
+      darkPrimary: Color(0xFF64B5F6),
+      darkOnPrimary: Color(0xFF001833),
+      darkPrimaryContainer: Color(0xFF0D47A1),
+      darkOnPrimaryContainer: Color(0xFFD6E9FF),
       darkSecondary: Color(0xFFCE93D8),
-      darkTertiary: Color(0xFF80DEEA),
-      darkSurface: Color(0xFF0B0F1A),
+      darkTertiary: Color(0xFF4DD0E1),
+      darkSurface: Color(0xFF0D111A),
       darkError: Color(0xFFCF6679),
       darkOnSurface: Color(0xFFE6EEF5),
       darkOutline: Color(0xFF37474F),
     ),
-    AppThemeType.forest: AppThemePalette._(
-      type: AppThemeType.forest,
-      seed: Color(0xFF2E7D32),
+    AppThemeType.lime: AppThemePalette._(
+      type: AppThemeType.lime,
+      seed: Color(0xFF43A047),
       // Light
       lightPrimary: Color(0xFF2E7D32),
       lightOnPrimary: Color(0xFFFFFFFF),
       lightPrimaryContainer: Color(0xFFC8E6C9),
-      lightOnPrimaryContainer: Color(0xFF071A08),
-      lightSecondary: Color(0xFF558B2F),
-      lightTertiary: Color(0xFF8BC34A),
+      lightOnPrimaryContainer: Color(0xFF052107),
+      lightSecondary: Color(0xFF00897B),
+      lightTertiary: Color(0xFFFBC02D),
       lightSurface: Color(0xFFFFFFFF),
       lightError: Color(0xFFB00020),
       lightOnSurface: Color(0xFF1A1A1A),
-      lightOutline: Color(0xFF9E9E9E),
-      // Dark
-      darkPrimary: Color(0xFFA5D6A7),
-      darkOnPrimary: Color(0xFF002104),
-      darkPrimaryContainer: Color(0xFF134E18),
-      darkOnPrimaryContainer: Color(0xFFDFF6DF),
-      darkSecondary: Color(0xFF8BC34A),
-      darkTertiary: Color(0xFF3DDC84),
-      darkSurface: Color(0xFF0B130A),
-      darkError: Color(0xFFCF6679),
-      darkOnSurface: Color(0xFFE6F3EA),
-      darkOutline: Color(0xFF294022),
-    ),
-    AppThemeType.sunset: AppThemePalette._(
-      type: AppThemeType.sunset,
-      seed: Color(0xFFFF7043),
-      // Light (WCAG AA >= 4.5:1 onPrimary/primary)
-      lightPrimary: Color(0xFFD84315),
-      lightOnPrimary: Color(0xFFFFFFFF),
-      lightPrimaryContainer: Color(0xFFFFCCBC),
-      lightOnPrimaryContainer: Color(0xFF3C0B00),
-      lightSecondary: Color(0xFFFF5252),
-      lightTertiary: Color(0xFFFFD54F),
-      lightSurface: Color(0xFFFFFFFF),
-      lightError: Color(0xFFB00020),
-      lightOnSurface: Color(0xFF2A2A2A),
       lightOutline: Color(0xFFBDBDBD),
       // Dark
-      darkPrimary: Color(0xFFFFAB91),
-      darkOnPrimary: Color(0xFF2B0000),
-      darkPrimaryContainer: Color(0xFF7A2F19),
-      darkOnPrimaryContainer: Color(0xFFFFDCCF),
-      darkSecondary: Color(0xFFFF8A80),
-      darkTertiary: Color(0xFFFFE082),
-      darkSurface: Color(0xFF121212),
+      darkPrimary: Color(0xFF69F0AE),
+      darkOnPrimary: Color(0xFF00210E),
+      darkPrimaryContainer: Color(0xFF1B5E20),
+      darkOnPrimaryContainer: Color(0xFFD7F9DB),
+      darkSecondary: Color(0xFF4DB6AC),
+      darkTertiary: Color(0xFFFFEE58),
+      darkSurface: Color(0xFF0E140F),
       darkError: Color(0xFFCF6679),
-      darkOnSurface: Color(0xFFECECEC),
-      darkOutline: Color(0xFF3A3A3A),
+      darkOnSurface: Color(0xFFE6F3EA),
+      darkOutline: Color(0xFF2E4432),
+    ),
+    AppThemeType.grape: AppThemePalette._(
+      type: AppThemeType.grape,
+      seed: Color(0xFF8E24AA),
+      // Light
+      lightPrimary: Color(0xFF7B1FA2),
+      lightOnPrimary: Color(0xFFFFFFFF),
+      lightPrimaryContainer: Color(0xFFE1BEE7),
+      lightOnPrimaryContainer: Color(0xFF2C003E),
+      lightSecondary: Color(0xFFD81B60),
+      lightTertiary: Color(0xFF00ACC1),
+      lightSurface: Color(0xFFFFFFFF),
+      lightError: Color(0xFFB00020),
+      lightOnSurface: Color(0xFF1F1F1F),
+      lightOutline: Color(0xFFBDBDBD),
+      // Dark
+      darkPrimary: Color(0xFFCE93D8),
+      darkOnPrimary: Color(0xFF260033),
+      darkPrimaryContainer: Color(0xFF4A148C),
+      darkOnPrimaryContainer: Color(0xFFF3E5F5),
+      darkSecondary: Color(0xFFF48FB1),
+      darkTertiary: Color(0xFF80DEEA),
+      darkSurface: Color(0xFF140E18),
+      darkError: Color(0xFFCF6679),
+      darkOnSurface: Color(0xFFEDE7F6),
+      darkOutline: Color(0xFF3E2E4A),
     ),
   };
 }

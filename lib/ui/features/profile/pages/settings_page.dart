@@ -9,6 +9,9 @@ import '../../../../core/settings_repository.dart';
 import '../../../../generated/app_localizations.dart';
 import '../../../../home_screen.dart';
 import '../../../../services/notification_service.dart';
+import '../../../../services/theme_controller.dart';
+import '../../../common/app_theme.dart';
+import '../../../common/widgets/theme_picker_sheet.dart';
 import 'profile_page.dart';
 import 'widget_settings_page.dart';
 
@@ -244,6 +247,30 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
                 onChanged: _onLocaleChanged,
               ),
+            );
+          },
+        ),
+        ListenableBuilder(
+          listenable: ThemeController.instance,
+          builder: (context, _) {
+            final controller = ThemeController.instance;
+            final palette = AppThemePalette.forType(controller.currentTheme);
+            final scheme = Theme.of(context).brightness == Brightness.dark
+                ? palette.darkScheme()
+                : palette.lightScheme();
+            return ListTile(
+              leading: const Icon(Icons.palette_outlined),
+              title: Text(l10n.themeTitle),
+              subtitle: Text(controller.currentTheme.label),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ThemePreviewRow(scheme: scheme),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              onTap: () => showThemePickerSheet(context),
             );
           },
         ),

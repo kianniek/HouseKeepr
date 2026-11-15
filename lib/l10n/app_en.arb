@@ -19,6 +19,12 @@
   "homeScreenWidgetsSubtitle": "Customize Pill Reminder, Shopping List & Coffee widgets",
   "@homeScreenWidgetsSubtitle": { "description": "Home screen widgets settings tile subtitle" },
 
+  "themeTitle": "Theme",
+  "@themeTitle": { "description": "Theme setting label" },
+
+  "selectTheme": "Select theme",
+  "@selectTheme": { "description": "Theme picker sheet title" },
+
   "language": "Language",
   "@language": { "description": "Language setting label" },
 

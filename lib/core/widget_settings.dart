@@ -22,7 +22,7 @@ class WidgetSettings {
     this.coffeeIncludeCustomRecipes = true,
     this.coffeeShowSubtitle = true,
     this.widgetFollowAppTheme = true,
-    this.widgetThemeType = 'classic',
+    this.widgetThemeType = 'orange',
     this.widgetThemeMode = 'system',
   });
 
@@ -85,7 +85,7 @@ class WidgetSettingsRepository {
           prefs.getBool(coffeeIncludeCustomRecipesKey) ?? true,
       coffeeShowSubtitle: prefs.getBool(coffeeShowSubtitleKey) ?? true,
       widgetFollowAppTheme: prefs.getBool(widgetFollowAppThemeKey) ?? true,
-      widgetThemeType: prefs.getString(widgetThemeTypeKey) ?? 'classic',
+      widgetThemeType: prefs.getString(widgetThemeTypeKey) ?? 'orange',
       widgetThemeMode: prefs.getString(widgetThemeModeKey) ?? 'system',
     );
   }

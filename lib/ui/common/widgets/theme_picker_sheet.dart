@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../generated/app_localizations.dart';
 import '../../../services/theme_controller.dart';
 import '../app_theme.dart';
 
@@ -27,7 +28,7 @@ class ThemePickerSheet extends StatelessWidget {
               children: [
                 ListTile(
                   title: Text(
-                    'Select theme',
+                    AppLocalizations.of(context).selectTheme,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),

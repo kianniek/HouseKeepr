@@ -77,7 +77,10 @@ Future<void> main() async {
     debugPrint('Firebase initialization failed: $e\n$st');
   }
 
-  await ThemeController.instance.load();
+  final initialUid = Firebase.apps.isNotEmpty
+      ? FirebaseAuth.instance.currentUser?.uid
+      : null;
+  await ThemeController.instance.load(userId: initialUid);
 
   await LocaleProvider.instance.load();
 
@@ -313,6 +316,7 @@ class _AppRootState extends State<AppRoot> {
     if (authListenerAttached) return;
     authListenerAttached = true;
     authSub = FirebaseAuth.instance.authStateChanges().listen((firebaseUser) {
+      unawaited(ThemeController.instance.setUserId(firebaseUser?.uid));
       if (!mounted) return;
       if (firebaseUser == null) {
         setState(() {

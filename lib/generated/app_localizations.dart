@@ -134,6 +134,18 @@ abstract class AppLocalizations {
   /// **'Customize Pill Reminder, Shopping List & Coffee widgets'**
   String get homeScreenWidgetsSubtitle;
 
+  /// Theme setting label
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get themeTitle;
+
+  /// Theme picker sheet title
+  ///
+  /// In en, this message translates to:
+  /// **'Select theme'**
+  String get selectTheme;
+
   /// Language setting label
   ///
   /// In en, this message translates to:

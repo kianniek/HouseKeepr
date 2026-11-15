@@ -28,6 +28,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Customize Pill Reminder, Shopping List & Coffee widgets';
 
   @override
+  String get themeTitle => 'Theme';
+
+  @override
+  String get selectTheme => 'Select theme';
+
+  @override
   String get language => 'Language';
 
   @override

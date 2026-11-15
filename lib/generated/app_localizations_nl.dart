@@ -28,6 +28,12 @@ class AppLocalizationsNl extends AppLocalizations {
       'Pas Pilherinnering-, Boodschappenlijst- en Koffiewidgets aan';
 
   @override
+  String get themeTitle => 'Thema';
+
+  @override
+  String get selectTheme => 'Thema kiezen';
+
+  @override
   String get language => 'Taal';
 
   @override
