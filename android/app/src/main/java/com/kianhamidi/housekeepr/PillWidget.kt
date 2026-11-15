@@ -94,8 +94,9 @@ class PillWidget : AppWidgetProvider() {
                 .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
             val isCompactHeight = minHeight in 1 until 102
 
-            val canShowMorning = !hideUnused || hasMorning
-            val canShowEvening = !hideUnused || hasEvening
+            val effectiveHideUnused = hideUnused || isCompactHeight
+            val canShowMorning = !effectiveHideUnused || hasMorning
+            val canShowEvening = !effectiveHideUnused || hasEvening
             val showMorningRow = if (isCompactHeight) {
                 canShowMorning && (!morningTaken || !canShowEvening)
             } else {
