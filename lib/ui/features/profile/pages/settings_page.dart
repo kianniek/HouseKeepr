@@ -219,10 +219,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return l10n.viewAccountSubtitle;
   }
 
-  Widget _buildPreferencesSection(
-    BuildContext context,
-    AppLocalizations l10n,
-  ) {
+  Widget _buildPreferencesSection(BuildContext context, AppLocalizations l10n) {
     return _SettingsCard(
       children: [
         ListenableBuilder(
