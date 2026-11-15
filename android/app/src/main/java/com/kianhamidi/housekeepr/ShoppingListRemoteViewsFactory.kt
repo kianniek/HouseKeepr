@@ -2,8 +2,10 @@ package com.kianhamidi.housekeepr
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Paint
+import android.os.Build
 import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
@@ -156,8 +158,17 @@ class ShoppingListRemoteViewsFactory(
 
         // Quantity badge: hidden when qty <= 1, shown otherwise
         if (item.quantity > 1) {
+            val palette = WidgetThemeHelper.resolve(context)
             views.setViewVisibility(R.id.item_quantity_badge, View.VISIBLE)
             views.setTextViewText(R.id.item_quantity_badge, item.quantity.toString())
+            views.setTextColor(R.id.item_quantity_badge, palette.onPrimary)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                views.setColorStateList(
+                    R.id.item_quantity_badge,
+                    "setBackgroundTintList",
+                    ColorStateList.valueOf(palette.primary)
+                )
+            }
         } else {
             views.setViewVisibility(R.id.item_quantity_badge, View.GONE)
         }

@@ -42,15 +42,15 @@ object WidgetThemeHelper {
                 val obj = JSONObject(jsonStr)
                 return WidgetThemePalette(
                     isDark = isDark,
-                    surface = obj.optInt("surface", defaultSurface(isDark)),
-                    surfaceContainer = obj.optInt("surfaceContainer", defaultSurfaceContainer(isDark)),
-                    onSurface = obj.optInt("onSurface", defaultOnSurface(isDark)),
-                    onSurfaceVariant = obj.optInt("onSurfaceVariant", defaultOnSurfaceVariant(isDark)),
-                    primary = obj.optInt("primary", defaultPrimary(isDark)),
-                    onPrimary = obj.optInt("onPrimary", defaultOnPrimary(isDark)),
-                    primaryContainer = obj.optInt("primaryContainer", defaultPrimaryContainer(isDark)),
-                    onPrimaryContainer = obj.optInt("onPrimaryContainer", defaultOnPrimaryContainer(isDark)),
-                    outline = obj.optInt("outline", defaultOutline(isDark)),
+                    surface = obj.colorInt("surface", defaultSurface(isDark)),
+                    surfaceContainer = obj.colorInt("surfaceContainer", defaultSurfaceContainer(isDark)),
+                    onSurface = obj.colorInt("onSurface", defaultOnSurface(isDark)),
+                    onSurfaceVariant = obj.colorInt("onSurfaceVariant", defaultOnSurfaceVariant(isDark)),
+                    primary = obj.colorInt("primary", defaultPrimary(isDark)),
+                    onPrimary = obj.colorInt("onPrimary", defaultOnPrimary(isDark)),
+                    primaryContainer = obj.colorInt("primaryContainer", defaultPrimaryContainer(isDark)),
+                    onPrimaryContainer = obj.colorInt("onPrimaryContainer", defaultOnPrimaryContainer(isDark)),
+                    outline = obj.colorInt("outline", defaultOutline(isDark)),
                 )
             } catch (_: Exception) {
                 // Fall back to defaults
@@ -70,6 +70,9 @@ object WidgetThemeHelper {
             outline = defaultOutline(isDark),
         )
     }
+
+    private fun JSONObject.colorInt(key: String, fallback: Int): Int =
+        if (has(key) && !isNull(key)) optLong(key, fallback.toLong()).toInt() else fallback
 
     private fun defaultSurface(isDark: Boolean) =
         if (isDark) 0xFF121212.toInt() else 0xFFFFFFFF.toInt()

@@ -106,6 +106,8 @@ class CoffeeWidget : AppWidgetProvider() {
                 setInt(R.id.coffee_root, "setBackgroundColor", palette.surface)
                 setTextColor(R.id.coffee_title, palette.onSurfaceVariant)
                 setTextColor(R.id.coffee_arrow, palette.primary)
+                setInt(R.id.coffee_spin_status, "setBackgroundColor", palette.primary)
+                setTextColor(R.id.coffee_spin_status, palette.onPrimary)
                 setTextColor(R.id.coffee_recipe_title, palette.onSurface)
                 setTextColor(R.id.coffee_recipe_subtitle, palette.onSurfaceVariant)
                 setViewVisibility(

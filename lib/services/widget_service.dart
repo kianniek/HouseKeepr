@@ -11,6 +11,7 @@ import '../models/grocery_item.dart';
 import '../models/medication.dart';
 import '../repositories/local_medication_repository.dart';
 import '../ui/common/app_theme.dart';
+import 'theme_controller.dart';
 
 /// Service that bridges Flutter's ShoppingCubit state to the Android home-screen
 /// widget via [home_widget].
@@ -141,11 +142,11 @@ class WidgetService {
           settingsOverride ?? WidgetSettingsRepository(prefs).load();
 
       final resolvedThemeName = settings.widgetFollowAppTheme
-          ? (appTheme?.name ?? prefs.getString('app_theme_type') ?? 'classic')
+          ? (appTheme?.name ?? ThemeController.instance.currentTheme.name)
           : settings.widgetThemeType;
 
       final resolvedModeName = settings.widgetFollowAppTheme
-          ? (appMode?.name ?? prefs.getString('app_theme_mode') ?? 'system')
+          ? (appMode?.name ?? ThemeController.instance.themeMode.name)
           : settings.widgetThemeMode;
 
       final palette = AppThemePalette.forName(resolvedThemeName);

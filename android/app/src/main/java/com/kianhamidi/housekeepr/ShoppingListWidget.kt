@@ -235,8 +235,12 @@ internal fun updateAppWidget(
         // Fallback safely retains defaults
     }
 
+    val palette = WidgetThemeHelper.resolve(context)
+
     // Build sub-views configurations explicitly to support runtime transitions flawlessly
     val views1x1 = RemoteViews(context.packageName, R.layout.widget_1x1).apply {
+        setInt(R.id.widget_container, "setBackgroundColor", palette.surface)
+        setTextColor(R.id.item_count, palette.primary)
         setTextViewText(R.id.item_count, itemsCount.toString())
         setViewVisibility(
             R.id.item_count,
@@ -245,6 +249,8 @@ internal fun updateAppWidget(
     }
 
     val views1xn = RemoteViews(context.packageName, R.layout.widget_1xn).apply {
+        setInt(R.id.widget_container, "setBackgroundColor", palette.surface)
+        setTextColor(R.id.item_count, palette.primary)
         setTextViewText(R.id.item_count, itemsCount.toString())
         setViewVisibility(
             R.id.item_count,
@@ -253,6 +259,11 @@ internal fun updateAppWidget(
     }
 
     val viewsNx1 = RemoteViews(context.packageName, R.layout.widget_nx1).apply {
+        setInt(R.id.widget_container_1, "setBackgroundColor", palette.surface)
+        setInt(R.id.widget_container_2, "setBackgroundColor", palette.surface)
+        setTextColor(R.id.next_item_text, palette.onSurface)
+        setTextColor(R.id.amount_items_left, palette.primary)
+        setTextColor(R.id.widget_empty_text, palette.onSurfaceVariant)
         // 1. Fix the syntax error by closing the parenthesis properly
         setTextViewText(R.id.next_item_text, nextUncheckedItemName)
 
@@ -306,8 +317,6 @@ internal fun updateAppWidget(
         }
         // -------------------------
     }
-
-    val palette = WidgetThemeHelper.resolve(context)
 
     val viewsNormal = RemoteViews(context.packageName, R.layout.shopping_list_widget).apply {
         setInt(R.id.widget_container, "setBackgroundColor", palette.surface)
