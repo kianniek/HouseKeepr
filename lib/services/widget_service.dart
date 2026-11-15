@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Brightness, ThemeMode;
 import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/widget_settings.dart';
@@ -9,6 +10,7 @@ import '../models/coffee_recipe.dart';
 import '../models/grocery_item.dart';
 import '../models/medication.dart';
 import '../repositories/local_medication_repository.dart';
+import '../ui/common/app_theme.dart';
 
 /// Service that bridges Flutter's ShoppingCubit state to the Android home-screen
 /// widget via [home_widget].
@@ -114,6 +116,8 @@ class WidgetService {
         ),
       ]);
 
+      await syncThemeToWidgets(settingsOverride: settings);
+
       await Future.wait([
         HomeWidget.updateWidget(androidName: _pillWidgetName),
         HomeWidget.updateWidget(androidName: _androidWidgetName),
@@ -121,6 +125,55 @@ class WidgetService {
       ]);
     } catch (e) {
       debugPrint('WidgetService: failed to apply widget settings: $e');
+    }
+  }
+
+  /// Syncs the resolved widget theme palette and mode to Android widgets.
+  Future<void> syncThemeToWidgets({
+    AppThemeType? appTheme,
+    ThemeMode? appMode,
+    WidgetSettings? settingsOverride,
+  }) async {
+    if (!_isAndroid) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final settings =
+          settingsOverride ?? WidgetSettingsRepository(prefs).load();
+
+      final resolvedThemeName = settings.widgetFollowAppTheme
+          ? (appTheme?.name ?? prefs.getString('app_theme_type') ?? 'classic')
+          : settings.widgetThemeType;
+
+      final resolvedModeName = settings.widgetFollowAppTheme
+          ? (appMode?.name ?? prefs.getString('app_theme_mode') ?? 'system')
+          : settings.widgetThemeMode;
+
+      final palette = AppThemePalette.forName(resolvedThemeName);
+      final lightColors = palette.toWidgetColorsMap(Brightness.light);
+      final darkColors = palette.toWidgetColorsMap(Brightness.dark);
+
+      await Future.wait([
+        HomeWidget.saveWidgetData<String>(
+          'widget_theme_mode',
+          resolvedModeName,
+        ),
+        HomeWidget.saveWidgetData<String>(
+          'widget_theme_colors_light',
+          jsonEncode(lightColors),
+        ),
+        HomeWidget.saveWidgetData<String>(
+          'widget_theme_colors_dark',
+          jsonEncode(darkColors),
+        ),
+      ]);
+
+      await Future.wait([
+        HomeWidget.updateWidget(androidName: _pillWidgetName),
+        HomeWidget.updateWidget(androidName: _androidWidgetName),
+        HomeWidget.updateWidget(androidName: _coffeeWidgetName),
+      ]);
+    } catch (e) {
+      debugPrint('WidgetService: failed to sync widget theme: $e');
     }
   }
 

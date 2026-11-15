@@ -10,7 +10,10 @@ import 'package:uuid/uuid.dart';
 
 import '../../../../cubits/task_cubit.dart';
 import '../../../../models/task.dart';
+import '../../../common/widgets/assignee_avatar.dart';
 import '../../../common/widgets/task_card.dart';
+import '../../../common/widgets/undo_toast.dart';
+import '../utils/task_date_utils.dart';
 import '../widgets/task_add_dialog.dart';
 
 class _TaskIconKeyword {
@@ -36,9 +39,15 @@ class _RepeatConfig {
 
 class _TasksPageState extends State<TasksPage> {
   static const String _selectedRoomKey = 'tasks_selected_room_v1';
+  static const String _myTasksOnlyKey = 'tasks_my_tasks_only_v1';
 
   String _selectedRoom = 'Everything';
   bool _hasUserSelectedRoom = false;
+  bool _myTasksOnly = false;
+  bool _dueSoonExpanded = true;
+  bool _upcomingExpanded = true;
+  bool _wheneverExpanded = true;
+  bool _doneExpanded = false;
   final List<String> _rooms = [
     'Everything',
     'Bathroom',
@@ -51,21 +60,29 @@ class _TasksPageState extends State<TasksPage> {
   @override
   void initState() {
     super.initState();
-    _loadSelectedRoom();
+    _loadFilters();
   }
 
-  Future<void> _loadSelectedRoom() async {
+  Future<void> _loadFilters() async {
     final prefs = await SharedPreferences.getInstance();
     final savedRoom = prefs.getString(_selectedRoomKey);
-    if (!mounted ||
-        _hasUserSelectedRoom ||
-        savedRoom == null ||
-        !_rooms.contains(savedRoom)) {
-      return;
-    }
+    final savedMyTasks = prefs.getBool(_myTasksOnlyKey) ?? false;
+    if (!mounted) return;
     setState(() {
-      _selectedRoom = savedRoom;
+      if (!_hasUserSelectedRoom &&
+          savedRoom != null &&
+          _rooms.contains(savedRoom)) {
+        _selectedRoom = savedRoom;
+      }
+      _myTasksOnly = savedMyTasks;
     });
+  }
+
+  Future<void> _toggleMyTasks() async {
+    final next = !_myTasksOnly;
+    setState(() => _myTasksOnly = next);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_myTasksOnlyKey, next);
   }
 
   Future<void> _selectRoom(String room) async {
@@ -240,89 +257,11 @@ class _TasksPageState extends State<TasksPage> {
     return BlocBuilder<TaskCubit, TaskState>(
       builder: (context, state) {
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Tasks'),
-            actions: [
-              BlocBuilder<TaskCubit, TaskState>(
-                builder: (context, state) {
-                  final nowUtc = DateTime.now().toUtc();
-                  final todayStr = nowUtc.toIso8601String().split('T')[0];
-
-                  // Helper to determine if a task is already done for today
-                  bool isDoneForToday(Task t) {
-                    if (t.isRepeating) {
-                      return (t.completedDates ?? []).contains(todayStr);
-                    }
-                    return t.completed;
-                  }
-
-                  // Check if there are any pending/incomplete tasks available to check off
-                  final hasTasksToCheckOff = state.tasks.any(
-                    (t) => !t.archived && !isDoneForToday(t),
-                  );
-
-                  if (!hasTasksToCheckOff) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Center(
-                        child: Text(
-                          'All tasks done',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  return TextButton(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) {
-                          return AlertDialog(
-                            title: const Text('Check off all tasks?'),
-                            content: const Text(
-                              'Are you sure you want to mark all tasks as completed? This action cannot be undone.',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(ctx).pop(),
-                                child: const Text('Cancel'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  context.read<TaskCubit>().completeAllTasks();
-                                  Navigator.of(ctx).pop();
-                                },
-                                child: const Text('Confirm'),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                    child: const Text('Check off all tasks'),
-                  );
-                },
-              ),
-            ],
-          ),
+          appBar: AppBar(title: const Text('Tasks')),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Rooms',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
               _buildRoomFilters(),
               const SizedBox(height: 8),
               Expanded(child: _buildTaskList(context, state.tasks)),
@@ -346,37 +285,68 @@ class _TasksPageState extends State<TasksPage> {
   }
 
   Widget _buildRoomFilters() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     return SizedBox(
       height: 40,
-      child: ListView.builder(
+      child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _rooms.length,
-        itemBuilder: (context, index) {
-          final theme = Theme.of(context);
-          final scheme = theme.colorScheme;
-          final room = _rooms[index];
-          final isSelected = room == _selectedRoom;
-          return Padding(
+        children: [
+          Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilterChip(
-              label: Text(room),
-              selected: isSelected,
-              onSelected: (_) => _selectRoom(room),
-              selectedColor: scheme.primaryContainer,
+              avatar: Icon(
+                Icons.person_outline,
+                size: 16,
+                color: _myTasksOnly
+                    ? scheme.onSecondaryContainer
+                    : scheme.onSurfaceVariant,
+              ),
+              label: const Text('My Tasks'),
+              selected: _myTasksOnly,
+              onSelected: (_) => _toggleMyTasks(),
+              selectedColor: scheme.secondaryContainer,
               backgroundColor: scheme.surfaceContainerHighest,
-              checkmarkColor: scheme.primary,
+              checkmarkColor: scheme.onSecondaryContainer,
               labelStyle: theme.textTheme.bodySmall?.copyWith(
-                color: isSelected ? scheme.onSurface : scheme.onSurfaceVariant,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: _myTasksOnly
+                    ? scheme.onSecondaryContainer
+                    : scheme.onSurfaceVariant,
+                fontWeight: _myTasksOnly ? FontWeight.w600 : FontWeight.normal,
               ),
               side: BorderSide.none,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
             ),
-          );
-        },
+          ),
+          ..._rooms.map((room) {
+            final isSelected = room == _selectedRoom;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                label: Text(room),
+                selected: isSelected,
+                onSelected: (_) => _selectRoom(room),
+                selectedColor: scheme.primaryContainer,
+                backgroundColor: scheme.surfaceContainerHighest,
+                checkmarkColor: scheme.onPrimaryContainer,
+                labelStyle: theme.textTheme.bodySmall?.copyWith(
+                  color: isSelected
+                      ? scheme.onPrimaryContainer
+                      : scheme.onSurfaceVariant,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+                side: BorderSide.none,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -423,127 +393,19 @@ class _TasksPageState extends State<TasksPage> {
     return 'Repeats every ${cfg.interval} $unitLabel';
   }
 
-  DateTime? _nextOccurrence(Task task) {
-    if (!task.isRepeating) return null;
-    final cfg = _parseRepeatRule(task.repeatRule);
-    final now = DateTime.now().toUtc();
-    final deadline = (task.deadline ?? now).toUtc();
-    final startDate = DateTime.utc(deadline.year, deadline.month, deadline.day);
-    final today = DateTime.utc(now.year, now.month, now.day);
-    final todayStr = DateTime.utc(
-      now.year,
-      now.month,
-      now.day,
-    ).toIso8601String().split('T')[0];
-    final completedToday = (task.completedDates ?? []).contains(todayStr);
-
-    if (cfg.unit == 'day') {
-      final diffDays = today.difference(startDate).inDays;
-      if (diffDays < 0) return startDate;
-      final remainder = diffDays % cfg.interval;
-      final offset = remainder == 0 ? 0 : cfg.interval - remainder;
-      final candidate = today.add(Duration(days: offset));
-      if (completedToday && candidate.isAtSameMomentAs(today)) {
-        return candidate.add(Duration(days: cfg.interval));
-      }
-      return candidate;
-    }
-
-    if (cfg.unit == 'week') {
-      final days = task.repeatDays?.isNotEmpty ?? false
-          ? task.repeatDays!
-          : <int>[startDate.weekday];
-      for (int offset = 0; offset <= 366; offset++) {
-        final check = now.add(Duration(days: offset));
-        if (completedToday && offset == 0) continue;
-        if (!days.contains(check.weekday)) continue;
-        final diff = check.difference(startDate).inDays;
-        if (diff < 0) continue;
-        final weekIndex = diff ~/ 7;
-        if (weekIndex % cfg.interval != 0) continue;
-        return DateTime.utc(check.year, check.month, check.day);
-      }
-      return null;
-    }
-
-    if (cfg.unit == 'month') {
-      final days = task.repeatDays?.isNotEmpty ?? false
-          ? task.repeatDays!
-          : <int>[startDate.day];
-      for (int m = 0; m <= 24; m++) {
-        final monthCandidate = DateTime.utc(now.year, now.month + m, 1);
-        final monthDiff =
-            (monthCandidate.year - startDate.year) * 12 +
-            (monthCandidate.month - startDate.month);
-        if (monthDiff < 0 || monthDiff % cfg.interval != 0) continue;
-        for (final d in days) {
-          try {
-            final candidate = DateTime.utc(
-              monthCandidate.year,
-              monthCandidate.month,
-              d,
-            );
-            if (completedToday && candidate.isAtSameMomentAs(today)) continue;
-            if (!candidate.isBefore(now)) return candidate;
-          } catch (_) {}
-        }
-      }
-    }
-    return null;
-  }
-
-  int _compareByNextOccurrence(Task a, Task b) {
-    final aNext = _nextOccurrence(a);
-    final bNext = _nextOccurrence(b);
-    if (aNext == null && bNext == null) return a.title.compareTo(b.title);
-    if (aNext == null) return 1;
-    if (bNext == null) return -1;
-    return aNext.compareTo(bNext);
-  }
-
   Widget _buildTaskList(BuildContext context, List<Task> tasks) {
-    // Filter tasks by selected room
-    var roomTasks = tasks;
+    // Filter tasks by selected room and optional My Tasks toggle (#7)
+    var filtered = tasks.where((t) => !t.archived).toList();
     if (_selectedRoom != 'Everything') {
-      roomTasks = tasks.where((t) => t.room == _selectedRoom).toList();
+      filtered = filtered.where((t) => t.room == _selectedRoom).toList();
     }
-
-    bool isRepeatingActiveToday(Task t) {
-      if (!t.isRepeating) return false;
-      try {
-        final iu = t.inactiveUntil;
-        if (iu != null) {
-          final nowUtc = DateTime.now().toUtc();
-          if (nowUtc.isBefore(iu)) return false;
-        }
-      } catch (_) {}
-      final cfg = _parseRepeatRule(t.repeatRule);
-      final now = DateTime.now().toUtc();
-      final today = DateTime.utc(now.year, now.month, now.day);
-      final startRaw = (t.deadline ?? now).toUtc();
-      final start = DateTime.utc(startRaw.year, startRaw.month, startRaw.day);
-      if (today.isBefore(start)) return false;
-      final diffDays = today.difference(start).inDays;
-
-      if (cfg.unit == 'day') {
-        return diffDays % cfg.interval == 0;
+    if (_myTasksOnly) {
+      final uid = widget.currentUser?.uid;
+      if (uid != null) {
+        filtered = filtered.where((t) => t.assignedToId == uid).toList();
+      } else {
+        filtered = [];
       }
-      if (cfg.unit == 'week') {
-        final weekIndex = diffDays ~/ 7;
-        final weekdayMatches = (t.repeatDays?.isNotEmpty ?? false)
-            ? t.repeatDays!.contains(now.weekday)
-            : startRaw.weekday == now.weekday;
-        return weekdayMatches && weekIndex % cfg.interval == 0;
-      }
-      if (cfg.unit == 'month') {
-        final monthDiff =
-            (today.year - start.year) * 12 + (today.month - start.month);
-        final dayMatches = (t.repeatDays?.isNotEmpty ?? false)
-            ? t.repeatDays!.contains(today.day)
-            : start.day == today.day;
-        return dayMatches && monthDiff % cfg.interval == 0;
-      }
-      return false;
     }
 
     bool isDoneForToday(Task t, String todayStr) {
@@ -553,129 +415,156 @@ class _TasksPageState extends State<TasksPage> {
       return t.completed;
     }
 
-    bool isInactiveFutureRepeating(Task t) {
-      if (!t.isRepeating) return false;
-      final next = _nextOccurrence(t);
-      if (next == null) return false;
-      final nowUtc = DateTime.now().toUtc();
-      final todayUtc = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day);
-      final nextDayUtc = DateTime.utc(next.year, next.month, next.day);
-      return nextDayUtc.isAfter(todayUtc);
-    }
-
     final nowUtc = DateTime.now().toUtc();
     final todayStr = nowUtc.toIso8601String().split('T')[0];
 
-    final activeTasks = <Task>[];
-    final inactiveFutureTasks = <Task>[];
+    final dueSoonTasks = <Task>[];
+    final upcomingTasks = <Task>[];
+    final wheneverTasks = <Task>[];
     final doneTasks = <Task>[];
 
-    for (final t in roomTasks) {
-      final done = isDoneForToday(t, todayStr);
-      if (done) {
+    for (final t in filtered) {
+      if (isDoneForToday(t, todayStr)) {
         doneTasks.add(t);
         continue;
       }
-
-      if (!t.isRepeating) {
-        activeTasks.add(t);
-        continue;
-      }
-
-      if (isRepeatingActiveToday(t)) {
-        activeTasks.add(t);
-      } else if (isInactiveFutureRepeating(t)) {
-        inactiveFutureTasks.add(t);
+      switch (classifyTimeHorizon(t)) {
+        case TimeHorizon.dueSoon:
+          dueSoonTasks.add(t);
+          break;
+        case TimeHorizon.upcoming:
+          upcomingTasks.add(t);
+          break;
+        case TimeHorizon.whenever:
+          wheneverTasks.add(t);
+          break;
       }
     }
 
-    inactiveFutureTasks.sort(_compareByNextOccurrence);
+    int compareByEffectiveDue(Task a, Task b) {
+      final aDue = effectiveDueDate(a);
+      final bDue = effectiveDueDate(b);
+      if (aDue == null && bDue == null) return a.title.compareTo(b.title);
+      if (aDue == null) return 1;
+      if (bDue == null) return -1;
+      return aDue.compareTo(bDue);
+    }
 
-    if (activeTasks.isEmpty &&
-        inactiveFutureTasks.isEmpty &&
+    dueSoonTasks.sort(compareByEffectiveDue);
+    upcomingTasks.sort(compareByEffectiveDue);
+    wheneverTasks.sort((a, b) => a.title.compareTo(b.title));
+
+    if (dueSoonTasks.isEmpty &&
+        upcomingTasks.isEmpty &&
+        wheneverTasks.isEmpty &&
         doneTasks.isEmpty) {
       return const Center(child: Text('No tasks found'));
     }
 
     final listChildren = <Widget>[];
 
-    if (activeTasks.isNotEmpty) {
+    void addSection({
+      required String title,
+      required List<Task> items,
+      required bool expanded,
+      required VoidCallback onToggle,
+      bool isDoneSection = false,
+    }) {
+      if (items.isEmpty) return;
+      final theme = Theme.of(context);
+      final scheme = theme.colorScheme;
       listChildren.add(
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Text(
-            'Active Tasks',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        InkWell(
+          onTap: onToggle,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                Icon(
+                  expanded ? Icons.expand_more : Icons.chevron_right,
+                  size: 20,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${items.length}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
-      listChildren.addAll(
-        activeTasks.map(
-          (t) => _buildTaskCard(
-            context,
-            t,
-            isRepeating: t.isRepeating,
-            isInactive: false,
-            taskSection: _TaskSection.active,
+      if (expanded) {
+        listChildren.addAll(
+          items.map(
+            (t) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _buildTaskCard(
+                context,
+                t,
+                isRepeating: t.isRepeating,
+                isInactive: isDoneSection,
+                taskSection: isDoneSection
+                    ? _TaskSection.done
+                    : _TaskSection.active,
+              ),
+            ),
           ),
-        ),
-      );
+        );
+      }
     }
 
-    if (inactiveFutureTasks.isNotEmpty) {
-      listChildren.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text(
-            'Future (${inactiveFutureTasks.length})',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ),
-      );
-      listChildren.addAll(
-        inactiveFutureTasks.map(
-          (t) => _buildTaskCard(
-            context,
-            t,
-            isRepeating: true,
-            isInactive: true,
-            taskSection: _TaskSection.future,
-          ),
-        ),
-      );
-    }
-
-    if (doneTasks.isNotEmpty) {
-      listChildren.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text(
-            'Done (${doneTasks.length})',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ),
-      );
-      listChildren.addAll(
-        doneTasks.map(
-          (t) => _buildTaskCard(
-            context,
-            t,
-            isRepeating: t.isRepeating,
-            isInactive: true,
-            taskSection: _TaskSection.done,
-          ),
-        ),
-      );
-    }
+    addSection(
+      title: 'Due Soon',
+      items: dueSoonTasks,
+      expanded: _dueSoonExpanded,
+      onToggle: () => setState(() => _dueSoonExpanded = !_dueSoonExpanded),
+    );
+    addSection(
+      title: 'Upcoming',
+      items: upcomingTasks,
+      expanded: _upcomingExpanded,
+      onToggle: () => setState(() => _upcomingExpanded = !_upcomingExpanded),
+    );
+    addSection(
+      title: 'Whenever',
+      items: wheneverTasks,
+      expanded: _wheneverExpanded,
+      onToggle: () => setState(() => _wheneverExpanded = !_wheneverExpanded),
+    );
+    addSection(
+      title: 'Done',
+      items: doneTasks,
+      expanded: _doneExpanded,
+      onToggle: () => setState(() => _doneExpanded = !_doneExpanded),
+      isDoneSection: true,
+    );
 
     return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 88),
       children: listChildren,
     );
   }
@@ -691,210 +580,156 @@ class _TasksPageState extends State<TasksPage> {
     final isCompleted = t.isRepeating
         ? (t.completedDates ?? []).contains(todayStr)
         : t.completed;
+    final cubit = context.read<TaskCubit>();
+    final displayTitle = sanitizeTaskTitle(t.title);
 
     Future<void> toggleCompletion() async {
-      if (isInactive) return;
-
       final nextCompleted = !isCompleted;
       if (t.isRepeating) {
-        final cubit = context.read<TaskCubit>();
         if (nextCompleted) {
           await cubit.completeOccurrence(t.id, todayStr);
         } else {
           await cubit.uncompleteOccurrence(t.id, todayStr);
         }
       } else {
-        context.read<TaskCubit>().updateTask(
-          t.copyWith(completed: nextCompleted),
+        await cubit.updateTask(t.copyWith(completed: nextCompleted));
+      }
+
+      if (!context.mounted) return;
+      showUndoToast(
+        context,
+        message: nextCompleted
+            ? 'Completed "$displayTitle"'
+            : 'Reopened "$displayTitle"',
+        icon: nextCompleted ? Icons.check_circle_outline : Icons.undo,
+        onUndo: () {
+          if (t.isRepeating) {
+            if (nextCompleted) {
+              cubit.uncompleteOccurrence(t.id, todayStr);
+            } else {
+              cubit.completeOccurrence(t.id, todayStr);
+            }
+          } else {
+            cubit.updateTask(t.copyWith(completed: !nextCompleted));
+          }
+        },
+      );
+    }
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final due = effectiveDueDate(t);
+    final overdue = due != null && isOverdue(due) && !isCompleted;
+    final dueLabel = due != null ? formatRelativeDueDate(due) : null;
+    final freqLabel = t.isRepeating ? repeatFrequencyLabel(t) : null;
+
+    Widget buildSubtitle() {
+      final amberBg = isDark
+          ? const Color(0xFF4A3200)
+          : const Color(0xFFFFF3CD);
+      final amberFg = isDark
+          ? const Color(0xFFFFD54F)
+          : const Color(0xFF7A4F01);
+
+      final parts = <Widget>[];
+      if (dueLabel != null) {
+        if (overdue) {
+          parts.add(
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: amberBg,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                dueLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: amberFg,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          );
+        } else {
+          parts.add(
+            Text(
+              dueLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          );
+        }
+      }
+
+      if (freqLabel != null && freqLabel.isNotEmpty) {
+        if (parts.isNotEmpty) {
+          parts.add(
+            Text(
+              ' · ',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          );
+        }
+        parts.add(
+          Flexible(
+            child: Text(
+              freqLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
         );
       }
-    }
 
-    Future<void> putOffTask() async {
-      if (taskSection != _TaskSection.active) return;
-      final now = DateTime.now().toUtc();
-      final tomorrow = DateTime.utc(now.year, now.month, now.day + 1);
-      final updated = t.copyWith(
-        deadline: tomorrow,
-        putOffCount: t.putOffCount + 1,
-      );
-      context.read<TaskCubit>().updateTask(updated);
-    }
-
-    Future<void> doingItNow() async {
-      if (taskSection != _TaskSection.future) return;
-      final now = DateTime.now().toUtc();
-      final today = DateTime.utc(now.year, now.month, now.day);
-      final updated = t.copyWith(
-        deadline: today,
-        putOffCount: t.putOffCount > 0 ? t.putOffCount - 1 : 0,
-      );
-      context.read<TaskCubit>().updateTask(updated);
-    }
-
-    Future<void> undoDone() async {
-      if (taskSection != _TaskSection.done) return;
-      if (t.isRepeating) {
-        await context.read<TaskCubit>().uncompleteOccurrence(t.id, todayStr);
-      } else {
-        context.read<TaskCubit>().updateTask(t.copyWith(completed: false));
+      if (parts.isEmpty) {
+        parts.add(
+          Text(
+            (t.room != null && t.room!.isNotEmpty) ? t.room! : 'Whenever',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        );
       }
-    }
 
-    String smartActionLabel() {
-      switch (taskSection) {
-        case _TaskSection.active:
-          return 'Put Off';
-        case _TaskSection.done:
-          return 'Undo';
-        case _TaskSection.future:
-          return 'Do It Now';
-      }
-    }
-
-    IconData smartActionIcon() {
-      switch (taskSection) {
-        case _TaskSection.active:
-          return Icons.schedule;
-        case _TaskSection.done:
-          return Icons.undo;
-        case _TaskSection.future:
-          return Icons.task;
-      }
-    }
-
-    VoidCallback? smartActionHandler() {
-      switch (taskSection) {
-        case _TaskSection.active:
-          return putOffTask;
-        case _TaskSection.done:
-          return undoDone;
-        case _TaskSection.future:
-          return doingItNow;
-      }
-    }
-
-    String friendlyDate(DateTime d) {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final dt = DateTime(d.year, d.month, d.day);
-      final diff = dt.difference(today).inDays;
-      final local = d.toLocal();
-
-      if (diff == 0) return 'Today';
-      if (diff == 1) return 'Tomorrow';
-      if (diff > 1 && diff < 7) return 'In $diff days';
-      return '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+      return Row(mainAxisSize: MainAxisSize.min, children: parts);
     }
 
     Widget card = TaskCard(
       task: t,
       icon: _getTaskIcon(t),
       isCompleted: isCompleted,
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (t.isHouseholdTask)
-            const Text('Assigned to: Household (anyone can pick up)')
-          else
-            Row(
-              children: [
-                if (t.assignedToName != null)
-                  Expanded(
-                    child: Text(
-                      'Assigned to: ${t.assignedToName}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  )
-                else if (t.assignedToId != null)
-                  const Expanded(
-                    child: Text(
-                      'Assigned to: member',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-            ),
-          if (t.description != null)
-            Text(t.description!, maxLines: 2, overflow: TextOverflow.ellipsis),
-          if (t.deadline != null) Text('Due: ${t.deadline!.toLocalIsoDate()}'),
-          if (isRepeating && t.repeatRule != null) ...[
-            Text(_repeatLabel(t), maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (t.isRepeating)
-              Builder(
-                builder: (ctx) {
-                  final next = _nextOccurrence(t);
-                  if (next != null) {
-                    return Text(
-                      'Next: ${friendlyDate(next)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    );
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
-            if (t.completedDates != null && t.completedDates!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text('Last completed: ${t.completedDates!.last}'),
-              ),
-          ],
-        ],
-      ),
+      subtitle: buildSubtitle(),
       onToggleComplete: toggleCompletion,
-      onPutOff: smartActionHandler(),
+      onTap: () => _showTaskDetailSheet(context, t, isCompleted: isCompleted),
+      onSnooze: () => _showSnoozeSheet(context, t),
       onLongPress: () => showTaskAddEditDialog(
         context,
         taskToEdit: t,
         currentUser: widget.currentUser,
         householdId: widget.householdId,
       ),
-      onDelete: () => context.read<TaskCubit>().deleteTask(t.id),
-      enableDismiss: true,
+      enableSnooze: !isCompleted,
       isRetrying: t.isRetrying,
-      elevation: (isCompleted || isInactive) ? 0 : 2,
-      isThreeLine:
-          (t.assignedToName != null || t.isHouseholdTask) &&
-          t.description != null,
-      isInactive: isInactive,
-      putOffLabel: smartActionLabel(),
-      putOffIcon: smartActionIcon(),
-      showDoneAction: taskSection == _TaskSection.active,
+      elevation: 0,
+      isInactive: false,
     );
 
-    if (isInactive) {
-      card = Opacity(
-        opacity: 0.55,
-        child: ColorFiltered(
-          colorFilter: const ColorFilter.matrix([
-            0.2126,
-            0.7152,
-            0.0722,
-            0,
-            0,
-            0.2126,
-            0.7152,
-            0.0722,
-            0,
-            0,
-            0.2126,
-            0.7152,
-            0.0722,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            0,
-          ]),
-          child: card,
-        ),
-      );
+    if (isCompleted) {
+      card = Opacity(opacity: 0.65, child: card);
     }
 
     return AnimatedSwitcher(
@@ -913,7 +748,276 @@ class _TasksPageState extends State<TasksPage> {
     );
   }
 
+  Future<void> _showSnoozeSheet(BuildContext context, Task t) async {
+    final cubit = context.read<TaskCubit>();
+    final now = DateTime.now().toUtc();
+    final today = DateTime.utc(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    // Upcoming Saturday (or Sunday if today is Saturday)
+    final daysUntilSat = (DateTime.saturday - today.weekday) % 7;
+    final thisWeekend = today.add(
+      Duration(days: daysUntilSat == 0 ? 1 : daysUntilSat),
+    );
+    final cfg = _parseRepeatRule(t.repeatRule);
+    final DateTime nextCycle;
+    if (t.isRepeating) {
+      if (cfg.unit == 'month') {
+        nextCycle = DateTime.utc(
+          today.year,
+          today.month + cfg.interval,
+          today.day,
+        );
+      } else if (cfg.unit == 'week') {
+        nextCycle = today.add(Duration(days: 7 * cfg.interval));
+      } else {
+        nextCycle = today.add(Duration(days: cfg.interval));
+      }
+    } else {
+      nextCycle = today.add(const Duration(days: 7));
+    }
+
+    Future<void> applySnooze(DateTime target, String label) async {
+      final previous = t;
+      final updated = t.copyWith(
+        deadline: target,
+        inactiveUntil: t.isRepeating ? target : t.inactiveUntil,
+        putOffCount: t.putOffCount + 1,
+      );
+      await cubit.updateTask(updated);
+      if (!context.mounted) return;
+      showUndoToast(
+        context,
+        message: 'Snoozed "${sanitizeTaskTitle(t.title)}" to $label',
+        icon: Icons.snooze,
+        onUndo: () => cubit.updateTask(previous),
+      );
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Snooze "${sanitizeTaskTitle(t.title)}"',
+                  style: Theme.of(sheetCtx).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ActionChip(
+                      avatar: const Icon(Icons.wb_sunny_outlined, size: 18),
+                      label: const Text('Tomorrow'),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx);
+                        applySnooze(tomorrow, 'Tomorrow');
+                      },
+                    ),
+                    ActionChip(
+                      avatar: const Icon(Icons.weekend_outlined, size: 18),
+                      label: const Text('This Weekend'),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx);
+                        applySnooze(thisWeekend, 'This Weekend');
+                      },
+                    ),
+                    ActionChip(
+                      avatar: const Icon(Icons.update, size: 18),
+                      label: const Text('Next Cycle'),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx);
+                        applySnooze(nextCycle, 'Next Cycle');
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showTaskDetailSheet(
+    BuildContext context,
+    Task t, {
+    required bool isCompleted,
+  }) async {
+    final cubit = context.read<TaskCubit>();
+    final displayTitle = sanitizeTaskTitle(t.title);
+    final lastCompleted =
+        (t.completedDates != null && t.completedDates!.isNotEmpty)
+        ? t.completedDates!.last
+        : null;
+    final due = effectiveDueDate(t);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetCtx) {
+        final theme = Theme.of(sheetCtx);
+        final scheme = theme.colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: scheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        _getTaskIcon(t),
+                        color: scheme.onSecondaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            displayTitle,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (t.room != null && t.room!.isNotEmpty)
+                            Text(
+                              t.room!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (!t.isHouseholdTask &&
+                        (t.assignedToId != null || t.assignedToName != null))
+                      AssigneeAvatar(
+                        userId: t.assignedToId,
+                        displayName: t.assignedToName,
+                        radius: 16,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (t.description != null && t.description!.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      t.description!,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                if (due != null)
+                  _detailRow(
+                    sheetCtx,
+                    Icons.event_outlined,
+                    'Due: ${formatRelativeDueDate(due)} (${due.toLocalIsoDate()})',
+                  ),
+                if (t.isRepeating)
+                  _detailRow(sheetCtx, Icons.repeat, _repeatLabel(t)),
+                _detailRow(
+                  sheetCtx,
+                  Icons.person_outline,
+                  t.isHouseholdTask
+                      ? 'Assigned to: Household'
+                      : 'Assigned to: ${t.assignedToName ?? 'Member'}',
+                ),
+                if (lastCompleted != null)
+                  _detailRow(
+                    sheetCtx,
+                    Icons.history,
+                    'Last completed: $lastCompleted',
+                  ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      icon: Icon(Icons.delete_outline, color: scheme.error),
+                      label: Text(
+                        'Delete',
+                        style: TextStyle(color: scheme.error),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx);
+                        cubit.deleteTask(t.id);
+                        showUndoToast(
+                          context,
+                          message: 'Deleted "$displayTitle"',
+                          icon: Icons.delete_outline,
+                          onUndo: () => cubit.addTask(t),
+                        );
+                      },
+                    ),
+                    const Spacer(),
+                    FilledButton.icon(
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Edit'),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx);
+                        showTaskAddEditDialog(
+                          context,
+                          taskToEdit: t,
+                          currentUser: widget.currentUser,
+                          householdId: widget.householdId,
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(BuildContext context, IconData icon, String text) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
+        ],
+      ),
+    );
+  }
+
   IconData _getTaskIcon(Task task) {
+    switch ((task.room ?? '').toLowerCase().trim()) {
+      case 'bathroom':
+        return Icons.bathroom;
+      case 'kitchen':
+        return Icons.kitchen;
+      case 'bedroom':
+        return Icons.bed;
+      case 'living room':
+        return Icons.weekend;
+    }
     final title = task.title.toLowerCase();
     final description = (task.description ?? '').toLowerCase();
     final match1 = _matchIcon(title);
@@ -1032,7 +1136,7 @@ class _TasksPageState extends State<TasksPage> {
   ];
 }
 
-enum _TaskSection { active, future, done }
+enum _TaskSection { active, done }
 
 class _BulkImportConfirmationPage extends StatefulWidget {
   final List<Task> tasks;

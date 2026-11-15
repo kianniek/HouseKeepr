@@ -307,7 +307,12 @@ internal fun updateAppWidget(
         // -------------------------
     }
 
+    val palette = WidgetThemeHelper.resolve(context)
+
     val viewsNormal = RemoteViews(context.packageName, R.layout.shopping_list_widget).apply {
+        setInt(R.id.widget_container, "setBackgroundColor", palette.surface)
+        setTextColor(R.id.widget_title, palette.onSurface)
+        setTextColor(R.id.widget_empty_text, palette.onSurfaceVariant)
         val serviceIntent = Intent(context, ShoppingListRemoteViewsService::class.java).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
             data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))

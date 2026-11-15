@@ -31,6 +31,41 @@ class ThemePickerSheet extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<ThemeMode>(
+                      segments: const [
+                        ButtonSegment(
+                          value: ThemeMode.system,
+                          icon: Icon(Icons.brightness_auto_outlined),
+                          label: Text('System'),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.light,
+                          icon: Icon(Icons.light_mode_outlined),
+                          label: Text('Light'),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.dark,
+                          icon: Icon(Icons.dark_mode_outlined),
+                          label: Text('Dark'),
+                        ),
+                      ],
+                      selected: {controller.themeMode},
+                      onSelectionChanged: (selection) {
+                        if (selection.isNotEmpty) {
+                          controller.setThemeMode(selection.first);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                const Divider(height: 16),
                 ...AppThemeType.values.map((t) {
                   final selected = controller.currentTheme == t;
                   final palette = AppThemePalette.forType(t);

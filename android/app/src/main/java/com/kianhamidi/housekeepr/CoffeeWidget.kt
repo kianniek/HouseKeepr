@@ -101,7 +101,13 @@ class CoffeeWidget : AppWidgetProvider() {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val state = prefs.getString(STATE_KEY, STATE_IDLE) ?: STATE_IDLE
             val showSubtitle = prefs.getBoolean(SHOW_SUBTITLE_KEY, true)
+            val palette = WidgetThemeHelper.resolve(context)
             val views = RemoteViews(context.packageName, R.layout.coffee_widget).apply {
+                setInt(R.id.coffee_root, "setBackgroundColor", palette.surface)
+                setTextColor(R.id.coffee_title, palette.onSurfaceVariant)
+                setTextColor(R.id.coffee_arrow, palette.primary)
+                setTextColor(R.id.coffee_recipe_title, palette.onSurface)
+                setTextColor(R.id.coffee_recipe_subtitle, palette.onSurfaceVariant)
                 setViewVisibility(
                     R.id.coffee_idle_state,
                     if (state == STATE_RECIPE) android.view.View.GONE else android.view.View.VISIBLE,

@@ -120,7 +120,7 @@ class _MyAppState extends State<MyApp> {
               ],
               theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
               darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
-              themeMode: ThemeMode.system,
+              themeMode: controller.themeMode,
               home: AppRoot(initializationError: widget.initializationError),
             );
           },

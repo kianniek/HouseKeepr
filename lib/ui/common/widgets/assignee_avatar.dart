@@ -49,46 +49,50 @@ class _AssigneeAvatarState extends State<AssigneeAvatar> {
       _loadFailed = data['loadFailed'] as bool? ?? false;
     }
     if (widget.userId != null && !_cache.containsKey(widget.userId)) {
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .get()
-          .then((doc) {
-            final data = doc.data();
-            if (data != null) {
-              final url = (data['photoURL'] is String)
-                  ? data['photoURL'] as String
-                  : null;
-              final name = (data['displayName'] is String)
-                  ? data['displayName'] as String
-                  : null;
-              Color? col;
-              if (data['personalColor'] is int) {
-                try {
-                  col = Color(data['personalColor'] as int);
-                } catch (_) {}
+      try {
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.userId)
+            .get()
+            .then((doc) {
+              final data = doc.data();
+              if (data != null) {
+                final url = (data['photoURL'] is String)
+                    ? data['photoURL'] as String
+                    : null;
+                final name = (data['displayName'] is String)
+                    ? data['displayName'] as String
+                    : null;
+                Color? col;
+                if (data['personalColor'] is int) {
+                  try {
+                    col = Color(data['personalColor'] as int);
+                  } catch (_) {}
+                }
+                _cache[widget.userId!] = {
+                  'photoURL': url,
+                  'displayName': name,
+                  'personalColor': col,
+                  'loadFailed': false,
+                };
+                if (mounted) {
+                  setState(() {
+                    _photoUrl = url;
+                    _personalColor = col;
+                    _loadFailed = false;
+                    if (name != null) _displayName = name;
+                  });
+                }
               }
-              _cache[widget.userId!] = {
-                'photoURL': url,
-                'displayName': name,
-                'personalColor': col,
-                'loadFailed': false,
-              };
-              if (mounted) {
-                setState(() {
-                  _photoUrl = url;
-                  _personalColor = col;
-                  _loadFailed = false;
-                  if (name != null) _displayName = name;
-                });
-              }
-            }
-          })
-          .catchError((e) {
-            debugPrint(
-              'AssigneeAvatar: failed to fetch user ${widget.userId}: $e',
-            );
-          });
+            })
+            .catchError((e) {
+              debugPrint(
+                'AssigneeAvatar: failed to fetch user ${widget.userId}: $e',
+              );
+            });
+      } catch (e) {
+        debugPrint('AssigneeAvatar: Firestore unavailable: $e');
+      }
     }
   }
 

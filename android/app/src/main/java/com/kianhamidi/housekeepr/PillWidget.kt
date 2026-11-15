@@ -50,6 +50,10 @@ class PillWidget : AppWidgetProvider() {
             appWidgetId: Int
         ) {
             val views = RemoteViews(context.packageName, R.layout.pill_widget)
+            val palette = WidgetThemeHelper.resolve(context)
+            views.setInt(R.id.pill_widget_root, "setBackgroundColor", palette.surface)
+            views.setTextColor(R.id.pill_widget_title, palette.onSurface)
+            views.setTextColor(R.id.pill_empty_text, palette.onSurfaceVariant)
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val rawJson = prefs.getString(DATA_KEY, null)
 

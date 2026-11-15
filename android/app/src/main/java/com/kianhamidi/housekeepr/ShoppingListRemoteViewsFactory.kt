@@ -55,11 +55,14 @@ class ShoppingListRemoteViewsFactory(
 
     /** Normal text color, theme-aware. */
     private val normalTextColor: Int
-        get() = if (isDarkMode) 0xFFFFFFFF.toInt() else 0xFF000000.toInt()
+        get() = WidgetThemeHelper.resolve(context).onSurface
 
     /** Checked/lighter text color, theme-aware. */
     private val checkedTextColor: Int
-        get() = if (isDarkMode) 0x80FFFFFF.toInt() else 0x80000000.toInt()
+        get() {
+            val base = WidgetThemeHelper.resolve(context).onSurfaceVariant
+            return (base and 0x00FFFFFF) or (0x80 shl 24)
+        }
 
     override fun onCreate() {
         loadData()

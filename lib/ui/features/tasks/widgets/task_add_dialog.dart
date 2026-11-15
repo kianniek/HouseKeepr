@@ -13,6 +13,31 @@ import 'package:uuid/uuid.dart';
 import '../../../../cubits/task_cubit.dart';
 import '../../../../models/task.dart';
 import '../../../../services/household_service.dart';
+import '../utils/task_date_utils.dart';
+
+class _TaskReminderPreset {
+  final String title;
+  final String room;
+  final int interval;
+  final String unit;
+  const _TaskReminderPreset(this.title, this.room, this.interval, this.unit);
+}
+
+const List<_TaskReminderPreset> _reminderPresets = [
+  _TaskReminderPreset('Dust ceiling corners', 'Living Room', 1, 'month'),
+  _TaskReminderPreset('Refresh water filter', 'Kitchen', 1, 'month'),
+  _TaskReminderPreset('Wash throw blankets', 'Living Room', 1, 'month'),
+  _TaskReminderPreset('Wipe bathroom mirror', 'Bathroom', 1, 'week'),
+  _TaskReminderPreset('Empty kitchen bin', 'Kitchen', 1, 'week'),
+  _TaskReminderPreset('Flip mattress', 'Bedroom', 1, 'month'),
+];
+
+const List<String> _taskRoomOptions = [
+  'Bathroom',
+  'Kitchen',
+  'Bedroom',
+  'Living Room',
+];
 
 /// Shows the add/edit Task dialog and saves via TaskCubit.
 Future<void> showTaskAddEditDialog(
@@ -23,9 +48,12 @@ Future<void> showTaskAddEditDialog(
   Future<void> Function()? onBulkImportTap,
 }) async {
   final cubit = context.read<TaskCubit>();
-  final titleCtl = TextEditingController(text: taskToEdit?.title ?? '');
+  final titleCtl = TextEditingController(
+    text: taskToEdit != null ? sanitizeTaskTitle(taskToEdit.title) : '',
+  );
   final descCtl = TextEditingController(text: taskToEdit?.description ?? '');
   TaskPriority selectedPriority = taskToEdit?.priority ?? TaskPriority.medium;
+  String? selectedRoom = taskToEdit?.room;
   String? selectedMemberId = taskToEdit?.assignedToId;
   String? selectedMemberName = taskToEdit?.assignedToName;
   bool isHouseholdTask = taskToEdit?.isHouseholdTask ?? false;
@@ -187,9 +215,70 @@ Future<void> showTaskAddEditDialog(
                     ],
                   ),
                   const SizedBox(height: 12),
+                  if (taskToEdit == null) ...[
+                    Text(
+                      'Quick Picks',
+                      style: Theme.of(contextSB).textTheme.labelMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      height: 38,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _reminderPresets.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (ctx, i) {
+                          final preset = _reminderPresets[i];
+                          return ActionChip(
+                            label: Text(preset.title),
+                            onPressed: () {
+                              setStateSB(() {
+                                titleCtl.text = preset.title;
+                                selectedRoom = preset.room;
+                                isRepeating = true;
+                                repeatInterval = preset.interval;
+                                repeatUnit = preset.unit;
+                                repeatIntervalCtl.text = preset.interval
+                                    .toString();
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   TextField(
                     controller: titleCtl,
-                    decoration: const InputDecoration(labelText: 'Title'),
+                    decoration: const InputDecoration(
+                      labelText: 'Title',
+                      hintText: 'e.g. Refresh water filter',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Room',
+                      style: Theme.of(contextSB).textTheme.labelMedium,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: _taskRoomOptions.map((room) {
+                      final isSelected = selectedRoom == room;
+                      return ChoiceChip(
+                        label: Text(room),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          setStateSB(() {
+                            selectedRoom = selected ? room : null;
+                          });
+                        },
+                      );
+                    }).toList(),
                   ),
                   const SizedBox(height: 8),
                   Align(
@@ -689,11 +778,15 @@ Future<void> showTaskAddEditDialog(
                         onPressed: canAdd()
                             ? () {
                                 if (taskToEdit != null) {
+                                  final sanitizedTitle = sanitizeTaskTitle(
+                                    titleCtl.text,
+                                  ).capitalizeFirst();
                                   final updated = taskToEdit.copyWith(
-                                    title: titleCtl.text.capitalizeFirst(),
+                                    title: sanitizedTitle,
                                     description: descCtl.text.isEmpty
                                         ? null
                                         : descCtl.text,
+                                    room: selectedRoom,
                                     assignedToId: isHouseholdTask
                                         ? null
                                         : selectedMemberId,
@@ -716,12 +809,16 @@ Future<void> showTaskAddEditDialog(
                                   cubit.updateTask(updated);
                                 } else {
                                   final id = const Uuid().v4();
+                                  final sanitizedTitle = sanitizeTaskTitle(
+                                    titleCtl.text,
+                                  ).capitalizeFirst();
                                   final task = Task(
                                     id: id,
-                                    title: titleCtl.text.capitalizeFirst(),
+                                    title: sanitizedTitle,
                                     description: descCtl.text.isEmpty
                                         ? null
                                         : descCtl.text,
+                                    room: selectedRoom,
                                     assignedToId: isHouseholdTask
                                         ? null
                                         : selectedMemberId,

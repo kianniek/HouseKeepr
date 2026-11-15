@@ -9,6 +9,9 @@ class WidgetSettings {
   final bool shoppingShowItemCount;
   final bool coffeeIncludeCustomRecipes;
   final bool coffeeShowSubtitle;
+  final bool widgetFollowAppTheme;
+  final String widgetThemeType;
+  final String widgetThemeMode;
 
   const WidgetSettings({
     this.pillHideUnusedToggles = false,
@@ -18,6 +21,9 @@ class WidgetSettings {
     this.shoppingShowItemCount = true,
     this.coffeeIncludeCustomRecipes = true,
     this.coffeeShowSubtitle = true,
+    this.widgetFollowAppTheme = true,
+    this.widgetThemeType = 'classic',
+    this.widgetThemeMode = 'system',
   });
 
   WidgetSettings copyWith({
@@ -28,6 +34,9 @@ class WidgetSettings {
     bool? shoppingShowItemCount,
     bool? coffeeIncludeCustomRecipes,
     bool? coffeeShowSubtitle,
+    bool? widgetFollowAppTheme,
+    String? widgetThemeType,
+    String? widgetThemeMode,
   }) {
     return WidgetSettings(
       pillHideUnusedToggles:
@@ -40,6 +49,9 @@ class WidgetSettings {
       coffeeIncludeCustomRecipes:
           coffeeIncludeCustomRecipes ?? this.coffeeIncludeCustomRecipes,
       coffeeShowSubtitle: coffeeShowSubtitle ?? this.coffeeShowSubtitle,
+      widgetFollowAppTheme: widgetFollowAppTheme ?? this.widgetFollowAppTheme,
+      widgetThemeType: widgetThemeType ?? this.widgetThemeType,
+      widgetThemeMode: widgetThemeMode ?? this.widgetThemeMode,
     );
   }
 }
@@ -54,6 +66,9 @@ class WidgetSettingsRepository {
   static const String coffeeIncludeCustomRecipesKey =
       'coffee_include_custom_recipes_v1';
   static const String coffeeShowSubtitleKey = 'coffee_show_subtitle_v1';
+  static const String widgetFollowAppThemeKey = 'widget_follow_app_theme_v1';
+  static const String widgetThemeTypeKey = 'widget_theme_type_v1';
+  static const String widgetThemeModeKey = 'widget_theme_mode_v1';
 
   final SharedPreferences prefs;
 
@@ -69,6 +84,9 @@ class WidgetSettingsRepository {
       coffeeIncludeCustomRecipes:
           prefs.getBool(coffeeIncludeCustomRecipesKey) ?? true,
       coffeeShowSubtitle: prefs.getBool(coffeeShowSubtitleKey) ?? true,
+      widgetFollowAppTheme: prefs.getBool(widgetFollowAppThemeKey) ?? true,
+      widgetThemeType: prefs.getString(widgetThemeTypeKey) ?? 'classic',
+      widgetThemeMode: prefs.getString(widgetThemeModeKey) ?? 'system',
     );
   }
 
@@ -84,6 +102,9 @@ class WidgetSettingsRepository {
         settings.coffeeIncludeCustomRecipes,
       ),
       prefs.setBool(coffeeShowSubtitleKey, settings.coffeeShowSubtitle),
+      prefs.setBool(widgetFollowAppThemeKey, settings.widgetFollowAppTheme),
+      prefs.setString(widgetThemeTypeKey, settings.widgetThemeType),
+      prefs.setString(widgetThemeModeKey, settings.widgetThemeMode),
     ]);
   }
 }

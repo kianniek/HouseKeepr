@@ -111,12 +111,37 @@ class AppThemePalette {
 
   static AppThemePalette forType(AppThemeType t) => _palettes[t]!;
 
+  /// Lookup palette by enum name, falling back to [AppThemeType.classic].
+  static AppThemePalette forName(String? name) {
+    final type = AppThemeType.values.firstWhere(
+      (e) => e.name == name,
+      orElse: () => AppThemeType.classic,
+    );
+    return forType(type);
+  }
+
+  /// Exports ARGB color integers for Android home-screen widgets.
+  Map<String, int> toWidgetColorsMap(Brightness brightness) {
+    final scheme = brightness == Brightness.dark ? darkScheme() : lightScheme();
+    return {
+      'surface': scheme.surface.toARGB32(),
+      'surfaceContainer': scheme.surfaceContainerHighest.toARGB32(),
+      'onSurface': scheme.onSurface.toARGB32(),
+      'onSurfaceVariant': scheme.onSurfaceVariant.toARGB32(),
+      'primary': scheme.primary.toARGB32(),
+      'onPrimary': scheme.onPrimary.toARGB32(),
+      'primaryContainer': scheme.primaryContainer.toARGB32(),
+      'onPrimaryContainer': scheme.onPrimaryContainer.toARGB32(),
+      'outline': scheme.outline.toARGB32(),
+    };
+  }
+
   static const Map<AppThemeType, AppThemePalette> _palettes = {
     AppThemeType.classic: AppThemePalette._(
       type: AppThemeType.classic,
       seed: Color(0xFFF68801),
-      // Light
-      lightPrimary: Color(0xFFF57C00),
+      // Light (WCAG AA >= 4.5:1 onPrimary/primary)
+      lightPrimary: Color(0xFFC65102),
       lightOnPrimary: Color(0xFFFFFFFF),
       lightPrimaryContainer: Color(0xFFFFE0B2),
       lightOnPrimaryContainer: Color(0xFF3E1700),
@@ -193,8 +218,8 @@ class AppThemePalette {
     AppThemeType.sunset: AppThemePalette._(
       type: AppThemeType.sunset,
       seed: Color(0xFFFF7043),
-      // Light
-      lightPrimary: Color(0xFFFF7043),
+      // Light (WCAG AA >= 4.5:1 onPrimary/primary)
+      lightPrimary: Color(0xFFD84315),
       lightOnPrimary: Color(0xFFFFFFFF),
       lightPrimaryContainer: Color(0xFFFFCCBC),
       lightOnPrimaryContainer: Color(0xFF3C0B00),

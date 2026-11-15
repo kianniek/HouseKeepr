@@ -209,21 +209,14 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildClassicNav(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return BottomNavigationBar(
-      currentIndex: _currentIndex,
-      onTap: _onNavTap,
-      selectedItemColor: colorScheme.primary,
-      unselectedItemColor: colorScheme.onSurfaceVariant,
-      showSelectedLabels: true,
-      showUnselectedLabels: true,
-      type: BottomNavigationBarType.fixed,
-      items: HomeTab.values
+    return NavigationBar(
+      selectedIndex: _currentIndex,
+      onDestinationSelected: _onNavTap,
+      destinations: HomeTab.values
           .map(
-            (tab) => BottomNavigationBarItem(
+            (tab) => NavigationDestination(
               icon: Icon(tab.icon),
-              activeIcon: Icon(tab.activeIcon),
+              selectedIcon: Icon(tab.activeIcon),
               label: tab.label,
             ),
           )

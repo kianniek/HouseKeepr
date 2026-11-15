@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/widget_settings.dart';
 import '../../../../services/widget_service.dart';
+import '../../../common/app_theme.dart';
 
 /// Hub screen listing each home-screen widget and opening its dedicated settings.
 class WidgetSettingsPage extends StatelessWidget {
@@ -17,6 +18,8 @@ class WidgetSettingsPage extends StatelessWidget {
       appBar: AppBar(title: const Text('Home Screen Widgets')),
       body: ListView(
         children: [
+          const _WidgetThemeSection(),
+          const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.medication_outlined),
             title: const Text('Pill Reminder Widget'),
@@ -63,6 +66,107 @@ class WidgetSettingsPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _WidgetThemeSection extends StatefulWidget {
+  const _WidgetThemeSection();
+
+  @override
+  State<_WidgetThemeSection> createState() => _WidgetThemeSectionState();
+}
+
+class _WidgetThemeSectionState extends State<_WidgetThemeSection> {
+  WidgetSettingsRepository? _repo;
+  WidgetSettings _settings = const WidgetSettings();
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final repo = WidgetSettingsRepository(prefs);
+    if (!mounted) return;
+    setState(() {
+      _repo = repo;
+      _settings = repo.load();
+    });
+  }
+
+  Future<void> _update(WidgetSettings next) async {
+    setState(() => _settings = next);
+    await _repo?.save(next);
+    await WidgetService.instance.applyWidgetSettings(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+          child: Text(
+            'Widget Appearance',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        SwitchListTile(
+          secondary: const Icon(Icons.palette_outlined),
+          title: const Text('Match App Theme'),
+          subtitle: const Text(
+            'Use the same color palette and light/dark mode as the app',
+          ),
+          value: _settings.widgetFollowAppTheme,
+          onChanged: (v) =>
+              _update(_settings.copyWith(widgetFollowAppTheme: v)),
+        ),
+        if (!_settings.widgetFollowAppTheme) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: AppThemeType.values.map((t) {
+                final selected = _settings.widgetThemeType == t.name;
+                return ChoiceChip(
+                  label: Text(t.label),
+                  selected: selected,
+                  onSelected: (_) =>
+                      _update(_settings.copyWith(widgetThemeType: t.name)),
+                );
+              }).toList(),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'system', label: Text('System')),
+                  ButtonSegment(value: 'light', label: Text('Light')),
+                  ButtonSegment(value: 'dark', label: Text('Dark')),
+                ],
+                selected: {_settings.widgetThemeMode},
+                onSelectionChanged: (sel) {
+                  if (sel.isNotEmpty) {
+                    _update(_settings.copyWith(widgetThemeMode: sel.first));
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

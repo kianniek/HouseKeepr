@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../models/task.dart';
+import '../../features/tasks/utils/task_date_utils.dart';
+import 'assignee_avatar.dart';
 
 class TaskCard extends StatelessWidget {
   final Task task;
@@ -7,19 +10,15 @@ class TaskCard extends StatelessWidget {
   final bool isCompleted;
   final Widget subtitle;
   final VoidCallback onToggleComplete;
-  final VoidCallback? onPutOff;
+  final VoidCallback? onTap;
+  final VoidCallback? onSnooze;
   final VoidCallback? onLongPress;
-  final VoidCallback? onDelete;
-  final bool enableDismiss;
+  final bool enableSnooze;
   final bool isRetrying;
   final EdgeInsetsGeometry margin;
   final double? elevation;
   final Color? color;
-  final bool? isThreeLine;
   final bool isInactive;
-  final String putOffLabel;
-  final IconData putOffIcon;
-  final bool showDoneAction;
 
   const TaskCard({
     super.key,
@@ -28,139 +27,183 @@ class TaskCard extends StatelessWidget {
     required this.isCompleted,
     required this.subtitle,
     required this.onToggleComplete,
-    this.onPutOff,
+    this.onTap,
+    this.onSnooze,
     this.onLongPress,
-    this.onDelete,
-    this.enableDismiss = false,
+    this.enableSnooze = false,
     this.isRetrying = false,
     this.margin = const EdgeInsets.only(bottom: 8),
     this.elevation,
     this.color,
-    this.isThreeLine,
     this.isInactive = false,
-    this.putOffLabel = 'Put Off',
-    this.putOffIcon = Icons.schedule,
-    this.showDoneAction = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final displayTitle = sanitizeTaskTitle(task.title);
 
     final card = Card(
       margin: margin,
-      color: color ?? scheme.surfaceContainerHighest,
-      elevation: elevation,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: scheme.tertiaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        task.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          decoration: isCompleted
-                              ? TextDecoration.lineThrough
-                              : null,
+      color: color ?? scheme.surfaceContainerLow,
+      elevation: elevation ?? 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: scheme.outlineVariant.withValues(alpha: 0.5),
+          width: 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Left-aligned circular checkbox matching ShoppingListItemTile (#5)
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: (isInactive || isRetrying) ? null : onToggleComplete,
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isCompleted ? scheme.primary : scheme.outline,
+                          width: 2,
                         ),
+                        color: isCompleted ? scheme.primary : scheme.surface,
                       ),
-                      const SizedBox(height: 4),
-                      subtitle,
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Builder(
-                  builder: (context) {
-                    if (!showDoneAction) {
-                      return const SizedBox.shrink();
-                    }
-                    return Expanded(
-                      child: SizedBox(
-                        height: 32,
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.check, size: 16),
-                          label: const Text(
-                            'Done',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          onPressed: isInactive || isRetrying
-                              ? null
-                              : onToggleComplete,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 32,
-                    child: OutlinedButton.icon(
-                      icon: Icon(putOffIcon, size: 16),
-                      label: Text(
-                        putOffLabel,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      onPressed: isRetrying ? null : onPutOff,
+                      child: isCompleted
+                          ? Icon(Icons.check, color: scheme.onPrimary, size: 16)
+                          : null,
                     ),
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(width: 6),
+              // Room/category icon (#4)
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: scheme.secondaryContainer.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, size: 18, color: scheme.onSecondaryContainer),
+              ),
+              const SizedBox(width: 12),
+              // Compact 2-line content: title + single muted metadata line (#4)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      displayTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        decoration: isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
+                        color: isCompleted
+                            ? scheme.onSurfaceVariant
+                            : scheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    subtitle,
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Top-right compact assignee avatar / household badge (#4)
+              _buildAssigneeBadge(context),
+            ],
+          ),
         ),
       ),
     );
 
-    final cardWithGesture = GestureDetector(
-      onLongPress: onLongPress,
-      child: card,
-    );
+    if (!enableSnooze || onSnooze == null || isCompleted) {
+      return card;
+    }
 
-    if (!enableDismiss || onDelete == null) return cardWithGesture;
+    final isDark = theme.brightness == Brightness.dark;
+    final snoozeBg = isDark ? const Color(0xFF4A3200) : const Color(0xFFFFF3CD);
+    final snoozeFg = isDark ? const Color(0xFFFFD54F) : const Color(0xFF7A4F01);
 
     return Dismissible(
       key: ValueKey('dismiss_${task.id}'),
       direction: isRetrying
           ? DismissDirection.none
           : DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        onSnooze?.call();
+        return false;
+      },
       background: Container(
-        color: scheme.error,
+        margin: margin,
+        decoration: BoxDecoration(
+          color: snoozeBg,
+          borderRadius: BorderRadius.circular(14),
+        ),
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Icon(Icons.delete, color: scheme.onError),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Snooze',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: snoozeFg,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.snooze, color: snoozeFg),
+          ],
+        ),
       ),
-      onDismissed: (_) => onDelete?.call(),
-      child: cardWithGesture,
+      child: card,
     );
+  }
+
+  Widget _buildAssigneeBadge(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    if (task.isHouseholdTask) {
+      return Tooltip(
+        message: 'Household',
+        child: CircleAvatar(
+          radius: 13,
+          backgroundColor: scheme.surfaceContainerHighest,
+          child: Icon(
+            Icons.group_outlined,
+            size: 15,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+    if (task.assignedToId != null || task.assignedToName != null) {
+      return AssigneeAvatar(
+        userId: task.assignedToId,
+        displayName: task.assignedToName,
+        radius: 13,
+      );
+    }
+    return const SizedBox.shrink();
   }
 }
