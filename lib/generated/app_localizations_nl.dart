@@ -15,6 +15,19 @@ class AppLocalizationsNl extends AppLocalizations {
   String get settingsTitle => 'Instellingen';
 
   @override
+  String get preferencesSection => 'Voorkeuren';
+
+  @override
+  String get notificationsSection => 'Meldingen';
+
+  @override
+  String get homeScreenWidgetsTitle => 'Startschermwidgets';
+
+  @override
+  String get homeScreenWidgetsSubtitle =>
+      'Pas Pilherinnering-, Boodschappenlijst- en Koffiewidgets aan';
+
+  @override
   String get language => 'Taal';
 
   @override
@@ -62,6 +75,11 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get logoutConfirmation => 'Weet je zeker dat je wilt uitloggen?';
+
+  @override
+  String failedToLogout(String error) {
+    return 'Uitloggen mislukt: $error';
+  }
 
   @override
   String get cancel => 'Annuleren';

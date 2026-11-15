@@ -7,6 +7,18 @@
   "settingsTitle": "Settings",
   "@settingsTitle": { "description": "Settings screen title" },
 
+  "preferencesSection": "Preferences",
+  "@preferencesSection": { "description": "Preferences section header in settings" },
+
+  "notificationsSection": "Notifications",
+  "@notificationsSection": { "description": "Notifications section header in settings" },
+
+  "homeScreenWidgetsTitle": "Home Screen Widgets",
+  "@homeScreenWidgetsTitle": { "description": "Home screen widgets settings tile title" },
+
+  "homeScreenWidgetsSubtitle": "Customize Pill Reminder, Shopping List & Coffee widgets",
+  "@homeScreenWidgetsSubtitle": { "description": "Home screen widgets settings tile subtitle" },
+
   "language": "Language",
   "@language": { "description": "Language setting label" },
 
@@ -54,6 +66,14 @@
 
   "logoutConfirmation": "Are you sure you want to log out?",
   "@logoutConfirmation": { "description": "Logout confirmation message" },
+
+  "failedToLogout": "Failed to logout: {error}",
+  "@failedToLogout": {
+    "description": "Error message shown when logout fails",
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
 
   "cancel": "Cancel",
   "@cancel": { "description": "Cancel button label" },

@@ -312,15 +312,16 @@ class _AppRootState extends State<AppRoot> {
   void attachAuthListener() {
     if (authListenerAttached) return;
     authListenerAttached = true;
-    authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
-      if (user == null) {
+    authSub = FirebaseAuth.instance.authStateChanges().listen((firebaseUser) {
+      if (!mounted) return;
+      if (firebaseUser == null) {
         setState(() {
           user = null;
           householdId = null;
           checkingHousehold = false;
         });
-      } else if (this.user?.uid != user.uid) {
-        onSignedIn(user);
+      } else if (user?.uid != firebaseUser.uid) {
+        onSignedIn(firebaseUser);
       }
     });
   }

@@ -5,6 +5,14 @@
 
   "settingsTitle": "Instellingen",
 
+  "preferencesSection": "Voorkeuren",
+
+  "notificationsSection": "Meldingen",
+
+  "homeScreenWidgetsTitle": "Startschermwidgets",
+
+  "homeScreenWidgetsSubtitle": "Pas Pilherinnering-, Boodschappenlijst- en Koffiewidgets aan",
+
   "language": "Taal",
 
   "languageEnglish": "Engels",
@@ -36,6 +44,8 @@
   "logout": "Uitloggen",
 
   "logoutConfirmation": "Weet je zeker dat je wilt uitloggen?",
+
+  "failedToLogout": "Uitloggen mislukt: {error}",
 
   "cancel": "Annuleren",
 

@@ -15,6 +15,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTitle => 'Settings';
 
   @override
+  String get preferencesSection => 'Preferences';
+
+  @override
+  String get notificationsSection => 'Notifications';
+
+  @override
+  String get homeScreenWidgetsTitle => 'Home Screen Widgets';
+
+  @override
+  String get homeScreenWidgetsSubtitle =>
+      'Customize Pill Reminder, Shopping List & Coffee widgets';
+
+  @override
   String get language => 'Language';
 
   @override
@@ -62,6 +75,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logoutConfirmation => 'Are you sure you want to log out?';
+
+  @override
+  String failedToLogout(String error) {
+    return 'Failed to logout: $error';
+  }
 
   @override
   String get cancel => 'Cancel';

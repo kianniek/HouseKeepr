@@ -110,6 +110,30 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settingsTitle;
 
+  /// Preferences section header in settings
+  ///
+  /// In en, this message translates to:
+  /// **'Preferences'**
+  String get preferencesSection;
+
+  /// Notifications section header in settings
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notificationsSection;
+
+  /// Home screen widgets settings tile title
+  ///
+  /// In en, this message translates to:
+  /// **'Home Screen Widgets'**
+  String get homeScreenWidgetsTitle;
+
+  /// Home screen widgets settings tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Customize Pill Reminder, Shopping List & Coffee widgets'**
+  String get homeScreenWidgetsSubtitle;
+
   /// Language setting label
   ///
   /// In en, this message translates to:
@@ -205,6 +229,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Are you sure you want to log out?'**
   String get logoutConfirmation;
+
+  /// Error message shown when logout fails
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to logout: {error}'**
+  String failedToLogout(String error);
 
   /// Cancel button label
   ///
