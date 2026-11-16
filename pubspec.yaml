@@ -32,6 +32,8 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  health_keepr:
+    path: packages/health_keepr
   intl: ^0.20.2
 
   barcode_widget: ^2.0.1

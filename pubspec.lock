@@ -741,6 +741,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  health_keepr:
+    dependency: "direct main"
+    description:
+      path: "packages/health_keepr"
+      relative: true
+    source: path
+    version: "0.0.1"
   hive:
     dependency: "direct main"
     description:
@@ -1061,6 +1068,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "9.5.0"
+  open_gym:
+    dependency: transitive
+    description:
+      path: "packages/open_gym"
+      relative: true
+    source: path
+    version: "0.0.1"
   package_config:
     dependency: transitive
     description:

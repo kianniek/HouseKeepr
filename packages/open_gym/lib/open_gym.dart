@@ -1,0 +1,76 @@
+import 'package:flutter/material.dart';
+import 'package:health_keepr/health_keepr.dart';
+
+import 'src/state/open_gym_controller.dart';
+import 'src/ui/open_gym_dashboard_screen.dart';
+
+export 'src/models/exercise.dart';
+export 'src/models/exercise_set.dart';
+export 'src/models/workout_log.dart';
+export 'src/models/workout_template.dart';
+export 'src/state/open_gym_controller.dart';
+export 'src/state/open_gym_repository.dart';
+export 'src/state/personal_record_service.dart';
+
+/// Root entry widget for the deferred OpenGym mini-app.
+///
+/// Wraps a nested [Navigator] with [PopScope] so back navigation cleanly pops
+/// internal OpenGym screens before returning to `HealthKeeprHubScreen`.
+class OpenGymRoot extends StatefulWidget {
+  const OpenGymRoot({
+    super.key,
+    required this.store,
+  });
+
+  final HealthDataStore store;
+
+  @override
+  State<OpenGymRoot> createState() => _OpenGymRootState();
+}
+
+class _OpenGymRootState extends State<OpenGymRoot> {
+  final GlobalKey<NavigatorState> _nestedNavigatorKey =
+      GlobalKey<NavigatorState>();
+  late final OpenGymController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = OpenGymController(store: widget.store)..initialize();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _exitModule() {
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        final nestedNav = _nestedNavigatorKey.currentState;
+        if (nestedNav != null && nestedNav.canPop()) {
+          nestedNav.pop();
+        } else {
+          _exitModule();
+        }
+      },
+      child: Navigator(
+        key: _nestedNavigatorKey,
+        onGenerateRoute: (_) => MaterialPageRoute<void>(
+          builder: (_) => OpenGymDashboardScreen(
+            controller: _controller,
+            onExitModule: _exitModule,
+          ),
+        ),
+      ),
+    );
+  }
+}
