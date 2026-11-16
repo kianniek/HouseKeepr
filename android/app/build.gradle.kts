@@ -64,6 +64,8 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    dynamicFeatures += setOf(":openGym")
 }
 
 flutter {
@@ -78,4 +80,5 @@ dependencies {
     implementation("androidx.annotation:annotation:1.9.1")
     implementation("com.google.firebase:firebase-auth-ktx:23.2.1")
     implementation("com.google.firebase:firebase-firestore-ktx:25.1.4")
+    implementation("com.google.android.play:feature-delivery:2.1.0")
 }

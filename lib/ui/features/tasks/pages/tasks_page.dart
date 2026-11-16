@@ -9,7 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../cubits/task_cubit.dart';
+import '../../../../home_screen.dart';
 import '../../../../models/task.dart';
+import '../../../../services/task_rescheduler.dart';
 import '../../../common/widgets/assignee_avatar.dart';
 import '../../../common/widgets/task_card.dart';
 import '../../../common/widgets/undo_toast.dart';
@@ -48,6 +50,7 @@ class _TasksPageState extends State<TasksPage> {
   bool _upcomingExpanded = true;
   bool _wheneverExpanded = true;
   bool _doneExpanded = false;
+  bool _highlightAutoBalance = false;
   final List<String> _rooms = [
     'Everything',
     'Bathroom',
@@ -61,6 +64,28 @@ class _TasksPageState extends State<TasksPage> {
   void initState() {
     super.initState();
     _loadFilters();
+    HomeScreen.highlightAutoBalanceNotifier.addListener(
+      _onHighlightAutoBalance,
+    );
+  }
+
+  @override
+  void dispose() {
+    HomeScreen.highlightAutoBalanceNotifier.removeListener(
+      _onHighlightAutoBalance,
+    );
+    _bulkImportController.dispose();
+    super.dispose();
+  }
+
+  void _onHighlightAutoBalance() {
+    if (!mounted) return;
+    setState(() => _highlightAutoBalance = true);
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _highlightAutoBalance = false);
+      }
+    });
   }
 
   Future<void> _loadFilters() async {
@@ -463,6 +488,86 @@ class _TasksPageState extends State<TasksPage> {
 
     final listChildren = <Widget>[];
 
+    final overdueTasks = dueSoonTasks.where((t) {
+      final due = effectiveDueDate(t);
+      return due != null && isOverdue(due);
+    }).toList();
+
+    if (overdueTasks.length >= 3) {
+      final theme = Theme.of(context);
+      final scheme = theme.colorScheme;
+      listChildren.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            decoration: BoxDecoration(
+              color: _highlightAutoBalance
+                  ? scheme.primaryContainer
+                  : scheme.secondaryContainer.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(14),
+              border: _highlightAutoBalance
+                  ? Border.all(color: scheme.primary, width: 2)
+                  : null,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.auto_awesome,
+                    size: 20,
+                    color: scheme.onSecondaryContainer,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${overdueTasks.length} tasks piled up. Spread them across this week?',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSecondaryContainer,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.tonal(
+                    onPressed: () async {
+                      final cubit = context.read<TaskCubit>();
+                      final targetIds = overdueTasks.map((t) => t.id).toSet();
+                      final updates = TaskRescheduler.rebalanceOverduePileup(
+                        cubit.state.tasks,
+                        targetTaskIds: targetIds,
+                      );
+                      if (updates.isEmpty) return;
+                      final previous = await cubit.batchRescheduleTasks(
+                        updates,
+                      );
+                      if (!context.mounted || previous.isEmpty) return;
+                      showUndoToast(
+                        context,
+                        message:
+                            'Balanced ${previous.length} overdue ${previous.length == 1 ? 'task' : 'tasks'}',
+                        icon: Icons.auto_awesome,
+                        onUndo: () => cubit.restoreTasks(previous),
+                      );
+                    },
+                    style: FilledButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                    ),
+                    child: const Text('Auto-Balance'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     void addSection({
       required String title,
       required List<Task> items,
@@ -793,6 +898,9 @@ class _TasksPageState extends State<TasksPage> {
       );
     }
 
+    final smartPick = TaskRescheduler.suggestBestDate(t, cubit.state.tasks);
+    final smartLabel = formatRelativeDueDate(smartPick.targetDate);
+
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -815,6 +923,14 @@ class _TasksPageState extends State<TasksPage> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
+                    ActionChip(
+                      avatar: const Icon(Icons.auto_awesome, size: 18),
+                      label: Text('Smart: $smartLabel (${smartPick.reason})'),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx);
+                        applySnooze(smartPick.targetDate, smartLabel);
+                      },
+                    ),
                     ActionChip(
                       avatar: const Icon(Icons.wb_sunny_outlined, size: 18),
                       label: const Text('Tomorrow'),

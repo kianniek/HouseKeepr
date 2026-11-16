@@ -461,4 +461,54 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get openInWebView => 'Openen in browserweergave';
+
+  @override
+  String get allNotificationsTitle => 'Alle meldingen';
+
+  @override
+  String get allNotificationsSubtitle =>
+      'Schakel alle herinneringen en overzichten in of uit';
+
+  @override
+  String get morningBriefing => 'Ochtendoverzicht';
+
+  @override
+  String get eveningCheckIn => 'Avondcheck-in';
+
+  @override
+  String get appChannels => 'App-kanalen';
+
+  @override
+  String get notifTasksDigestTitle => 'Taken — Ochtendoverzicht';
+
+  @override
+  String get notifTasksDigestSubtitle => 'Dagelijks aantal taken voor vandaag';
+
+  @override
+  String get notifTasksRemindersTitle => 'Taken — Individuele herinneringen';
+
+  @override
+  String get notifTasksRemindersSubtitle =>
+      'Meldingen voor taken met een specifieke herinneringstijd';
+
+  @override
+  String get notifTasksPileupTitle => 'Taken — Opstapeling Auto-Balans';
+
+  @override
+  String get notifTasksPileupSubtitle =>
+      'Avondmelding om openstaande taken te verspreiden bij drukte';
+
+  @override
+  String get notifMedicationsTitle => 'Medicatie';
+
+  @override
+  String get notifMedicationsSubtitle =>
+      'Geplande herinneringen voor overdag en \'s avonds';
+
+  @override
+  String get notifHouseholdTitle => 'Huishoudupdates';
+
+  @override
+  String get notifHouseholdSubtitle =>
+      'Gedeelde lijst- en taakupdates van huisgenoten';
 }

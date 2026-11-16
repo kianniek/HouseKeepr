@@ -27,7 +27,7 @@
     </queries>
 
     <application
-        android:name="${applicationName}"
+        android:name="io.flutter.embedding.android.FlutterPlayStoreSplitApplication"
         android:icon="@mipmap/launcher_icon"
         android:label="housekeepr">
 

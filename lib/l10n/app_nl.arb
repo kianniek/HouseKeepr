@@ -179,5 +179,21 @@
   "pasteIngredientsHint": "Plak hier de ingrediënten van het recept, één per regel",
   "parseIngredients": "Volgende",
   "extractRecipe": "Recept ophalen",
-  "openInWebView": "Openen in browserweergave"
+  "openInWebView": "Openen in browserweergave",
+
+  "allNotificationsTitle": "Alle meldingen",
+  "allNotificationsSubtitle": "Schakel alle herinneringen en overzichten in of uit",
+  "morningBriefing": "Ochtendoverzicht",
+  "eveningCheckIn": "Avondcheck-in",
+  "appChannels": "App-kanalen",
+  "notifTasksDigestTitle": "Taken — Ochtendoverzicht",
+  "notifTasksDigestSubtitle": "Dagelijks aantal taken voor vandaag",
+  "notifTasksRemindersTitle": "Taken — Individuele herinneringen",
+  "notifTasksRemindersSubtitle": "Meldingen voor taken met een specifieke herinneringstijd",
+  "notifTasksPileupTitle": "Taken — Opstapeling Auto-Balans",
+  "notifTasksPileupSubtitle": "Avondmelding om openstaande taken te verspreiden bij drukte",
+  "notifMedicationsTitle": "Medicatie",
+  "notifMedicationsSubtitle": "Geplande herinneringen voor overdag en 's avonds",
+  "notifHouseholdTitle": "Huishoudupdates",
+  "notifHouseholdSubtitle": "Gedeelde lijst- en taakupdates van huisgenoten"
 }

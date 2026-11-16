@@ -461,4 +461,54 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get openInWebView => 'Open in browser view';
+
+  @override
+  String get allNotificationsTitle => 'All Notifications';
+
+  @override
+  String get allNotificationsSubtitle =>
+      'Enable or pause all reminders and digests';
+
+  @override
+  String get morningBriefing => 'Morning Briefing';
+
+  @override
+  String get eveningCheckIn => 'Evening Check-in';
+
+  @override
+  String get appChannels => 'App Channels';
+
+  @override
+  String get notifTasksDigestTitle => 'Tasks — Morning Digest';
+
+  @override
+  String get notifTasksDigestSubtitle => 'Daily count of tasks due today';
+
+  @override
+  String get notifTasksRemindersTitle => 'Tasks — Individual Reminders';
+
+  @override
+  String get notifTasksRemindersSubtitle =>
+      'Alerts for tasks with a specific reminder time';
+
+  @override
+  String get notifTasksPileupTitle => 'Tasks — Pile-up Auto-Balance Nudge';
+
+  @override
+  String get notifTasksPileupSubtitle =>
+      'Evening prompt to spread unfinished tasks when overwhelmed';
+
+  @override
+  String get notifMedicationsTitle => 'Medications';
+
+  @override
+  String get notifMedicationsSubtitle =>
+      'Scheduled daytime and evening dose reminders';
+
+  @override
+  String get notifHouseholdTitle => 'Household Updates';
+
+  @override
+  String get notifHouseholdSubtitle =>
+      'Shared list and chore updates from household members';
 }

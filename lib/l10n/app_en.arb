@@ -471,5 +471,50 @@
   "@extractRecipe": { "description": "Button in WebView extractor to parse the loaded recipe page" },
 
   "openInWebView": "Open in browser view",
-  "@openInWebView": { "description": "Button to open recipe URL in in-app WebView" }
+  "@openInWebView": { "description": "Button to open recipe URL in in-app WebView" },
+
+  "allNotificationsTitle": "All Notifications",
+  "@allNotificationsTitle": { "description": "Master switch for all notifications" },
+
+  "allNotificationsSubtitle": "Enable or pause all reminders and digests",
+  "@allNotificationsSubtitle": { "description": "Subtitle for master notifications switch" },
+
+  "morningBriefing": "Morning Briefing",
+  "@morningBriefing": { "description": "Morning briefing time picker label" },
+
+  "eveningCheckIn": "Evening Check-in",
+  "@eveningCheckIn": { "description": "Evening check-in time picker label" },
+
+  "appChannels": "App Channels",
+  "@appChannels": { "description": "Expandable section title for per-domain notification channels" },
+
+  "notifTasksDigestTitle": "Tasks — Morning Digest",
+  "@notifTasksDigestTitle": { "description": "Toggle title for morning task digest" },
+
+  "notifTasksDigestSubtitle": "Daily count of tasks due today",
+  "@notifTasksDigestSubtitle": { "description": "Toggle subtitle for morning task digest" },
+
+  "notifTasksRemindersTitle": "Tasks — Individual Reminders",
+  "@notifTasksRemindersTitle": { "description": "Toggle title for per-task reminders" },
+
+  "notifTasksRemindersSubtitle": "Alerts for tasks with a specific reminder time",
+  "@notifTasksRemindersSubtitle": { "description": "Toggle subtitle for per-task reminders" },
+
+  "notifTasksPileupTitle": "Tasks — Pile-up Auto-Balance Nudge",
+  "@notifTasksPileupTitle": { "description": "Toggle title for evening pile-up nudge" },
+
+  "notifTasksPileupSubtitle": "Evening prompt to spread unfinished tasks when overwhelmed",
+  "@notifTasksPileupSubtitle": { "description": "Toggle subtitle for evening pile-up nudge" },
+
+  "notifMedicationsTitle": "Medications",
+  "@notifMedicationsTitle": { "description": "Toggle title for medication notifications" },
+
+  "notifMedicationsSubtitle": "Scheduled daytime and evening dose reminders",
+  "@notifMedicationsSubtitle": { "description": "Toggle subtitle for medication notifications" },
+
+  "notifHouseholdTitle": "Household Updates",
+  "@notifHouseholdTitle": { "description": "Toggle title for household activity notifications" },
+
+  "notifHouseholdSubtitle": "Shared list and chore updates from household members",
+  "@notifHouseholdSubtitle": { "description": "Toggle subtitle for household activity notifications" }
 }

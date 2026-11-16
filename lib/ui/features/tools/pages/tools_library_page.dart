@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:health_keepr/health_keepr.dart';
 import 'package:marquee/marquee.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -34,6 +35,7 @@ class ToolsLibraryPage extends StatefulWidget {
 //enum for the categories of tools, this is used for filtering the tools in the library
 enum ToolCategory {
   financeUtilities('Finance'),
+  healthUtilities('Health'),
   statusUtilities('Status'),
   kitchenUtilities('Kitchen');
 
@@ -110,11 +112,19 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
 
   final List<ToolCategory> _categories = [
     ToolCategory.financeUtilities,
+    ToolCategory.healthUtilities,
     ToolCategory.statusUtilities,
     ToolCategory.kitchenUtilities,
   ];
 
   List<ToolItem> get _allTools => [
+    const ToolItem(
+      title: 'HealthKeepr',
+      subtitle: 'Private on-device health modules & OpenGym',
+      category: ToolCategory.healthUtilities,
+      icon: Icons.health_and_safety_rounded,
+      destination: HealthKeeprHubScreen(),
+    ),
     ToolItem(
       title: 'Personal Budget Contribution',
       subtitle: 'Calculate your left-over budget',

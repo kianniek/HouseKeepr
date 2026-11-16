@@ -8,12 +8,56 @@ import 'package:flutter/services.dart';
 
 // Optional platform notifications
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import '../core/settings_repository.dart';
+import '../core/sync_mode.dart';
 import '../models/medication.dart';
+import '../models/task.dart';
 import '../repositories/local_medication_repository.dart';
+import '../repositories/task_repository.dart';
+import '../ui/features/tasks/utils/task_date_utils.dart';
+import 'task_rescheduler.dart';
 import 'widget_service.dart';
+import 'write_queue.dart';
+
+/// Declarative channel configuration so new notification setups can easily
+/// specify their own Android Importance/Priority, sound/vibration, and iOS
+/// presentation rules in one place.
+enum NotificationChannelType {
+  taskDigest,
+  taskReminders,
+  medications,
+  householdActivity,
+}
+
+class NotificationChannelConfig {
+  final String id;
+  final String name;
+  final String description;
+  final Importance androidImportance;
+  final Priority androidPriority;
+  final bool playSound;
+  final bool enableVibration;
+  final bool presentAlert;
+  final bool presentSound;
+  final bool presentBadge;
+
+  const NotificationChannelConfig({
+    required this.id,
+    required this.name,
+    required this.description,
+    this.androidImportance = Importance.defaultImportance,
+    this.androidPriority = Priority.defaultPriority,
+    this.playSound = true,
+    this.enableVibration = true,
+    this.presentAlert = true,
+    this.presentSound = true,
+    this.presentBadge = true,
+  });
+}
 
 /// Lightweight in-app notification service.
 ///
@@ -34,7 +78,9 @@ import 'widget_service.dart';
 Future<void> notificationTapBackground(NotificationResponse response) async {
   WidgetsFlutterBinding.ensureInitialized();
   if (response.actionId != NotificationService._kActionRemindLater &&
-      response.actionId != NotificationService._kActionMarkTaken) {
+      response.actionId != NotificationService._kActionMarkTaken &&
+      response.actionId != NotificationService._kActionTaskDone &&
+      response.actionId != NotificationService._kActionTaskSmartReschedule) {
     return;
   }
   if (!NotificationService.instance.isInitialized) {
@@ -45,6 +91,11 @@ Future<void> notificationTapBackground(NotificationResponse response) async {
     await NotificationService.instance.handleRemindLater(response);
   } else if (response.actionId == NotificationService._kActionMarkTaken) {
     await NotificationService.instance.handleMarkMedicationTaken(response);
+  } else if (response.actionId == NotificationService._kActionTaskDone) {
+    await NotificationService.instance.handleTaskDone(response);
+  } else if (response.actionId ==
+      NotificationService._kActionTaskSmartReschedule) {
+    await NotificationService.instance.handleTaskSmartReschedule(response);
   }
 }
 
@@ -60,20 +111,99 @@ class NotificationService {
   FlutterLocalNotificationsPlugin? _plugin;
   bool _pluginAvailable = false;
   VoidCallback? _onOpenTasks;
+  VoidCallback? _onOpenTasksRebalance;
   VoidCallback? _onOpenMedications;
 
   static const _kPayloadOpenTasks = 'open_tasks';
+  static const _kPayloadOpenTasksRebalance = 'open_tasks_rebalance';
   static const _kPayloadOpenMedications = 'open_medications';
   static const _kActionRemindLater = 'remind_later';
   static const _kActionMarkTaken = 'mark_taken';
+  static const _kActionTaskDone = 'task_done';
+  static const _kActionTaskSmartReschedule = 'task_smart_reschedule';
   static const _kAndroidIntentChannel = 'housekeepr/notification_intents';
+  static const _kActiveUserIdKey = 'notif_active_user_id_v1';
+
+  static const int morningDigestNotificationId = 1001;
+  static const int eveningPileupNotificationId = 1002;
+  static const _kLegacyStartNotificationId = 1000;
 
   /// Incremented whenever a notification action updates medication dose state
   /// in the active isolate.
   final ValueNotifier<int> medicationUpdatesNotifier = ValueNotifier<int>(0);
 
+  /// Incremented whenever a notification action updates task state in the
+  /// active isolate (or background isolate).
+  final ValueNotifier<int> taskUpdatesNotifier = ValueNotifier<int>(0);
+
   static const _kRemindersKey = 'scheduled_reminders_v1';
+  static const _kScheduledTaskReminderIdsKey =
+      'scheduled_task_reminder_ids_v1';
   static const _kMedicationRemindersKey = 'scheduled_medication_reminders_v1';
+
+  /// Centralized channel registry. Add new [NotificationChannelType] entries
+  /// here to configure custom Android Importance/Priority and sound/vibration
+  /// rules for future notification setups.
+  static const Map<NotificationChannelType, NotificationChannelConfig>
+  channelConfigs = {
+    NotificationChannelType.taskDigest: NotificationChannelConfig(
+      id: 'housekeepr_task_digest',
+      name: 'Task Digest & Check-ins',
+      description: 'Morning daily summary and gentle evening pile-up check-in',
+      androidImportance: Importance.defaultImportance,
+      androidPriority: Priority.defaultPriority,
+      enableVibration: false,
+    ),
+    NotificationChannelType.taskReminders: NotificationChannelConfig(
+      id: 'housekeepr_task_reminders',
+      name: 'Task Reminders',
+      description: 'Scheduled alerts for tasks with a specific reminder time',
+      androidImportance: Importance.high,
+      androidPriority: Priority.high,
+    ),
+    NotificationChannelType.medications: NotificationChannelConfig(
+      id: 'housekeepr_medications',
+      name: 'Medication Reminders',
+      description: 'Scheduled daytime and evening medication dose reminders',
+      androidImportance: Importance.high,
+      androidPriority: Priority.high,
+    ),
+    NotificationChannelType.householdActivity: NotificationChannelConfig(
+      id: 'housekeepr_household',
+      name: 'Household Updates',
+      description: 'Shared list and chore updates from household members',
+      androidImportance: Importance.defaultImportance,
+      androidPriority: Priority.defaultPriority,
+    ),
+  };
+
+  /// Builds [NotificationDetails] from the declarative [channelConfigs] entry.
+  static NotificationDetails buildNotificationDetails(
+    NotificationChannelType channel, {
+    Color? color,
+    List<AndroidNotificationAction>? actions,
+  }) {
+    final cfg = channelConfigs[channel]!;
+    return NotificationDetails(
+      android: AndroidNotificationDetails(
+        cfg.id,
+        cfg.name,
+        channelDescription: cfg.description,
+        importance: cfg.androidImportance,
+        priority: cfg.androidPriority,
+        playSound: cfg.playSound,
+        enableVibration: cfg.enableVibration,
+        icon: 'ic_launcher_monochrome',
+        color: color,
+        actions: actions,
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: cfg.presentAlert,
+        presentSound: cfg.presentSound,
+        presentBadge: cfg.presentBadge,
+      ),
+    );
+  }
 
   Color? _getColorForPriority(int? priorityLevel) {
     if (priorityLevel == null) {
@@ -93,45 +223,40 @@ class NotificationService {
     }
   }
 
-  static const _medicationNotificationDetails = NotificationDetails(
-    android: AndroidNotificationDetails(
-      'medication_reminders',
-      'Medication Reminders',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: 'ic_launcher_monochrome',
-      actions: <AndroidNotificationAction>[
-        AndroidNotificationAction(
-          _kActionMarkTaken,
-          'Mark as taken',
-          cancelNotification: true,
-          showsUserInterface: false,
-        ),
-        AndroidNotificationAction(
-          _kActionRemindLater,
-          'Remind me later',
-          cancelNotification: true,
-        ),
-      ],
-    ),
-    iOS: DarwinNotificationDetails(
-      presentAlert: true,
-      presentSound: true,
-      presentBadge: true,
-    ),
+  static final _medicationNotificationDetails = buildNotificationDetails(
+    NotificationChannelType.medications,
+    actions: const <AndroidNotificationAction>[
+      AndroidNotificationAction(
+        _kActionMarkTaken,
+        'Mark as taken',
+        cancelNotification: true,
+        showsUserInterface: false,
+      ),
+      AndroidNotificationAction(
+        _kActionRemindLater,
+        'Remind me later',
+        cancelNotification: true,
+      ),
+    ],
   );
 
   Future<void> init(
     SharedPreferences prefs, {
     GlobalKey<ScaffoldMessengerState>? scaffoldKey,
     VoidCallback? onOpenTasks,
+    VoidCallback? onOpenTasksRebalance,
     VoidCallback? onOpenMedications,
+    String? userId,
     bool isBackground = false,
   }) async {
     _prefs = prefs;
     _scaffoldKey = scaffoldKey;
     _onOpenTasks = onOpenTasks;
+    _onOpenTasksRebalance = onOpenTasksRebalance;
     _onOpenMedications = onOpenMedications;
+    if (userId != null && userId.isNotEmpty) {
+      await prefs.setString(_kActiveUserIdKey, userId);
+    }
     // Try to initialize platform notifications. Wrap errors so tests/headless
     // environments don't fail.
     if (!kIsWeb) {
@@ -200,27 +325,18 @@ class NotificationService {
         >();
     if (android == null) return;
     try {
-      await android.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'task_reminders',
-          'Task Reminders',
-          importance: Importance.defaultImportance,
-        ),
-      );
-      await android.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'daily_reminders',
-          'Daily reminders',
-          importance: Importance.defaultImportance,
-        ),
-      );
-      await android.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'medication_reminders',
-          'Medication Reminders',
-          importance: Importance.high,
-        ),
-      );
+      for (final cfg in channelConfigs.values) {
+        await android.createNotificationChannel(
+          AndroidNotificationChannel(
+            cfg.id,
+            cfg.name,
+            description: cfg.description,
+            importance: cfg.androidImportance,
+            playSound: cfg.playSound,
+            enableVibration: cfg.enableVibration,
+          ),
+        );
+      }
     } catch (_) {
       // ignore
     }
@@ -235,6 +351,14 @@ class NotificationService {
       handleMarkMedicationTaken(response);
       return;
     }
+    if (response.actionId == _kActionTaskDone) {
+      handleTaskDone(response);
+      return;
+    }
+    if (response.actionId == _kActionTaskSmartReschedule) {
+      handleTaskSmartReschedule(response);
+      return;
+    }
     _handleNotificationPayload(response.payload);
   }
 
@@ -244,12 +368,24 @@ class NotificationService {
         try {
           final map = jsonDecode(payload) as Map<String, dynamic>;
           final action = map['action'] as String?;
+          if (action == _kPayloadOpenTasksRebalance) {
+            (_onOpenTasksRebalance ?? _onOpenTasks)?.call();
+            return;
+          }
+          if (action == _kPayloadOpenTasks) {
+            _onOpenTasks?.call();
+            return;
+          }
           if (action == _kPayloadOpenMedications ||
               (action != null && action.startsWith('open_medication'))) {
             _onOpenMedications?.call();
             return;
           }
         } catch (_) {}
+      }
+      if (payload == _kPayloadOpenTasksRebalance) {
+        (_onOpenTasksRebalance ?? _onOpenTasks)?.call();
+        return;
       }
       if (payload == _kPayloadOpenMedications ||
           payload.startsWith('open_medication')) {
@@ -569,6 +705,442 @@ class NotificationService {
     }
   }
 
+  /// Deterministic 32-bit notification ID for a task (range 10000..1009999).
+  static int taskNotificationId(String taskId) {
+    return (taskId.hashCode & 0x7FFFFFFF) % 1000000 + 10000;
+  }
+
+  /// Synchronizes all task-related OS notifications (individual task reminders,
+  /// morning digest, and evening pile-up nudge) with [tasks] and [settings].
+  Future<void> syncTaskNotifications({
+    required List<Task> tasks,
+    required SettingsRepository settings,
+  }) async {
+    // Cancel legacy start-of-day ID if present from older app versions.
+    await _cancelPlatformId(_kLegacyStartNotificationId);
+
+    // 1. Respect master & per-feature switches for individual reminders.
+    if (!settings.taskRemindersEnabled()) {
+      await cancelAllTaskReminders();
+    } else {
+      final now = DateTime.now();
+      final activeIds = <int>{};
+
+      for (final task in tasks) {
+        if (task.archived || task.completed || !task.reminderEnabled) continue;
+
+        final due = effectiveDueDate(task, now: now);
+        if (due == null) continue;
+
+        final offset = Duration(minutes: task.reminderOffsetMinutes ?? 60);
+        final triggerAt = due.toLocal().subtract(offset);
+
+        // Never fire stale past reminders; let the morning digest handle overdue items.
+        if (triggerAt.isBefore(now)) continue;
+
+        final notifId = taskNotificationId(task.id);
+        activeIds.add(notifId);
+
+        await _scheduleSingleTaskReminder(
+          id: notifId,
+          task: task,
+          triggerAt: triggerAt,
+        );
+      }
+
+      // Cancel any scheduled task reminders whose tasks were completed, deleted, or turned off.
+      await _cancelOrphanedTaskReminders(keepIds: activeIds);
+    }
+
+    // 2. Refresh daily digest & evening pile-up check-in.
+    if (settings.taskDailyDigestEnabled()) {
+      await _scheduleMorningDigest(tasks, settings.notificationStart());
+    } else {
+      await _cancelPlatformId(morningDigestNotificationId);
+    }
+
+    if (settings.taskPileupNudgeEnabled()) {
+      await _scheduleEveningPileupCheck(tasks, settings.notificationEnd());
+    } else {
+      await _cancelPlatformId(eveningPileupNotificationId);
+    }
+  }
+
+  Future<void> _cancelPlatformId(int id) async {
+    if (_pluginAvailable && _plugin != null) {
+      try {
+        await _plugin!.cancel(id: id);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> cancelAllTaskReminders() async {
+    if (_prefs != null) {
+      final rawIds =
+          _prefs!.getStringList(_kScheduledTaskReminderIdsKey) ?? <String>[];
+      for (final raw in rawIds) {
+        final id = int.tryParse(raw);
+        if (id != null) {
+          await _cancelPlatformId(id);
+        }
+      }
+      await _prefs!.setStringList(_kScheduledTaskReminderIdsKey, <String>[]);
+      await _prefs!.setStringList(_kRemindersKey, <String>[]);
+    }
+  }
+
+  Future<void> _cancelOrphanedTaskReminders({
+    required Set<int> keepIds,
+  }) async {
+    if (_prefs == null) return;
+    final rawIds =
+        _prefs!.getStringList(_kScheduledTaskReminderIdsKey) ?? <String>[];
+    for (final raw in rawIds) {
+      final id = int.tryParse(raw);
+      if (id != null && !keepIds.contains(id)) {
+        await _cancelPlatformId(id);
+      }
+    }
+    await _prefs!.setStringList(
+      _kScheduledTaskReminderIdsKey,
+      keepIds.map((e) => e.toString()).toList(),
+    );
+  }
+
+  Future<void> _scheduleSingleTaskReminder({
+    required int id,
+    required Task task,
+    required DateTime triggerAt,
+  }) async {
+    if (!_pluginAvailable || _plugin == null) return;
+    try {
+      final scheduled = tz.TZDateTime.from(triggerAt.toUtc(), tz.local);
+      final color = _getColorForPriority(task.priority.index);
+      final details = buildNotificationDetails(
+        NotificationChannelType.taskReminders,
+        color: color,
+        actions: const <AndroidNotificationAction>[
+          AndroidNotificationAction(
+            _kActionTaskDone,
+            'Done',
+            cancelNotification: true,
+            showsUserInterface: false,
+          ),
+          AndroidNotificationAction(
+            _kActionTaskSmartReschedule,
+            'Smart Reschedule',
+            cancelNotification: true,
+            showsUserInterface: false,
+          ),
+        ],
+      );
+      final payload = jsonEncode({
+        'action': _kPayloadOpenTasks,
+        'taskId': task.id,
+      });
+      await _zonedScheduleWithFallback(
+        id: id,
+        title: 'Task due',
+        body: task.title,
+        scheduledDate: scheduled,
+        notificationDetails: details,
+        payload: payload,
+      );
+    } catch (e) {
+      debugPrint('Failed to schedule single task reminder: $e');
+    }
+  }
+
+  /// Builds the morning digest title, body, and payload for [tasks] at [now],
+  /// or returns `null` when both due-today and overdue counts are 0.
+  static ({String title, String body, String payload})? buildMorningDigestContent(
+    List<Task> tasks, {
+    DateTime? now,
+  }) {
+    final ref = now ?? DateTime.now();
+    final today = DateTime(ref.year, ref.month, ref.day);
+    final dueToday = <Task>[];
+    final overdue = <Task>[];
+
+    for (final t in tasks) {
+      if (t.archived || t.completed) continue;
+      final due = effectiveDueDate(t, now: ref);
+      if (due == null) continue;
+      final localDue = due.toLocal();
+      final day = DateTime(localDue.year, localDue.month, localDue.day);
+      if (day.isBefore(today)) {
+        overdue.add(t);
+      } else if (day.isAtSameMomentAs(today)) {
+        dueToday.add(t);
+      }
+    }
+
+    if (dueToday.isEmpty && overdue.isEmpty) {
+      return null;
+    }
+
+    if (overdue.length >= 3) {
+      final dueCount = dueToday.length;
+      final overdueCount = overdue.length;
+      final dueLabel = '$dueCount ${dueCount == 1 ? 'task' : 'tasks'} due today';
+      return (
+        title: '$dueLabel · $overdueCount piled up',
+        body: 'Tap to auto-balance your backlog across this week.',
+        payload: jsonEncode({'action': _kPayloadOpenTasksRebalance}),
+      );
+    }
+
+    final combined = <Task>[...overdue, ...dueToday]
+      ..sort((a, b) => b.priority.index.compareTo(a.priority.index));
+    final total = combined.length;
+    final topTitles = combined.take(2).map((t) => t.title.trim()).join(', ');
+    final remaining = total - combined.take(2).length;
+    final body = remaining > 0 ? '$topTitles +$remaining more' : topTitles;
+
+    return (
+      title: "Today's Plan: $total ${total == 1 ? 'task' : 'tasks'}",
+      body: body,
+      payload: jsonEncode({'action': _kPayloadOpenTasks}),
+    );
+  }
+
+  Future<void> _scheduleMorningDigest(
+    List<Task> tasks,
+    TimeOfDay start,
+  ) async {
+    final content = buildMorningDigestContent(tasks);
+    if (content == null) {
+      await _cancelPlatformId(morningDigestNotificationId);
+      return;
+    }
+    if (!_pluginAvailable || _plugin == null) return;
+
+    final now = tz.TZDateTime.now(tz.local);
+    var nextStart = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      start.hour,
+      start.minute,
+    );
+    if (!nextStart.isAfter(now)) {
+      nextStart = nextStart.add(const Duration(days: 1));
+    }
+
+    try {
+      await _zonedScheduleWithFallback(
+        id: morningDigestNotificationId,
+        title: content.title,
+        body: content.body,
+        scheduledDate: nextStart,
+        notificationDetails: buildNotificationDetails(
+          NotificationChannelType.taskDigest,
+        ),
+        payload: content.payload,
+      );
+    } catch (e) {
+      debugPrint('Failed to schedule morning digest: $e');
+    }
+  }
+
+  Future<void> _scheduleEveningPileupCheck(
+    List<Task> tasks,
+    TimeOfDay end,
+  ) async {
+    final ref = DateTime.now();
+    final today = DateTime(ref.year, ref.month, ref.day);
+    int unfinishedCount = 0;
+
+    for (final t in tasks) {
+      if (t.archived || t.completed) continue;
+      final due = effectiveDueDate(t, now: ref);
+      if (due == null) continue;
+      final localDue = due.toLocal();
+      final day = DateTime(localDue.year, localDue.month, localDue.day);
+      if (!day.isAfter(today)) {
+        unfinishedCount++;
+      }
+    }
+
+    if (unfinishedCount < 3) {
+      await _cancelPlatformId(eveningPileupNotificationId);
+      return;
+    }
+    if (!_pluginAvailable || _plugin == null) return;
+
+    final now = tz.TZDateTime.now(tz.local);
+    var nextEnd = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      end.hour,
+      end.minute,
+    );
+    if (!nextEnd.isAfter(now)) {
+      nextEnd = nextEnd.add(const Duration(days: 1));
+    }
+
+    try {
+      await _zonedScheduleWithFallback(
+        id: eveningPileupNotificationId,
+        title: '$unfinishedCount tasks still open today',
+        body: 'Tap to auto-balance unfinished tasks into lighter days.',
+        scheduledDate: nextEnd,
+        notificationDetails: buildNotificationDetails(
+          NotificationChannelType.taskDigest,
+        ),
+        payload: jsonEncode({'action': _kPayloadOpenTasksRebalance}),
+      );
+    } catch (e) {
+      debugPrint('Failed to schedule evening pile-up nudge: $e');
+    }
+  }
+
+  Future<void> _ensureTaskHiveBoxesOpen() async {
+    try {
+      if (!Hive.isBoxOpen('tasks')) {
+        await Hive.initFlutter();
+      }
+      await Future.wait([
+        if (!Hive.isBoxOpen('tasks')) Hive.openBox('tasks'),
+        if (!Hive.isBoxOpen('tasks_meta')) Hive.openBox('tasks_meta'),
+        if (!Hive.isBoxOpen('history')) Hive.openBox('history'),
+      ]);
+    } catch (e) {
+      debugPrint('Failed to open Hive boxes in notification handler: $e');
+    }
+  }
+
+  String? _extractTaskId(NotificationResponse response) {
+    final raw = response.payload;
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      if (raw.startsWith('{')) {
+        final map = jsonDecode(raw) as Map<String, dynamic>;
+        return map['taskId'] as String?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _enqueueTaskSaveIfSyncEnabled(Task updated, Task previous) async {
+    if (_prefs == null) return;
+    final settings = SettingsRepository(_prefs!);
+    if (settings.getSyncMode() == SyncMode.localOnly) return;
+    final wq = WriteQueue(_prefs!);
+    final uid = _prefs!.getString(_kActiveUserIdKey);
+    if (uid != null && uid.isNotEmpty) {
+      wq.setUserId(uid);
+    }
+    final payload = updated.toMap();
+    try {
+      payload['_previous'] = previous.toMap();
+    } catch (_) {}
+    wq.enqueueOp(
+      QueueOp(type: QueueOpType.saveTask, id: updated.id, payload: payload),
+    );
+  }
+
+  /// Zero-open notification action: marks the task (or today's occurrence for
+  /// repeating tasks) complete in [TaskRepository] and [WriteQueue].
+  Future<void> handleTaskDone(NotificationResponse response) async {
+    if (response.id != null) {
+      await _cancelPlatformId(response.id!);
+    }
+    final taskId = _extractTaskId(response);
+    if (taskId == null || taskId.isEmpty || _prefs == null) return;
+
+    await _ensureTaskHiveBoxesOpen();
+    final repo = TaskRepository(_prefs!);
+    final tasks = repo.loadTasks();
+    final idx = tasks.indexWhere((t) => t.id == taskId);
+    if (idx == -1) return;
+
+    final task = tasks[idx];
+    final todayStr = DateTime.now().toUtc().toIso8601String().split('T')[0];
+    final Task updated;
+    if (task.isRepeating) {
+      final dates = List<String>.from(task.completedDates ?? <String>[]);
+      if (!dates.contains(todayStr)) dates.add(todayStr);
+      updated = task.copyWith(
+        completedDates: dates,
+        syncStatus: SyncStatus.pending,
+      );
+    } else {
+      updated = task.copyWith(completed: true, syncStatus: SyncStatus.pending);
+    }
+
+    final nextList = List<Task>.from(tasks)..[idx] = updated;
+    await repo.saveTasks(nextList);
+    await _enqueueTaskSaveIfSyncEnabled(updated, task);
+    await syncTaskNotifications(
+      tasks: nextList,
+      settings: SettingsRepository(_prefs!),
+    );
+    taskUpdatesNotifier.value++;
+  }
+
+  /// Zero-open notification action: runs [TaskRescheduler.suggestBestDate],
+  /// moves the task to the lightest upcoming day, and reschedules its alarm.
+  Future<void> handleTaskSmartReschedule(NotificationResponse response) async {
+    if (response.id != null) {
+      await _cancelPlatformId(response.id!);
+    }
+    final taskId = _extractTaskId(response);
+    if (taskId == null || taskId.isEmpty || _prefs == null) return;
+
+    await _ensureTaskHiveBoxesOpen();
+    final repo = TaskRepository(_prefs!);
+    final tasks = repo.loadTasks();
+    final idx = tasks.indexWhere((t) => t.id == taskId);
+    if (idx == -1) return;
+
+    final task = tasks[idx];
+    final suggestion = TaskRescheduler.suggestBestDate(task, tasks);
+    final origTime = (task.deadline ?? DateTime.now()).toLocal();
+    final target = DateTime(
+      suggestion.targetDate.year,
+      suggestion.targetDate.month,
+      suggestion.targetDate.day,
+      origTime.hour,
+      origTime.minute,
+    ).toUtc();
+
+    final updated = task.copyWith(
+      deadline: target,
+      inactiveUntil: task.isRepeating ? target : task.inactiveUntil,
+      putOffCount: task.putOffCount + 1,
+      syncStatus: SyncStatus.pending,
+    );
+
+    final nextList = List<Task>.from(tasks)..[idx] = updated;
+    await repo.saveTasks(nextList);
+    await _enqueueTaskSaveIfSyncEnabled(updated, task);
+    await syncTaskNotifications(
+      tasks: nextList,
+      settings: SettingsRepository(_prefs!),
+    );
+    taskUpdatesNotifier.value++;
+  }
+
+  /// Cancel all scheduled medication notifications across all medications.
+  Future<void> cancelAllMedicationReminders() async {
+    if (_prefs == null) return;
+    final list = _prefs!.getStringList(_kMedicationRemindersKey) ?? <String>[];
+    for (final s in list) {
+      try {
+        final m = jsonDecode(s) as Map<String, dynamic>;
+        final notificationId = m['notificationId'] as int?;
+        if (notificationId != null) {
+          await _cancelPlatformId(notificationId);
+        }
+      } catch (_) {}
+    }
+    await _prefs!.setStringList(_kMedicationRemindersKey, <String>[]);
+  }
+
   Future<void> scheduleReminder(
     String taskId,
     DateTime at, {
@@ -743,6 +1315,7 @@ class NotificationService {
     await cancelMedicationReminders(medication.id);
     if (!medication.isActive || medication.notificationTimes.isEmpty) return;
     if (_prefs == null) return;
+    if (!SettingsRepository(_prefs!).medicationNotificationsEnabled()) return;
 
     final list = _prefs!.getStringList(_kMedicationRemindersKey) ?? <String>[];
     final now = DateTime.now();
@@ -842,8 +1415,14 @@ class NotificationService {
     await _prefs!.setStringList(_kMedicationRemindersKey, remaining);
   }
 
-  /// Reschedule all active medications.
+  /// Reschedule all active medications (or cancel all if medication notifications
+  /// are disabled in settings).
   Future<void> rescheduleAllMedications(List<Medication> medications) async {
+    if (_prefs != null &&
+        !SettingsRepository(_prefs!).medicationNotificationsEnabled()) {
+      await cancelAllMedicationReminders();
+      return;
+    }
     for (final med in medications) {
       if (med.isActive) {
         await scheduleMedicationReminders(med);

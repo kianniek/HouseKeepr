@@ -901,6 +901,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open in browser view'**
   String get openInWebView;
+
+  /// Master switch for all notifications
+  ///
+  /// In en, this message translates to:
+  /// **'All Notifications'**
+  String get allNotificationsTitle;
+
+  /// Subtitle for master notifications switch
+  ///
+  /// In en, this message translates to:
+  /// **'Enable or pause all reminders and digests'**
+  String get allNotificationsSubtitle;
+
+  /// Morning briefing time picker label
+  ///
+  /// In en, this message translates to:
+  /// **'Morning Briefing'**
+  String get morningBriefing;
+
+  /// Evening check-in time picker label
+  ///
+  /// In en, this message translates to:
+  /// **'Evening Check-in'**
+  String get eveningCheckIn;
+
+  /// Expandable section title for per-domain notification channels
+  ///
+  /// In en, this message translates to:
+  /// **'App Channels'**
+  String get appChannels;
+
+  /// Toggle title for morning task digest
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks — Morning Digest'**
+  String get notifTasksDigestTitle;
+
+  /// Toggle subtitle for morning task digest
+  ///
+  /// In en, this message translates to:
+  /// **'Daily count of tasks due today'**
+  String get notifTasksDigestSubtitle;
+
+  /// Toggle title for per-task reminders
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks — Individual Reminders'**
+  String get notifTasksRemindersTitle;
+
+  /// Toggle subtitle for per-task reminders
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts for tasks with a specific reminder time'**
+  String get notifTasksRemindersSubtitle;
+
+  /// Toggle title for evening pile-up nudge
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks — Pile-up Auto-Balance Nudge'**
+  String get notifTasksPileupTitle;
+
+  /// Toggle subtitle for evening pile-up nudge
+  ///
+  /// In en, this message translates to:
+  /// **'Evening prompt to spread unfinished tasks when overwhelmed'**
+  String get notifTasksPileupSubtitle;
+
+  /// Toggle title for medication notifications
+  ///
+  /// In en, this message translates to:
+  /// **'Medications'**
+  String get notifMedicationsTitle;
+
+  /// Toggle subtitle for medication notifications
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled daytime and evening dose reminders'**
+  String get notifMedicationsSubtitle;
+
+  /// Toggle title for household activity notifications
+  ///
+  /// In en, this message translates to:
+  /// **'Household Updates'**
+  String get notifHouseholdTitle;
+
+  /// Toggle subtitle for household activity notifications
+  ///
+  /// In en, this message translates to:
+  /// **'Shared list and chore updates from household members'**
+  String get notifHouseholdSubtitle;
 }
 
 class _AppLocalizationsDelegate

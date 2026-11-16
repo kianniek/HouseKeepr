@@ -24,6 +24,7 @@ class MainActivity : FlutterActivity() {
         super.onCreate(savedInstanceState)
         launchedFromOnNewIntent = false
         handleIntent(intent)
+        WidgetPreviewHelper.updateAll(this)
     }
 
     override fun onNewIntent(intent: Intent) {

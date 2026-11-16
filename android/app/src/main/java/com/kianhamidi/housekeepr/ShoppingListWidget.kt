@@ -58,6 +58,7 @@ open class ShoppingListWidget : AppWidgetProvider() {
                 for (id in ids) {
                     updateAppWidget(context, manager, id)
                 }
+                WidgetPreviewHelper.updateShoppingListPreview(context)
             }
 
             if (elapsed < COALESCE_INTERVAL_MS) {
@@ -83,6 +84,7 @@ open class ShoppingListWidget : AppWidgetProvider() {
         for (appWidgetId in appWidgetIds) {
             updateAppWidget(context, appWidgetManager, appWidgetId)
         }
+        WidgetPreviewHelper.updateShoppingListPreview(context)
     }
 
     override fun onAppWidgetOptionsChanged(

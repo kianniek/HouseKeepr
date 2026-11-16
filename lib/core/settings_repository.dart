@@ -10,6 +10,19 @@ class SettingsRepository {
       'notifications_permission_prompted_v1';
   static const _kNotificationStart = 'notification_start_v1';
   static const _kNotificationEnd = 'notification_end_v1';
+
+  // RULE FOR FUTURE NOTIFICATIONS:
+  // Any new notification category/channel added in the future MUST be opt-in
+  // (defaulting to `false` in SettingsRepository). However, when the user
+  // interacts with that part of the system while its notification is disabled
+  // (and has not been prompted yet), show a one-time contextual prompt asking
+  // whether they want to turn on notifications for that feature, and persist
+  // a `*_prompted` flag so the prompt is only shown once.
+  static const _kTasksDigest = 'notif_tasks_daily_digest';
+  static const _kTasksReminders = 'notif_tasks_reminders';
+  static const _kTasksPileup = 'notif_tasks_pileup_nudge';
+  static const _kMedications = 'notif_medications_enabled';
+  static const _kHousehold = 'notif_household_activity';
   static const _kFloatingNav = 'floating_nav_v1';
   final SharedPreferences prefs;
 
@@ -31,6 +44,36 @@ class SettingsRepository {
   Future<void> setNotificationsEnabled(bool v) async {
     await prefs.setBool(_kNotificationsEnabled, v);
   }
+
+  bool taskDailyDigestEnabled({bool respectMaster = true}) =>
+      (!respectMaster || notificationsEnabled()) &&
+      (prefs.getBool(_kTasksDigest) ?? true);
+  Future<void> setTaskDailyDigestEnabled(bool v) =>
+      prefs.setBool(_kTasksDigest, v);
+
+  bool taskRemindersEnabled({bool respectMaster = true}) =>
+      (!respectMaster || notificationsEnabled()) &&
+      (prefs.getBool(_kTasksReminders) ?? true);
+  Future<void> setTaskRemindersEnabled(bool v) =>
+      prefs.setBool(_kTasksReminders, v);
+
+  bool taskPileupNudgeEnabled({bool respectMaster = true}) =>
+      (!respectMaster || notificationsEnabled()) &&
+      (prefs.getBool(_kTasksPileup) ?? true);
+  Future<void> setTaskPileupNudgeEnabled(bool v) =>
+      prefs.setBool(_kTasksPileup, v);
+
+  bool medicationNotificationsEnabled({bool respectMaster = true}) =>
+      (!respectMaster || notificationsEnabled()) &&
+      (prefs.getBool(_kMedications) ?? true);
+  Future<void> setMedicationNotificationsEnabled(bool v) =>
+      prefs.setBool(_kMedications, v);
+
+  bool householdNotificationsEnabled({bool respectMaster = true}) =>
+      (!respectMaster || notificationsEnabled()) &&
+      (prefs.getBool(_kHousehold) ?? true);
+  Future<void> setHouseholdNotificationsEnabled(bool v) =>
+      prefs.setBool(_kHousehold, v);
 
   bool notificationPermissionPrompted() {
     return prefs.getBool(_kNotificationsPermissionPrompted) ?? false;

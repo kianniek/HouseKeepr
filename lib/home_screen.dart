@@ -41,6 +41,10 @@ class HomeScreen extends StatefulWidget {
   /// Notifier that SettingsPage updates so HomeScreen reacts immediately.
   static final floatingNavNotifier = ValueNotifier<bool>(true);
 
+  /// Notifier toggled when a notification asks to open & highlight the
+  /// Auto-Balance banner on [TasksPage].
+  static final highlightAutoBalanceNotifier = ValueNotifier<int>(0);
+
   @override
   State<HomeScreen> createState() => HomeScreenState();
 }

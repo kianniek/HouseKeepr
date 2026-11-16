@@ -42,6 +42,7 @@ class PillWidget : AppWidgetProvider() {
             for (id in ids) {
                 updateAppWidget(context, manager, id)
             }
+            WidgetPreviewHelper.updatePillPreview(context)
         }
 
         fun updateAppWidget(
@@ -225,6 +226,7 @@ class PillWidget : AppWidgetProvider() {
         for (id in appWidgetIds) {
             updateAppWidget(context, appWidgetManager, id)
         }
+        WidgetPreviewHelper.updatePillPreview(context)
     }
 
     override fun onAppWidgetOptionsChanged(

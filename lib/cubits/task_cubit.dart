@@ -34,7 +34,16 @@ class TaskCubit extends Cubit<TaskState> {
 
   TaskCubit(this.repo, {this.settings, this.writeQueue, this.historyRepo})
     : super(TaskState.initial()) {
+    NotificationService.instance.taskUpdatesNotifier.addListener(
+      _onNotificationTaskUpdate,
+    );
     initializationFuture = load();
+  }
+
+  void _onNotificationTaskUpdate() {
+    if (isClosed) return;
+    final tasks = repo.loadTasks();
+    emit(state.copyWith(tasks: tasks));
   }
 
   Future<void> load() async {
@@ -43,6 +52,7 @@ class TaskCubit extends Cubit<TaskState> {
     final hasMore = all.length > tasks.length;
 
     emit(state.copyWith(tasks: tasks, hasMore: hasMore));
+    await _syncNotifications(all);
 
     try {
       final now = DateTime.now();
@@ -63,29 +73,13 @@ class TaskCubit extends Cubit<TaskState> {
     emit(state.copyWith(tasks: merged, hasMore: hasMore));
   }
 
-  Future<void> _scheduleReminderIfNeeded(
-    Task task, {
-    bool cancelExisting = false,
-  }) async {
+  Future<void> _syncNotifications(List<Task> tasks) async {
+    if (settings == null) return;
     try {
-      if (cancelExisting) {
-        await NotificationService.instance.cancelReminder(task.id);
-      }
-      if (task.deadline != null && task.reminderEnabled) {
-        final offset = task.reminderOffsetMinutes ?? 0;
-        final scheduled = task.deadline!.toUtc().subtract(
-          Duration(minutes: offset),
-        );
-        if (!scheduled.isBefore(DateTime.now().toUtc())) {
-          await NotificationService.instance.scheduleReminder(
-            task.id,
-            scheduled,
-            title: 'Task due',
-            body: task.title,
-            priorityLevel: task.priority.index,
-          );
-        }
-      }
+      await NotificationService.instance.syncTaskNotifications(
+        tasks: tasks,
+        settings: settings!,
+      );
     } catch (_) {}
   }
 
@@ -113,7 +107,7 @@ class TaskCubit extends Cubit<TaskState> {
     try {
       NotificationService.instance.show('Task created', task.title);
     } catch (_) {}
-    await _scheduleReminderIfNeeded(pending);
+    await _syncNotifications(list);
 
     _dispatchRemote(() {
       final payload = pending.toMap();
@@ -134,6 +128,7 @@ class TaskCubit extends Cubit<TaskState> {
     try {
       final list = List<Task>.from(state.tasks)..removeWhere((t) => t.id == id);
       await repo.saveTasks(list);
+    await _syncNotifications(list);
       emit(state.copyWith(tasks: list));
     } catch (_) {}
   }
@@ -160,7 +155,7 @@ class TaskCubit extends Cubit<TaskState> {
     try {
       NotificationService.instance.show('Task updated', task.title);
     } catch (_) {}
-    await _scheduleReminderIfNeeded(pending, cancelExisting: true);
+    await _syncNotifications(list);
 
     _dispatchRemote(() {
       final payload = pending.toMap();
@@ -195,6 +190,7 @@ class TaskCubit extends Cubit<TaskState> {
         'TaskCubit.replaceAll: Emitting state with ${filteredTasks.length} items',
       );
       emit(state.copyWith(tasks: filteredTasks));
+      await _syncNotifications(filteredTasks);
     } catch (e, st) {
       debugPrint('TaskCubit.replaceAll ERROR: $e$st');
       // If save/filter fails, try to just emit what we have
@@ -216,8 +212,8 @@ class TaskCubit extends Cubit<TaskState> {
     await repo.saveTasks(list);
     try {
       NotificationService.instance.show('Task deleted', id);
-      await NotificationService.instance.cancelReminder(id);
     } catch (_) {}
+    await _syncNotifications(list);
     final mode = settings?.getSyncMode() ?? SyncMode.sync;
     if (mode != SyncMode.localOnly) {
       if (remoteRepo != null) {
@@ -252,6 +248,7 @@ class TaskCubit extends Cubit<TaskState> {
         list.add(t);
       }
       await repo.saveTasks(list);
+    await _syncNotifications(list);
       emit(state.copyWith(tasks: list));
     } catch (_) {}
   }
@@ -261,6 +258,7 @@ class TaskCubit extends Cubit<TaskState> {
     final updated = t.copyWith(archived: true, syncStatus: SyncStatus.pending);
     final list = state.tasks.map((x) => x.id == id ? updated : x).toList();
     await repo.saveTasks(list);
+    await _syncNotifications(list);
     if (writeQueue != null) {
       final payload = updated.toMap();
       try {
@@ -283,6 +281,7 @@ class TaskCubit extends Cubit<TaskState> {
     final list = List<Task>.from(state.tasks)
       ..removeWhere((t) => ids.contains(t.id));
     await repo.saveTasks(list);
+    await _syncNotifications(list);
     if (writeQueue != null) {
       for (final p in prevs) {
         final payload = <String, dynamic>{};
@@ -311,6 +310,7 @@ class TaskCubit extends Cubit<TaskState> {
         )
         .toList();
     await repo.saveTasks(list);
+    await _syncNotifications(list);
     if (writeQueue != null) {
       for (final p in prevs) {
         final updated = p.copyWith(
@@ -334,6 +334,110 @@ class TaskCubit extends Cubit<TaskState> {
     emit(state.copyWith(tasks: list));
   }
 
+  /// Batch-reschedules multiple tasks in a single persistence & emit cycle.
+  ///
+  /// Returns the previous [Task] snapshots for all modified tasks so the caller
+  /// can support one-tap undo via [restoreTasks].
+  Future<List<Task>> batchRescheduleTasks(
+    Map<String, DateTime> updates, {
+    bool incrementPutOff = false,
+  }) async {
+    if (updates.isEmpty) return const [];
+
+    final previousSnapshots = <Task>[];
+    final modifiedTasks = <Task>[];
+
+    final nextList = state.tasks.map((t) {
+      final target = updates[t.id];
+      if (target == null) return t;
+      previousSnapshots.add(t);
+      final updated = t.copyWith(
+        deadline: target,
+        inactiveUntil: t.isRepeating ? target : t.inactiveUntil,
+        putOffCount: incrementPutOff ? t.putOffCount + 1 : t.putOffCount,
+        syncStatus: SyncStatus.pending,
+      );
+      modifiedTasks.add(updated);
+      return updated;
+    }).toList();
+
+    if (modifiedTasks.isEmpty) return const [];
+
+    // Optimistic UI update.
+    emit(state.copyWith(tasks: nextList));
+
+    try {
+      await repo.saveTasks(nextList);
+    } catch (_) {}
+
+    await _syncNotifications(nextList);
+
+    final prevById = {for (final p in previousSnapshots) p.id: p};
+    _dispatchBatchSave(modifiedTasks, prevById);
+
+    return previousSnapshots;
+  }
+
+  /// Restores a list of [Task] snapshots in a single persistence & emit cycle.
+  Future<void> restoreTasks(List<Task> previousSnapshots) async {
+    if (previousSnapshots.isEmpty) return;
+
+    final byId = {for (final t in previousSnapshots) t.id: t};
+    final currentById = {for (final t in state.tasks) t.id: t};
+    final restoredTasks = <Task>[];
+
+    final nextList = state.tasks.map((t) {
+      final prev = byId[t.id];
+      if (prev == null) return t;
+      final restored = prev.copyWith(syncStatus: SyncStatus.pending);
+      restoredTasks.add(restored);
+      return restored;
+    }).toList();
+
+    if (restoredTasks.isEmpty) return;
+
+    emit(state.copyWith(tasks: nextList));
+
+    try {
+      await repo.saveTasks(nextList);
+    } catch (_) {}
+
+    await _syncNotifications(nextList);
+
+    _dispatchBatchSave(restoredTasks, currentById);
+  }
+
+  void _dispatchBatchSave(
+    List<Task> updatedTasks,
+    Map<String, Task> previousById,
+  ) {
+    final mode = settings?.getSyncMode() ?? SyncMode.sync;
+    if (mode == SyncMode.localOnly || remoteRepo == null) return;
+
+    if (writeQueue != null) {
+      for (final updated in updatedTasks) {
+        final payload = updated.toMap();
+        final prev = previousById[updated.id];
+        if (prev != null) {
+          try {
+            payload['_previous'] = prev.toMap();
+          } catch (_) {}
+        }
+        writeQueue!.enqueueOp(
+          QueueOp(
+            type: QueueOpType.saveTask,
+            id: updated.id,
+            payload: payload,
+          ),
+        );
+      }
+    } else {
+      for (final updated in updatedTasks) {
+        unawaited(remoteRepo!.saveTask(updated));
+      }
+    }
+  }
+
   void setRemoteRepository(RemoteTaskRepository? r) {
     remoteRepo = r;
   }
@@ -354,12 +458,16 @@ class TaskCubit extends Cubit<TaskState> {
 
         await repo.saveTasks(filtered);
         emit(state.copyWith(tasks: filtered));
+        await _syncNotifications(filtered);
       } catch (_) {}
     });
   }
 
   @override
   Future<void> close() {
+    NotificationService.instance.taskUpdatesNotifier.removeListener(
+      _onNotificationTaskUpdate,
+    );
     _tasksSubscription?.cancel();
     return super.close();
   }
@@ -498,7 +606,6 @@ class TaskCubit extends Cubit<TaskState> {
     await updateTask(t.copyWith(completedDates: current, inactiveUntil: next));
     try {
       NotificationService.instance.show('Task completed', '${t.title} — $date');
-      await NotificationService.instance.cancelReminder(taskId);
     } catch (_) {}
   }
 
@@ -666,6 +773,7 @@ class TaskCubit extends Cubit<TaskState> {
     }
 
     emit(state.copyWith(tasks: updatedTasks));
+    await _syncNotifications(updatedTasks);
   }
 }
 

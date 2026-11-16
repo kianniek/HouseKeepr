@@ -621,7 +621,12 @@ class _HouseholdAppState extends State<HouseholdApp> {
       prefs,
       scaffoldKey: scaffoldMessengerKey,
       onOpenTasks: () => _openTab(HomeTab.tasks),
+      onOpenTasksRebalance: () {
+        _openTab(HomeTab.tasks);
+        HomeScreen.highlightAutoBalanceNotifier.value++;
+      },
       onOpenMedications: () => _openTab(HomeTab.tools),
+      userId: widget.user.uid,
     );
     await maybeRequestNotificationPermissions(settingsRepo);
     await NotificationService.instance.checkAndFireDueReminders();

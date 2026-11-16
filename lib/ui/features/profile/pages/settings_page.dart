@@ -1,13 +1,17 @@
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/extensions.dart';
 import '../../../../core/locale_provider.dart';
 import '../../../../core/settings_repository.dart';
+import '../../../../cubits/task_cubit.dart';
 import '../../../../generated/app_localizations.dart';
 import '../../../../home_screen.dart';
+import '../../../../repositories/local_medication_repository.dart';
+import '../../../../repositories/task_repository.dart';
 import '../../../../services/notification_service.dart';
 import '../../../../services/theme_controller.dart';
 import '../../../common/app_theme.dart';
@@ -28,6 +32,11 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   SettingsRepository? _settings;
   bool _enabled = true;
+  bool _tasksDigest = false;
+  bool _tasksReminders = false;
+  bool _tasksPileup = false;
+  bool _medications = true;
+  bool _household = true;
   bool _useFloatingNav = true;
   TimeOfDay _start = const TimeOfDay(hour: 7, minute: 0);
   TimeOfDay _end = const TimeOfDay(hour: 17, minute: 0);
@@ -46,6 +55,11 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _settings = s;
       _enabled = s.notificationsEnabled();
+      _tasksDigest = s.taskDailyDigestEnabled(respectMaster: false);
+      _tasksReminders = s.taskRemindersEnabled(respectMaster: false);
+      _tasksPileup = s.taskPileupNudgeEnabled(respectMaster: false);
+      _medications = s.medicationNotificationsEnabled(respectMaster: false);
+      _household = s.householdNotificationsEnabled(respectMaster: false);
       _useFloatingNav = s.useFloatingNav();
       _start = s.notificationStart();
       _end = s.notificationEnd();
@@ -54,11 +68,27 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _rescheduleNotifications() async {
-    await NotificationService.instance.scheduleDailyStartEnd(
-      enabled: _enabled,
-      start: _start,
-      end: _end,
+    final s = _settings;
+    if (s == null) return;
+    final tasks =
+        context.read<TaskCubit?>()?.state.tasks ??
+        TaskRepository(s.prefs).loadTasks();
+    await NotificationService.instance.syncTaskNotifications(
+      tasks: tasks,
+      settings: s,
     );
+  }
+
+  Future<void> _syncMedicationNotifications() async {
+    final s = _settings;
+    if (s == null) return;
+    if (s.medicationNotificationsEnabled()) {
+      final repo = LocalMedicationRepository(prefs: s.prefs);
+      final meds = await repo.getMedications();
+      await NotificationService.instance.rescheduleAllMedications(meds);
+    } else {
+      await NotificationService.instance.cancelAllMedicationReminders();
+    }
   }
 
   Future<void> _pickStart() async {
@@ -81,6 +111,40 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _enabled = v);
     await _settings?.setNotificationsEnabled(v);
     await _rescheduleNotifications();
+    await _syncMedicationNotifications();
+  }
+
+  Future<void> _toggleTasksDigest(bool v) async {
+    setState(() => _tasksDigest = v);
+    await _settings?.setTaskDailyDigestEnabled(v);
+    await _rescheduleNotifications();
+  }
+
+  Future<void> _toggleTasksReminders(bool v) async {
+    setState(() => _tasksReminders = v);
+    await _settings?.setTaskRemindersEnabled(v);
+    if (!v) {
+      await NotificationService.instance.cancelAllTaskReminders();
+    } else {
+      await _rescheduleNotifications();
+    }
+  }
+
+  Future<void> _toggleTasksPileup(bool v) async {
+    setState(() => _tasksPileup = v);
+    await _settings?.setTaskPileupNudgeEnabled(v);
+    await _rescheduleNotifications();
+  }
+
+  Future<void> _toggleMedications(bool v) async {
+    setState(() => _medications = v);
+    await _settings?.setMedicationNotificationsEnabled(v);
+    await _syncMedicationNotifications();
+  }
+
+  Future<void> _toggleHousehold(bool v) async {
+    setState(() => _household = v);
+    await _settings?.setHouseholdNotificationsEnabled(v);
   }
 
   Future<void> _toggleFloatingNav(bool v) async {
@@ -296,6 +360,10 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  // NOTE FOR FUTURE NOTIFICATIONS:
+  // Any new notification channels added here must default to opt-in (false)
+  // in SettingsRepository, with a one-time contextual prompt when the user
+  // uses that feature while its notifications are disabled.
   Widget _buildNotificationsSection(
     BuildContext context,
     AppLocalizations l10n,
@@ -304,15 +372,15 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         SwitchListTile(
           secondary: const Icon(Icons.notifications_outlined),
-          title: Text(l10n.dailyNotificationsTitle),
-          subtitle: Text(l10n.dailyNotificationsSubtitle),
+          title: Text(l10n.allNotificationsTitle),
+          subtitle: Text(l10n.allNotificationsSubtitle),
           value: _enabled,
           onChanged: _toggleEnabled,
         ),
         ListTile(
           enabled: _enabled,
           leading: const Icon(Icons.wb_sunny_outlined),
-          title: Text(l10n.startOfDayTime),
+          title: Text(l10n.morningBriefing),
           subtitle: Text(formatTimeWithSystemDefault(_start, context)),
           trailing: const Icon(Icons.access_time),
           onTap: _enabled ? _pickStart : null,
@@ -320,10 +388,59 @@ class _SettingsPageState extends State<SettingsPage> {
         ListTile(
           enabled: _enabled,
           leading: const Icon(Icons.nights_stay_outlined),
-          title: Text(l10n.endOfDayTime),
+          title: Text(l10n.eveningCheckIn),
           subtitle: Text(formatTimeWithSystemDefault(_end, context)),
           trailing: const Icon(Icons.access_time),
           onTap: _enabled ? _pickEnd : null,
+        ),
+        ExpansionTile(
+          shape: const Border(),
+          collapsedShape: const Border(),
+          leading: const Icon(Icons.tune_outlined),
+          title: Text(l10n.appChannels),
+          initiallyExpanded: _enabled,
+          children: [
+            const Divider(height: 1, indent: 56),
+            SwitchListTile(
+              secondary: const Icon(Icons.wb_twilight_outlined),
+              title: Text(l10n.notifTasksDigestTitle),
+              subtitle: Text(l10n.notifTasksDigestSubtitle),
+              value: _tasksDigest,
+              onChanged: _enabled ? _toggleTasksDigest : null,
+            ),
+            const Divider(height: 1, indent: 56),
+            SwitchListTile(
+              secondary: const Icon(Icons.alarm_outlined),
+              title: Text(l10n.notifTasksRemindersTitle),
+              subtitle: Text(l10n.notifTasksRemindersSubtitle),
+              value: _tasksReminders,
+              onChanged: _enabled ? _toggleTasksReminders : null,
+            ),
+            const Divider(height: 1, indent: 56),
+            SwitchListTile(
+              secondary: const Icon(Icons.auto_awesome_outlined),
+              title: Text(l10n.notifTasksPileupTitle),
+              subtitle: Text(l10n.notifTasksPileupSubtitle),
+              value: _tasksPileup,
+              onChanged: _enabled ? _toggleTasksPileup : null,
+            ),
+            const Divider(height: 1, indent: 56),
+            SwitchListTile(
+              secondary: const Icon(Icons.medication_outlined),
+              title: Text(l10n.notifMedicationsTitle),
+              subtitle: Text(l10n.notifMedicationsSubtitle),
+              value: _medications,
+              onChanged: _enabled ? _toggleMedications : null,
+            ),
+            const Divider(height: 1, indent: 56),
+            SwitchListTile(
+              secondary: const Icon(Icons.people_outline),
+              title: Text(l10n.notifHouseholdTitle),
+              subtitle: Text(l10n.notifHouseholdSubtitle),
+              value: _household,
+              onChanged: _enabled ? _toggleHousehold : null,
+            ),
+          ],
         ),
       ],
     );
