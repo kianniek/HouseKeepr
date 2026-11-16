@@ -137,8 +137,7 @@ class NotificationService {
   final ValueNotifier<int> taskUpdatesNotifier = ValueNotifier<int>(0);
 
   static const _kRemindersKey = 'scheduled_reminders_v1';
-  static const _kScheduledTaskReminderIdsKey =
-      'scheduled_task_reminder_ids_v1';
+  static const _kScheduledTaskReminderIdsKey = 'scheduled_task_reminder_ids_v1';
   static const _kMedicationRemindersKey = 'scheduled_medication_reminders_v1';
 
   /// Centralized channel registry. Add new [NotificationChannelType] entries
@@ -789,9 +788,7 @@ class NotificationService {
     }
   }
 
-  Future<void> _cancelOrphanedTaskReminders({
-    required Set<int> keepIds,
-  }) async {
+  Future<void> _cancelOrphanedTaskReminders({required Set<int> keepIds}) async {
     if (_prefs == null) return;
     final rawIds =
         _prefs!.getStringList(_kScheduledTaskReminderIdsKey) ?? <String>[];
@@ -853,10 +850,8 @@ class NotificationService {
 
   /// Builds the morning digest title, body, and payload for [tasks] at [now],
   /// or returns `null` when both due-today and overdue counts are 0.
-  static ({String title, String body, String payload})? buildMorningDigestContent(
-    List<Task> tasks, {
-    DateTime? now,
-  }) {
+  static ({String title, String body, String payload})?
+  buildMorningDigestContent(List<Task> tasks, {DateTime? now}) {
     final ref = now ?? DateTime.now();
     final today = DateTime(ref.year, ref.month, ref.day);
     final dueToday = <Task>[];
@@ -882,7 +877,8 @@ class NotificationService {
     if (overdue.length >= 3) {
       final dueCount = dueToday.length;
       final overdueCount = overdue.length;
-      final dueLabel = '$dueCount ${dueCount == 1 ? 'task' : 'tasks'} due today';
+      final dueLabel =
+          '$dueCount ${dueCount == 1 ? 'task' : 'tasks'} due today';
       return (
         title: '$dueLabel · $overdueCount piled up',
         body: 'Tap to auto-balance your backlog across this week.',
@@ -904,10 +900,7 @@ class NotificationService {
     );
   }
 
-  Future<void> _scheduleMorningDigest(
-    List<Task> tasks,
-    TimeOfDay start,
-  ) async {
+  Future<void> _scheduleMorningDigest(List<Task> tasks, TimeOfDay start) async {
     final content = buildMorningDigestContent(tasks);
     if (content == null) {
       await _cancelPlatformId(morningDigestNotificationId);
@@ -1025,7 +1018,10 @@ class NotificationService {
     return null;
   }
 
-  Future<void> _enqueueTaskSaveIfSyncEnabled(Task updated, Task previous) async {
+  Future<void> _enqueueTaskSaveIfSyncEnabled(
+    Task updated,
+    Task previous,
+  ) async {
     if (_prefs == null) return;
     final settings = SettingsRepository(_prefs!);
     if (settings.getSyncMode() == SyncMode.localOnly) return;

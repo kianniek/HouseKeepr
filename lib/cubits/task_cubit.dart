@@ -128,7 +128,7 @@ class TaskCubit extends Cubit<TaskState> {
     try {
       final list = List<Task>.from(state.tasks)..removeWhere((t) => t.id == id);
       await repo.saveTasks(list);
-    await _syncNotifications(list);
+      await _syncNotifications(list);
       emit(state.copyWith(tasks: list));
     } catch (_) {}
   }
@@ -248,7 +248,7 @@ class TaskCubit extends Cubit<TaskState> {
         list.add(t);
       }
       await repo.saveTasks(list);
-    await _syncNotifications(list);
+      await _syncNotifications(list);
       emit(state.copyWith(tasks: list));
     } catch (_) {}
   }
@@ -424,11 +424,7 @@ class TaskCubit extends Cubit<TaskState> {
           } catch (_) {}
         }
         writeQueue!.enqueueOp(
-          QueueOp(
-            type: QueueOpType.saveTask,
-            id: updated.id,
-            payload: payload,
-          ),
+          QueueOp(type: QueueOpType.saveTask, id: updated.id, payload: payload),
         );
       }
     } else {
