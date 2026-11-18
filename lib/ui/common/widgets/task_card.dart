@@ -84,13 +84,19 @@ class TaskCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: isCompleted ? scheme.primary : scheme.outline,
+                            color: isCompleted
+                                ? scheme.primary
+                                : scheme.outline,
                             width: 2,
                           ),
                           color: isCompleted ? scheme.primary : scheme.surface,
                         ),
                         child: isCompleted
-                            ? Icon(Icons.check, color: scheme.onPrimary, size: 16)
+                            ? Icon(
+                                Icons.check,
+                                color: scheme.onPrimary,
+                                size: 16,
+                              )
                             : null,
                       ),
                     ),

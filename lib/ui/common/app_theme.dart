@@ -76,11 +76,22 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
   }
 
   @override
-  AppSemanticColors lerp(covariant ThemeExtension<AppSemanticColors>? other, double t) {
+  AppSemanticColors lerp(
+    covariant ThemeExtension<AppSemanticColors>? other,
+    double t,
+  ) {
     if (other is! AppSemanticColors) return this;
     return AppSemanticColors(
-      warningContainer: Color.lerp(warningContainer, other.warningContainer, t)!,
-      onWarningContainer: Color.lerp(onWarningContainer, other.onWarningContainer, t)!,
+      warningContainer: Color.lerp(
+        warningContainer,
+        other.warningContainer,
+        t,
+      )!,
+      onWarningContainer: Color.lerp(
+        onWarningContainer,
+        other.onWarningContainer,
+        t,
+      )!,
       daytimeAccent: Color.lerp(daytimeAccent, other.daytimeAccent, t)!,
       eveningAccent: Color.lerp(eveningAccent, other.eveningAccent, t)!,
       favoriteAccent: Color.lerp(favoriteAccent, other.favoriteAccent, t)!,

@@ -107,9 +107,7 @@ class ThemePreviewRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: c,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
-        ),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
     );
 
