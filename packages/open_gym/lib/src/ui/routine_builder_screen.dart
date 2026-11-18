@@ -725,13 +725,13 @@ class _RoutineBuilderScreenState extends State<RoutineBuilderScreen> {
                       width: 34,
                       height: 34,
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade600,
-                        borderRadius: BorderRadius.circular(9),
+                        color: colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.folder_outlined,
                         size: 20,
-                        color: Colors.white,
+                        color: colorScheme.onSecondaryContainer,
                       ),
                     ),
                     title: const Text('Folder'),
@@ -810,13 +810,13 @@ class _RoutineBuilderScreenState extends State<RoutineBuilderScreen> {
                       width: 34,
                       height: 34,
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade600,
-                        borderRadius: BorderRadius.circular(9),
+                        color: colorScheme.tertiaryContainer,
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.trending_down_rounded,
                         size: 20,
-                        color: Colors.white,
+                        color: colorScheme.onTertiaryContainer,
                       ),
                     ),
                     title: const Text('Deload routine'),

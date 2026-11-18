@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/task.dart';
 import '../../features/tasks/utils/task_date_utils.dart';
+import '../app_theme.dart';
 import 'assignee_avatar.dart';
 
 class TaskCard extends StatelessWidget {
@@ -49,7 +50,7 @@ class TaskCard extends StatelessWidget {
       color: color ?? scheme.surfaceContainerLow,
       elevation: elevation ?? 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: scheme.outlineVariant.withValues(alpha: 0.5),
           width: 1,
@@ -65,28 +66,33 @@ class TaskCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Left-aligned circular checkbox matching ShoppingListItemTile (#5)
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: (isInactive || isRetrying) ? null : onToggleComplete,
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Center(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: 26,
-                      height: 26,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isCompleted ? scheme.primary : scheme.outline,
-                          width: 2,
+              Semantics(
+                button: true,
+                checked: isCompleted,
+                label: isCompleted ? 'Mark incomplete' : 'Mark complete',
+                child: InkResponse(
+                  onTap: (isInactive || isRetrying) ? null : onToggleComplete,
+                  radius: 24,
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Center(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isCompleted ? scheme.primary : scheme.outline,
+                            width: 2,
+                          ),
+                          color: isCompleted ? scheme.primary : scheme.surface,
                         ),
-                        color: isCompleted ? scheme.primary : scheme.surface,
+                        child: isCompleted
+                            ? Icon(Icons.check, color: scheme.onPrimary, size: 16)
+                            : null,
                       ),
-                      child: isCompleted
-                          ? Icon(Icons.check, color: scheme.onPrimary, size: 16)
-                          : null,
                     ),
                   ),
                 ),
@@ -141,9 +147,9 @@ class TaskCard extends StatelessWidget {
       return card;
     }
 
-    final isDark = theme.brightness == Brightness.dark;
-    final snoozeBg = isDark ? const Color(0xFF4A3200) : const Color(0xFFFFF3CD);
-    final snoozeFg = isDark ? const Color(0xFFFFD54F) : const Color(0xFF7A4F01);
+    final semantic = AppSemanticColors.of(context);
+    final snoozeBg = semantic.warningContainer;
+    final snoozeFg = semantic.onWarningContainer;
 
     return Dismissible(
       key: ValueKey('dismiss_${task.id}'),
@@ -158,7 +164,7 @@ class TaskCard extends StatelessWidget {
         margin: margin,
         decoration: BoxDecoration(
           color: snoozeBg,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.symmetric(horizontal: 20),

@@ -829,18 +829,19 @@ class _PersonalBudgetViewState extends State<_PersonalBudgetView> {
               ),
             ),
             color: _leftover >= 0
-                ? scheme.tertiaryContainer.withValues(alpha: 0.08)
-                : scheme.errorContainer.withValues(alpha: 0.08),
+                ? scheme.tertiaryContainer
+                : scheme.errorContainer,
             child: Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 children: [
                   Text(
                     'Leftover (After fixed costs & contribution)',
-                    style: TextStyle(
-                      fontSize: 14,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w500,
-                      color: _leftover >= 0 ? scheme.tertiary : scheme.error,
+                      color: _leftover >= 0
+                          ? scheme.onTertiaryContainer
+                          : scheme.onErrorContainer,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -850,10 +851,11 @@ class _PersonalBudgetViewState extends State<_PersonalBudgetView> {
                       fractionDigits: 2,
                       trimTrailingZeros: true,
                     ),
-                    style: TextStyle(
-                      fontSize: 28,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: _leftover >= 0 ? scheme.tertiary : scheme.error,
+                      color: _leftover >= 0
+                          ? scheme.onTertiaryContainer
+                          : scheme.onErrorContainer,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -865,16 +867,15 @@ class _PersonalBudgetViewState extends State<_PersonalBudgetView> {
                         size: 14,
                         color: _leftover >= 0
                             ? scheme.onTertiaryContainer
-                            : scheme.onError,
+                            : scheme.onErrorContainer,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         'Tap to copy',
-                        style: TextStyle(
-                          fontSize: 13,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: _leftover >= 0
                               ? scheme.onTertiaryContainer
-                              : scheme.onError,
+                              : scheme.onErrorContainer,
                         ),
                       ),
                     ],

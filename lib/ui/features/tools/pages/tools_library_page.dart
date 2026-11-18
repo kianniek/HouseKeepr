@@ -331,7 +331,10 @@ class _ToolCard extends StatelessWidget {
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(tool.icon, color: Colors.grey),
+          child: Icon(
+            tool.icon,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         title: Text(
           tool.title,

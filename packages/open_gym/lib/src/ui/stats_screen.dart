@@ -672,7 +672,7 @@ class _StatsScreenState extends State<StatsScreen> {
                               child: Container(
                                 color: <Color>[
                                   colorScheme.error,
-                                  Colors.orange,
+                                  colorScheme.secondary,
                                   colorScheme.primary,
                                   colorScheme.tertiary,
                                   colorScheme.surfaceContainerHighest,

@@ -195,5 +195,10 @@ class _LineChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LineChartPainter oldDelegate) =>
-      oldDelegate.values != values || oldDelegate.goalValue != goalValue;
+      oldDelegate.values != values ||
+      oldDelegate.goalValue != goalValue ||
+      oldDelegate.lineColor != lineColor ||
+      oldDelegate.goalColor != goalColor ||
+      oldDelegate.gridColor != gridColor ||
+      oldDelegate.labelStyle != labelStyle;
 }

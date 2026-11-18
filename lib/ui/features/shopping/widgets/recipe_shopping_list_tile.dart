@@ -68,7 +68,7 @@ class _RecipeShoppingListTileState extends State<RecipeShoppingListTile> {
         widget.recipe.checked || (totalCount > 0 && checkedCount == totalCount);
     final someChecked = !allChecked && checkedCount > 0;
 
-    final double circleSize = widget.aisleMode ? 52 : 44;
+    final double circleSize = widget.aisleMode ? 52 : 48;
     final titleStyle =
         (widget.aisleMode
                 ? theme.textTheme.headlineSmall
@@ -129,9 +129,10 @@ class _RecipeShoppingListTileState extends State<RecipeShoppingListTile> {
                 ),
                 child: Row(
                   children: [
-                    GestureDetector(
+                    InkResponse(
                       key: ValueKey('recipe_toggle_${widget.recipe.id}'),
                       onTap: widget.onToggleRecipe,
+                      radius: circleSize / 2,
                       child: Container(
                         width: circleSize,
                         height: circleSize,

@@ -66,9 +66,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
                         height: size,
                         decoration: BoxDecoration(
                           border: Border.all(
-                            color: scheme.onSurface.withAlpha(
-                              (0.9 * 255).round(),
-                            ),
+                            color: Colors.white.withValues(alpha: 0.9),
                             width: 2,
                           ),
                           borderRadius: BorderRadius.circular(12),
@@ -89,20 +87,19 @@ class _QRScannerPageState extends State<QRScannerPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    icon: Icon(Icons.arrow_back, color: scheme.onSurface),
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                   Text(
                     'Scan invite QR',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurface,
-                      fontSize: 16,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
                     ),
                   ),
                   IconButton(
                     icon: Icon(
                       _torchOn ? Icons.flash_on : Icons.flash_off,
-                      color: scheme.onSurface,
+                      color: Colors.white,
                     ),
                     onPressed: () async {
                       await _controller.toggleTorch();
@@ -123,7 +120,7 @@ class _QRScannerPageState extends State<QRScannerPage> {
                   'Align the household QR inside the box to scan',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurface.withAlpha((0.9 * 255).round()),
+                    color: Colors.white.withValues(alpha: 0.9),
                   ),
                 ),
               ),

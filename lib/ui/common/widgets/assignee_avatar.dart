@@ -109,10 +109,10 @@ class _AssigneeAvatarState extends State<AssigneeAvatar> {
     final theme = Theme.of(context);
     final fallbackBg =
         _personalColor ?? theme.colorScheme.surfaceContainerHighest;
+    final isDarkBg =
+        ThemeData.estimateBrightnessForColor(fallbackBg) == Brightness.dark;
     final fallbackTextColor =
-        ThemeData.estimateBrightnessForColor(fallbackBg) == Brightness.dark
-        ? theme.colorScheme.onPrimary
-        : theme.colorScheme.onSurface;
+        isDarkBg ? const Color(0xFFFFFFFF) : const Color(0xFF1F1F1F);
     // Validate URL and skip if it previously failed to load.
     final url = _photoUrl?.trim();
     final validUrl =

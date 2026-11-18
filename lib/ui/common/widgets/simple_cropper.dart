@@ -69,7 +69,7 @@ class _SimpleCropperState extends State<SimpleCropper> {
                     height: 300,
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: scheme.onSurface.withAlpha(204),
+                        color: Colors.white.withValues(alpha: 0.8),
                         width: 2,
                       ),
                     ),

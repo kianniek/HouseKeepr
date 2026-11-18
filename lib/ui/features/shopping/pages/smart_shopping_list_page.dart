@@ -964,7 +964,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
   }
 
   Widget _buildCategoryHexGrid(BuildContext context, ShoppingState state) {
-    const chipSize = 44.0;
+    const chipSize = 48.0;
     const hSpacing = chipSize * 0.1;
     const vSpacing = chipSize * 0.1;
 
@@ -1045,8 +1045,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
             label: Text(cat.emoji),
             selected: state.selectedCategory == cat,
             showCheckmark: false,
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            materialTapTargetSize: MaterialTapTargetSize.padded,
             padding: const EdgeInsets.all(0),
             shape: const CircleBorder(),
             onSelected: (_) {

@@ -279,42 +279,37 @@ class _CenterStartButton extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Material(
-              color: colorScheme.primary,
-              shape: const CircleBorder(),
-              elevation: 3,
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: onTap,
-                onLongPress: onLongPress,
-                child: SizedBox(
-                  width: 46,
-                  height: 46,
-                  child: Icon(
-                    isActive ? Icons.timer : Icons.play_arrow_rounded,
-                    color: colorScheme.onPrimary,
-                    size: 28,
-                  ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Material(
+            color: colorScheme.primary,
+            shape: const CircleBorder(),
+            elevation: 3,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onTap,
+              onLongPress: onLongPress,
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: Icon(
+                  isActive ? Icons.timer : Icons.play_arrow_rounded,
+                  color: colorScheme.onPrimary,
+                  size: 28,
                 ),
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              isActive ? 'Active' : 'Start',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.w700,
-              ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            isActive ? 'Active' : 'Start',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colorScheme.primary,
+              fontWeight: FontWeight.w700,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -947,7 +942,7 @@ class _PlanTabState extends State<_PlanTab> {
               Icon(
                 Icons.star_rounded,
                 size: 16,
-                color: Colors.amber.shade600,
+                color: colorScheme.primary,
               ),
               const SizedBox(width: 4),
             ],
@@ -1145,13 +1140,13 @@ class _PlanTabState extends State<_PlanTab> {
                         width: 34,
                         height: 34,
                         decoration: BoxDecoration(
-                          color: Colors.orange.shade600,
-                          borderRadius: BorderRadius.circular(9),
+                          color: colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.repeat_rounded,
                           size: 20,
-                          color: Colors.white,
+                          color: colorScheme.onPrimaryContainer,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1545,12 +1540,12 @@ class _PlanTabState extends State<_PlanTab> {
                   width: 34,
                   height: 34,
                   decoration: BoxDecoration(
-                    color: Colors.indigo.shade400,
-                    borderRadius: BorderRadius.circular(9),
+                    color: colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.bar_chart_rounded,
-                    color: Colors.white,
+                    color: colorScheme.onSecondaryContainer,
                     size: 20,
                   ),
                 ),
@@ -1660,7 +1655,7 @@ class _PlanTabState extends State<_PlanTab> {
             if (favTemplates.isNotEmpty) ...<Widget>[
               Row(
                 children: <Widget>[
-                  Icon(Icons.star_rounded, size: 16, color: Colors.amber.shade600),
+                  Icon(Icons.star_rounded, size: 16, color: colorScheme.primary),
                   const SizedBox(width: 6),
                   Text(
                     'Favourites',

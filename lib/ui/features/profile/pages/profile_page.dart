@@ -307,15 +307,14 @@ class _ProfilePageState extends State<ProfilePage> {
     final color = _selectedColor;
     final onColor = color != null
         ? (ThemeData.estimateBrightnessForColor(color) == Brightness.dark
-              ? scheme.onPrimary
-              : scheme.onSurface)
+              ? const Color(0xFFFFFFFF)
+              : const Color(0xFF1F1F1F))
         : scheme.onSurface;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
         backgroundColor: color,
         foregroundColor: onColor,
-        elevation: 0,
       ),
       body: Container(
         decoration: color != null
@@ -396,18 +395,26 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  GestureDetector(
+                  InkResponse(
                     onTap: _saving ? null : _pickColor,
-                    child: CircleAvatar(
-                      radius: 16,
-                      backgroundColor: color ?? scheme.surfaceContainerHighest,
-                      child: color == null
-                          ? Icon(
-                              Icons.color_lens,
-                              color: scheme.onSurfaceVariant,
-                              size: 18,
-                            )
-                          : null,
+                    radius: 24,
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(
+                        child: CircleAvatar(
+                          radius: 16,
+                          backgroundColor:
+                              color ?? scheme.surfaceContainerHighest,
+                          child: color == null
+                              ? Icon(
+                                  Icons.color_lens,
+                                  color: scheme.onSurfaceVariant,
+                                  size: 18,
+                                )
+                              : null,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -493,19 +500,27 @@ class _ProfilePageState extends State<ProfilePage> {
               .map(
                 (color) => GestureDetector(
                   onTap: () => Navigator.of(context).pop(color),
-                  child: CircleAvatar(
-                    backgroundColor: color,
-                    radius: 18,
-                    child: _selectedColor == color
-                        ? Icon(
-                            Icons.check,
-                            color:
-                                ThemeData.estimateBrightnessForColor(color) ==
-                                    Brightness.dark
-                                ? scheme.onPrimary
-                                : scheme.onSurface,
-                          )
-                        : null,
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Center(
+                      child: CircleAvatar(
+                        backgroundColor: color,
+                        radius: 18,
+                        child: _selectedColor == color
+                            ? Icon(
+                                Icons.check,
+                                color:
+                                    ThemeData.estimateBrightnessForColor(
+                                          color,
+                                        ) ==
+                                        Brightness.dark
+                                    ? const Color(0xFFFFFFFF)
+                                    : const Color(0xFF1F1F1F),
+                              )
+                            : null,
+                      ),
+                    ),
                   ),
                 ),
               )

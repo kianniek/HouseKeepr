@@ -19,6 +19,75 @@ extension AppThemeTypeX on AppThemeType {
   }
 }
 
+/// Semantic colors beyond core [ColorScheme] roles with full Light/Dark parity.
+@immutable
+class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
+  final Color warningContainer;
+  final Color onWarningContainer;
+  final Color daytimeAccent;
+  final Color eveningAccent;
+  final Color favoriteAccent;
+
+  const AppSemanticColors({
+    required this.warningContainer,
+    required this.onWarningContainer,
+    required this.daytimeAccent,
+    required this.eveningAccent,
+    required this.favoriteAccent,
+  });
+
+  static const AppSemanticColors light = AppSemanticColors(
+    warningContainer: Color(0xFFFFF3CD),
+    onWarningContainer: Color(0xFF5D3A00),
+    daytimeAccent: Color(0xFFB26A00),
+    eveningAccent: Color(0xFF3F51B5),
+    favoriteAccent: Color(0xFFB26A00),
+  );
+
+  static const AppSemanticColors dark = AppSemanticColors(
+    warningContainer: Color(0xFF4A3200),
+    onWarningContainer: Color(0xFFFFDF8F),
+    daytimeAccent: Color(0xFFFFCA28),
+    eveningAccent: Color(0xFF9FA8DA),
+    favoriteAccent: Color(0xFFFFCA28),
+  );
+
+  static AppSemanticColors of(BuildContext context) {
+    final ext = Theme.of(context).extension<AppSemanticColors>();
+    if (ext != null) return ext;
+    return Theme.of(context).brightness == Brightness.dark ? dark : light;
+  }
+
+  @override
+  AppSemanticColors copyWith({
+    Color? warningContainer,
+    Color? onWarningContainer,
+    Color? daytimeAccent,
+    Color? eveningAccent,
+    Color? favoriteAccent,
+  }) {
+    return AppSemanticColors(
+      warningContainer: warningContainer ?? this.warningContainer,
+      onWarningContainer: onWarningContainer ?? this.onWarningContainer,
+      daytimeAccent: daytimeAccent ?? this.daytimeAccent,
+      eveningAccent: eveningAccent ?? this.eveningAccent,
+      favoriteAccent: favoriteAccent ?? this.favoriteAccent,
+    );
+  }
+
+  @override
+  AppSemanticColors lerp(covariant ThemeExtension<AppSemanticColors>? other, double t) {
+    if (other is! AppSemanticColors) return this;
+    return AppSemanticColors(
+      warningContainer: Color.lerp(warningContainer, other.warningContainer, t)!,
+      onWarningContainer: Color.lerp(onWarningContainer, other.onWarningContainer, t)!,
+      daytimeAccent: Color.lerp(daytimeAccent, other.daytimeAccent, t)!,
+      eveningAccent: Color.lerp(eveningAccent, other.eveningAccent, t)!,
+      favoriteAccent: Color.lerp(favoriteAccent, other.favoriteAccent, t)!,
+    );
+  }
+}
+
 /// AppThemePalette maps a theme type to explicit light/dark ColorScheme roles.
 class AppThemePalette {
   final AppThemeType type;
@@ -78,17 +147,22 @@ class AppThemePalette {
       seedColor: seed,
       brightness: Brightness.light,
     );
+    final ter = ColorScheme.fromSeed(
+      seedColor: lightTertiary,
+      brightness: Brightness.light,
+    );
     return cs.copyWith(
       primary: lightPrimary,
       onPrimary: lightOnPrimary,
       primaryContainer: lightPrimaryContainer,
       onPrimaryContainer: lightOnPrimaryContainer,
-      secondary: lightSecondary,
-      tertiary: lightTertiary,
-      surface: lightSurface,
+      tertiary: ter.primary,
+      onTertiary: ter.onPrimary,
+      tertiaryContainer: ter.primaryContainer,
+      onTertiaryContainer: ter.onPrimaryContainer,
       error: lightError,
+      onError: const Color(0xFFFFFFFF),
       onSurface: lightOnSurface,
-      outline: lightOutline,
     );
   }
 
@@ -97,17 +171,23 @@ class AppThemePalette {
       seedColor: seed,
       brightness: Brightness.dark,
     );
+    final ter = ColorScheme.fromSeed(
+      seedColor: darkTertiary,
+      brightness: Brightness.dark,
+    );
     return cs.copyWith(
       primary: darkPrimary,
       onPrimary: darkOnPrimary,
       primaryContainer: darkPrimaryContainer,
       onPrimaryContainer: darkOnPrimaryContainer,
-      secondary: darkSecondary,
-      tertiary: darkTertiary,
+      tertiary: ter.primary,
+      onTertiary: ter.onPrimary,
+      tertiaryContainer: ter.primaryContainer,
+      onTertiaryContainer: ter.onPrimaryContainer,
       surface: darkSurface,
       error: darkError,
+      onError: const Color(0xFF000000),
       onSurface: darkOnSurface,
-      outline: darkOutline,
     );
   }
 

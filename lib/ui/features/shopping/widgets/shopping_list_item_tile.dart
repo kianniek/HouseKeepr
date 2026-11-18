@@ -62,8 +62,9 @@ class ShoppingListItemTile extends StatelessWidget {
             horizontal: aisleMode ? 24 : 16,
             vertical: aisleMode ? 12 : 8,
           ),
-          leading: GestureDetector(
+          leading: InkResponse(
             onTap: onCheck,
+            radius: (aisleMode ? 56 : 48) / 2,
             child: Container(
               width: aisleMode ? 56 : 48,
               height: aisleMode ? 56 : 48,

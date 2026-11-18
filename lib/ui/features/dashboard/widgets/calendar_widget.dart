@@ -91,6 +91,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
       final selected = await showModalBottomSheet<calendar.CalendarListEntry>(
         context: context,
         isScrollControlled: true,
+        showDragHandle: true,
         builder: (_) => _CalendarPickerSheet(
           calendarService: _calendarService,
           calendars: calendars,

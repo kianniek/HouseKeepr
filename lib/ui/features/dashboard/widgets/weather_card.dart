@@ -209,6 +209,7 @@ class _WeatherCardState extends State<WeatherCard> {
     final selection = await showModalBottomSheet<WeatherSelection>(
       context: context,
       isScrollControlled: true,
+      showDragHandle: true,
       builder: (_) => _LocationPickerSheet(
         weatherService: _weatherService,
         initialLocation: _location,

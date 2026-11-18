@@ -1187,12 +1187,9 @@ Future<void> showWorkoutCompleteSummarySheet(
               ),
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              height: 220,
-              child: BodyMapWidget(
-                weeklySetsByBodyPart: trainedMuscles,
-                showHeader: false,
-              ),
+            BodyMapWidget(
+              weeklySetsByBodyPart: trainedMuscles,
+              showHeader: false,
             ),
             const SizedBox(height: 20),
             Text(

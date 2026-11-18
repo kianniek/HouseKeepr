@@ -529,8 +529,9 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                 child: FilledButton.tonalIcon(
                   style: FilledButton.styleFrom(
                     visualDensity: VisualDensity.compact,
-                    backgroundColor: colorScheme.scrim.withValues(alpha: 0.65),
-                    foregroundColor: Colors.white,
+                    backgroundColor:
+                        colorScheme.inverseSurface.withValues(alpha: 0.78),
+                    foregroundColor: colorScheme.onInverseSurface,
                   ),
                   onPressed: () => setState(() {
                     _expandedAnimationIds.remove(entry.exerciseId);
@@ -546,8 +547,9 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                 child: FilledButton.tonalIcon(
                   style: FilledButton.styleFrom(
                     visualDensity: VisualDensity.compact,
-                    backgroundColor: colorScheme.scrim.withValues(alpha: 0.65),
-                    foregroundColor: Colors.white,
+                    backgroundColor:
+                        colorScheme.inverseSurface.withValues(alpha: 0.78),
+                    foregroundColor: colorScheme.onInverseSurface,
                   ),
                   onPressed: () => setState(() {
                     _animationPlaying[entry.exerciseId] = !isPlaying;

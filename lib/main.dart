@@ -38,6 +38,7 @@ import 'services/household_service.dart';
 import 'services/notification_service.dart';
 import 'services/shopping_products_service.dart';
 import 'services/theme_controller.dart';
+import 'ui/common/app_theme.dart';
 import 'services/widget_service.dart';
 import 'services/write_queue.dart';
 import 'ui/features/auth/login_page.dart';
@@ -121,8 +122,16 @@ class _MyAppState extends State<MyApp> {
                 GlobalWidgetsLocalizations.delegate,
                 GlobalCupertinoLocalizations.delegate,
               ],
-              theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
-              darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
+              theme: ThemeData(
+                colorScheme: lightScheme,
+                useMaterial3: true,
+                extensions: const [AppSemanticColors.light],
+              ),
+              darkTheme: ThemeData(
+                colorScheme: darkScheme,
+                useMaterial3: true,
+                extensions: const [AppSemanticColors.dark],
+              ),
               themeMode: controller.themeMode,
               home: AppRoot(initializationError: widget.initializationError),
             );

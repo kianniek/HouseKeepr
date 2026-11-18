@@ -12,6 +12,7 @@ import '../../../../cubits/task_cubit.dart';
 import '../../../../home_screen.dart';
 import '../../../../models/task.dart';
 import '../../../../services/task_rescheduler.dart';
+import '../../../common/app_theme.dart';
 import '../../../common/widgets/assignee_avatar.dart';
 import '../../../common/widgets/task_card.dart';
 import '../../../common/widgets/undo_toast.dart';
@@ -314,7 +315,7 @@ class _TasksPageState extends State<TasksPage> {
     final scheme = theme.colorScheme;
 
     return SizedBox(
-      height: 40,
+      height: 48,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -723,19 +724,15 @@ class _TasksPageState extends State<TasksPage> {
 
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
     final due = effectiveDueDate(t);
     final overdue = due != null && isOverdue(due) && !isCompleted;
     final dueLabel = due != null ? formatRelativeDueDate(due) : null;
     final freqLabel = t.isRepeating ? repeatFrequencyLabel(t) : null;
 
     Widget buildSubtitle() {
-      final amberBg = isDark
-          ? const Color(0xFF4A3200)
-          : const Color(0xFFFFF3CD);
-      final amberFg = isDark
-          ? const Color(0xFFFFD54F)
-          : const Color(0xFF7A4F01);
+      final semantic = AppSemanticColors.of(context);
+      final amberBg = semantic.warningContainer;
+      final amberFg = semantic.onWarningContainer;
 
       final parts = <Widget>[];
       if (dueLabel != null) {

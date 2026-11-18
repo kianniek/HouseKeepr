@@ -244,7 +244,7 @@ class HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         child: Center(
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(32),
             child: BackdropFilter(
               filter: ui.ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
               child: Container(
@@ -252,9 +252,9 @@ class HomeScreenState extends State<HomeScreen> {
                 constraints: const BoxConstraints(maxWidth: 400),
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainer.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(30),
+                  borderRadius: BorderRadius.circular(32),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.4),
                   ),
                 ),
                 child: LayoutBuilder(
@@ -325,7 +325,10 @@ class HomeScreenState extends State<HomeScreen> {
     final iconData = isSelected ? tab.activeIcon : tab.icon;
     final labelWidget = Text(
       tab.label,
-      style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+        color: color,
+        fontWeight: FontWeight.w600,
+      ),
     );
 
     final content = isWide
