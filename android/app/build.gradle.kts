@@ -81,4 +81,5 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx:23.2.1")
     implementation("com.google.firebase:firebase-firestore-ktx:25.1.4")
     implementation("com.google.android.play:feature-delivery:2.1.0")
+    implementation("androidx.health.connect:connect-client:1.1.0")
 }

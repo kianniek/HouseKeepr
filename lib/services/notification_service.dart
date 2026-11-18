@@ -164,8 +164,8 @@ class NotificationService {
       id: 'housekeepr_medications',
       name: 'Medication Reminders',
       description: 'Scheduled daytime and evening medication dose reminders',
-      androidImportance: Importance.high,
-      androidPriority: Priority.high,
+      androidImportance: Importance.max,
+      androidPriority: Priority.max,
     ),
     NotificationChannelType.householdActivity: NotificationChannelConfig(
       id: 'housekeepr_household',

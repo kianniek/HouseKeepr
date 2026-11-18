@@ -16,7 +16,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.0.73+73
+version: 0.0.88+88
 
 environment:
   sdk: ^3.10.0
@@ -100,6 +100,14 @@ flutter:
 
   assets:
     - assets/icon/
+
+  # Disabled until Flutter/Dart SDK includes fix for dart-lang/sdk#64162 (CL 549820),
+  # where deduplicated functions/closures in deferred AOT loading units retain
+  # entry_point_ = 0x1 after loadLibrary() completes.
+  # deferred-components:
+  #   - name: openGym
+  #     libraries:
+  #       - package:open_gym/open_gym.dart
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -21,7 +21,8 @@ void main() {
       await tester.pumpWidget(buildTestableWidget());
       await tester.pump();
 
-      expect(find.byType(ListTile), findsNWidgets(3));
+      expect(find.byType(ListTile), findsNWidgets(4));
+      expect(find.text('HealthKeepr'), findsOneWidget);
       expect(find.byType(GridView), findsNothing);
 
       // Toggle to grid view
@@ -56,7 +57,8 @@ void main() {
       await tester.pumpWidget(buildTestableWidget());
       await tester.pump();
 
-      expect(find.byType(ListTile), findsNWidgets(3));
+      expect(find.byType(ListTile), findsNWidgets(4));
+      expect(find.text('HealthKeepr'), findsOneWidget);
       expect(find.byType(GridView), findsNothing);
     });
 
@@ -66,7 +68,7 @@ void main() {
       await tester.pumpWidget(buildTestableWidget());
       await tester.pump();
 
-      expect(find.byType(ListTile), findsNWidgets(3));
+      expect(find.byType(ListTile), findsNWidgets(4));
 
       await tester.tap(find.text('Kitchen'));
       await tester.pump();
@@ -92,7 +94,7 @@ void main() {
       await tester.tap(find.text('All'));
       await tester.pump();
 
-      expect(find.byType(ListTile), findsNWidgets(3));
+      expect(find.byType(ListTile), findsNWidgets(4));
       expect(prefs.getString('tools_library_selected_category_v1'), isNull);
     });
   });

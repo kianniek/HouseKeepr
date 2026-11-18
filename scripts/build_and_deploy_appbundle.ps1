@@ -1,4 +1,4 @@
-# <#
+﻿# <#
 # Builds the release app bundle and, by default, publishes it to the Google Play
 # internal test track with a service account key.
 # #>
@@ -559,6 +559,320 @@ $SPINNER_FRAMES = @(
 )
 
 # ==============================================================================
+# STEP TIMING AVERAGES & PROGRESS TRACKING
+# ==============================================================================
+
+$script:TIMING_WINDOW_SIZE = 3
+$script:DEFAULT_STEP_ESTIMATES = @{
+    'activate_service_account' = 2.0
+    'fetch_access_token'       = 2.0
+    'verify_permissions'       = 2.0
+    'increment_version'        = 2.0
+    'build_appbundle'          = 60.0
+    'create_edit'              = 2.0
+    'upload_aab'               = 15.0
+    'assign_track'             = 2.0
+    'commit_edit'              = 2.0
+}
+$script:StepTimings = @{}
+$script:PipelineProgress = $null
+
+function Get-TimingFilePath {
+    param(
+        [Parameter(Mandatory = $true)] [string]$RepoRoot
+    )
+
+    return Join-Path $RepoRoot 'scripts\.build_appbundle_timings.json'
+}
+
+function Get-StepTimingData {
+    param(
+        [Parameter(Mandatory = $true)] [string]$RepoRoot
+    )
+
+    $timingPath = Get-TimingFilePath -RepoRoot $RepoRoot
+    $result = @{}
+    if (-not (Test-Path $timingPath)) { return $result }
+
+    try {
+        $raw = Get-Content -Path $timingPath -Raw | ConvertFrom-Json
+        if ($null -ne $raw -and $null -ne $raw.steps) {
+            foreach ($prop in $raw.steps.PSObject.Properties) {
+                $samples = @()
+                if ($null -ne $prop.Value.samples) {
+                    $samples = @($prop.Value.samples | ForEach-Object { [double]$_ })
+                }
+                $avg = if ($samples.Count -gt 0) {
+                    [math]::Round((($samples | Measure-Object -Average).Average), 3)
+                } elseif ($null -ne $prop.Value.averageSeconds) {
+                    [double]$prop.Value.averageSeconds
+                } else {
+                    0.0
+                }
+                $result[$prop.Name] = @{
+                    label          = [string]$prop.Value.label
+                    samples        = $samples
+                    averageSeconds = $avg
+                }
+            }
+        }
+    } catch {
+        return @{}
+    }
+
+    return $result
+}
+
+function Save-StepTimingData {
+    param(
+        [Parameter(Mandatory = $true)] [string]$RepoRoot,
+        [Parameter(Mandatory = $true)] [hashtable]$Timings
+    )
+
+    $timingPath = Get-TimingFilePath -RepoRoot $RepoRoot
+    $stepsOut = [ordered]@{}
+    foreach ($key in ($Timings.Keys | Sort-Object)) {
+        $entry = $Timings[$key]
+        $stepsOut[$key] = [ordered]@{
+            label          = [string]$entry.label
+            samples        = @($entry.samples | ForEach-Object { [double]$_ })
+            averageSeconds = [double]$entry.averageSeconds
+        }
+    }
+
+    $payload = [ordered]@{
+        windowSize = $script:TIMING_WINDOW_SIZE
+        updatedUtc = (Get-Date).ToUniversalTime().ToString('o')
+        steps      = $stepsOut
+    }
+
+    $payload | ConvertTo-Json -Depth 5 | Set-Content -Path $timingPath -Encoding UTF8
+}
+
+function Update-StepTiming {
+    param(
+        [Parameter(Mandatory = $true)] [string]$RepoRoot,
+        [Parameter(Mandatory = $true)] [string]$StepKey,
+        [Parameter(Mandatory = $true)] [string]$Label,
+        [Parameter(Mandatory = $true)] [double]$DurationSeconds
+    )
+
+    $samples = @()
+    if ($script:StepTimings.ContainsKey($StepKey) -and $null -ne $script:StepTimings[$StepKey].samples) {
+        $samples = @($script:StepTimings[$StepKey].samples | ForEach-Object { [double]$_ })
+    }
+
+    $samples += [math]::Round($DurationSeconds, 3)
+    if ($samples.Count -gt $script:TIMING_WINDOW_SIZE) {
+        $samples = @($samples[($samples.Count - $script:TIMING_WINDOW_SIZE)..($samples.Count - 1)])
+    }
+
+    $avg = [math]::Round((($samples | Measure-Object -Average).Average), 3)
+    $script:StepTimings[$StepKey] = @{
+        label          = $Label
+        samples        = $samples
+        averageSeconds = $avg
+    }
+
+    try {
+        Save-StepTimingData -RepoRoot $RepoRoot -Timings $script:StepTimings
+    } catch {
+        # Non-fatal: timing persistence failure should not abort build/deploy
+    }
+}
+
+function Initialize-PipelineProgress {
+    param(
+        [Parameter(Mandatory = $true)] [string]$RepoRoot,
+        [Parameter(Mandatory = $true)] [string[]]$PlannedSteps,
+        [Parameter(Mandatory = $true)] [System.Diagnostics.Stopwatch]$PipelineStopwatch
+    )
+
+    $estimates = @{}
+    $totalEst = 0.0
+    $calibratedCount = 0
+
+    foreach ($stepKey in $PlannedSteps) {
+        if ($script:StepTimings.ContainsKey($stepKey) -and $script:StepTimings[$stepKey].averageSeconds -gt 0) {
+            $est = [double]$script:StepTimings[$stepKey].averageSeconds
+            $calibratedCount++
+        } elseif ($script:DEFAULT_STEP_ESTIMATES.ContainsKey($stepKey)) {
+            $est = [double]$script:DEFAULT_STEP_ESTIMATES[$stepKey]
+        } else {
+            $est = 5.0
+        }
+        $estimates[$stepKey] = $est
+        $totalEst += $est
+    }
+
+    $script:PipelineProgress = @{
+        repoRoot              = $RepoRoot
+        plannedSteps          = $PlannedSteps
+        stepEstimates         = $estimates
+        totalEstimatedSeconds = $totalEst
+        completedSteps        = New-Object 'System.Collections.Generic.HashSet[string]'
+        completedWeight       = 0.0
+        currentStepKey        = ''
+        pipelineStopwatch     = $PipelineStopwatch
+        isCalibrated          = ($calibratedCount -gt 0)
+    }
+}
+
+function Set-CurrentPipelineStep {
+    param(
+        [string]$StepKey = ''
+    )
+
+    if ($null -ne $script:PipelineProgress) {
+        $script:PipelineProgress.currentStepKey = $StepKey
+    }
+}
+
+function Complete-PipelineStep {
+    param(
+        [string]$StepKey = '',
+        [string]$Title = '',
+        [double]$ElapsedSeconds = 0.0
+    )
+
+    if ([string]::IsNullOrWhiteSpace($StepKey)) { return }
+
+    if ($null -ne $script:PipelineProgress) {
+        if (-not $script:PipelineProgress.completedSteps.Contains($StepKey)) {
+            [void]$script:PipelineProgress.completedSteps.Add($StepKey)
+            if ($script:PipelineProgress.stepEstimates.ContainsKey($StepKey)) {
+                $script:PipelineProgress.completedWeight += [double]$script:PipelineProgress.stepEstimates[$StepKey]
+            }
+        }
+        $script:PipelineProgress.currentStepKey = ''
+
+        if (-not [string]::IsNullOrWhiteSpace($script:PipelineProgress.repoRoot)) {
+            $label = if (-not [string]::IsNullOrWhiteSpace($Title)) { $Title } else { $StepKey }
+            Update-StepTiming -RepoRoot $script:PipelineProgress.repoRoot -StepKey $StepKey -Label $label -DurationSeconds $ElapsedSeconds
+        }
+    }
+}
+
+function Get-PipelineProgressSnapshot {
+    param(
+        [double]$CurrentStepElapsedSeconds = 0.0,
+        [double]$CurrentStepFractionOverride = -1.0
+    )
+
+    if ($null -eq $script:PipelineProgress -or $script:PipelineProgress.totalEstimatedSeconds -le 0) {
+        return $null
+    }
+
+    $p = $script:PipelineProgress
+    $curKey = $p.currentStepKey
+    $estStep = if (-not [string]::IsNullOrWhiteSpace($curKey) -and $p.stepEstimates.ContainsKey($curKey)) {
+        [double]$p.stepEstimates[$curKey]
+    } else {
+        5.0
+    }
+
+    if ($CurrentStepFractionOverride -ge 0) {
+        $fraction = [math]::Min(1.0, [math]::Max(0.0, $CurrentStepFractionOverride))
+        $currentContribution = $estStep * $fraction
+        $currentRemaining = [math]::Max(0.0, $estStep * (1.0 - $fraction))
+    } else {
+        $currentContribution = [math]::Min($CurrentStepElapsedSeconds, $estStep * 0.95)
+        $currentRemaining = [math]::Max(0.0, $estStep - $CurrentStepElapsedSeconds)
+    }
+
+    $futureWeight = 0.0
+    foreach ($key in $p.plannedSteps) {
+        if (-not $p.completedSteps.Contains($key) -and $key -ne $curKey) {
+            $futureWeight += [double]$p.stepEstimates[$key]
+        }
+    }
+
+    $completedSoFar = $p.completedWeight + $currentContribution
+    $pct = [math]::Min(99, [math]::Max(0, [math]::Floor(($completedSoFar / $p.totalEstimatedSeconds) * 100)))
+    $remainingSeconds = $currentRemaining + $futureWeight
+    $totalElapsedSeconds = $p.pipelineStopwatch.Elapsed.TotalSeconds
+
+    return @{
+        Percent             = $pct
+        RemainingSeconds    = $remainingSeconds
+        TotalElapsedSeconds = $totalElapsedSeconds
+        CurrentStepEstimate = $estStep
+        IsCalibrated        = $p.isCalibrated
+    }
+}
+
+function Format-DurationShort {
+    param([double]$Seconds)
+    $clamped = [math]::Max(0, [math]::Round($Seconds))
+    $ts = [TimeSpan]::FromSeconds($clamped)
+    if ($ts.TotalHours -ge 1) {
+        return "{0:hh\:mm\:ss}" -f $ts
+    }
+    return "{0:mm\:ss}" -f $ts
+}
+
+function Format-OverallProgressBar {
+    param(
+        [hashtable]$Snapshot
+    )
+
+    if ($null -eq $Snapshot) { return '' }
+
+    $barWidth = 24
+    try {
+        $winWidth = [Console]::WindowWidth
+        if ($winWidth -gt 0 -and $winWidth -lt 72) {
+            $barWidth = [math]::Max(10, $winWidth - 48)
+        }
+    } catch { }
+
+    $pct = [int]$Snapshot.Percent
+    $filled = [math]::Floor(($pct / 100) * $barWidth)
+    $empty = $barWidth - $filled
+    $bar = ($SYM_BLOCK * $filled) + ($SYM_SHADE * $empty)
+
+    $elapsedStr = Format-DurationShort -Seconds $Snapshot.TotalElapsedSeconds
+    $etaPrefix = if ($Snapshot.IsCalibrated) { "~" } else { "~" }
+    $etaStr = if ($Snapshot.RemainingSeconds -le 0.5) { "${etaPrefix}00:00+" } else { "$etaPrefix$(Format-DurationShort -Seconds $Snapshot.RemainingSeconds)" }
+    $pctPadded = $pct.ToString().PadLeft(3)
+
+    return "${ESC}[90mOverall [${ESC}[32m$bar${ESC}[90m] ${ESC}[37m$pctPadded%${ESC}[90m | Elapsed $elapsedStr | ETA $etaStr${ESC}[0m"
+}
+
+function Write-LiveProgressLines {
+    param(
+        [Parameter(Mandatory = $true)] [string]$Line1,
+        [string]$Line2 = '',
+        [bool]$IsRedraw = $false
+    )
+
+    if ([Console]::IsOutputRedirected) { return }
+
+    if ([string]::IsNullOrWhiteSpace($Line2)) {
+        [Console]::Write("`r${ESC}[2K$Line1")
+    } elseif ($IsRedraw) {
+        [Console]::Write("${ESC}[1A`r${ESC}[2K$Line1`n${ESC}[2K$Line2")
+    } else {
+        [Console]::Write("`r${ESC}[2K$Line1`n${ESC}[2K$Line2")
+    }
+}
+
+function Clear-LiveProgressLines {
+    param(
+        [bool]$HasSecondLine = $false,
+        [bool]$HadOutput = $false
+    )
+
+    if ([Console]::IsOutputRedirected -or -not $HadOutput) { return }
+
+    if ($HasSecondLine) {
+        [Console]::Write("`r${ESC}[2K${ESC}[1A`r${ESC}[2K")
+    } else {
+        [Console]::Write("`r${ESC}[2K")
+    }
+}
+
+# ==============================================================================
 # TERMINAL UI & PROCESS HELPERS
 # ==============================================================================
 
@@ -586,9 +900,11 @@ function Invoke-StepWithSpinner {
         [Parameter(Mandatory = $true)] [string]$Title,
         [Parameter(Mandatory = $true)] [string]$FilePath,
         [string[]]$ArgumentList = @(),
-        [string]$WorkingDirectory = (Get-Location).Path
+        [string]$WorkingDirectory = (Get-Location).Path,
+        [string]$StepKey = ''
     )
 
+    Set-CurrentPipelineStep -StepKey $StepKey
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
     $cmd = Get-Command $FilePath -ErrorAction Stop
@@ -634,21 +950,30 @@ function Invoke-StepWithSpinner {
     } -MessageData $errBuilder
 
     [Console]::Write("${ESC}[?25l")
+    $i = 0
+    $hasSecondLine = $false
     try {
         [void]$proc.Start()
         $proc.BeginOutputReadLine()
         $proc.BeginErrorReadLine()
 
-        $i = 0
         while (-not $proc.WaitForExit(80)) {
             $frame = $SPINNER_FRAMES[$i % $SPINNER_FRAMES.Count]
             $elapsed = "{0:mm\:ss}" -f $sw.Elapsed
-            [Console]::Write("`r${ESC}[2K${ESC}[36m$frame${ESC}[0m $Title ${ESC}[90m[$elapsed]${ESC}[0m")
+            $snapshot = Get-PipelineProgressSnapshot -CurrentStepElapsedSeconds $sw.Elapsed.TotalSeconds
+            $estSuffix = if ($null -ne $snapshot -and -not [string]::IsNullOrWhiteSpace($StepKey)) {
+                " / ~$(Format-DurationShort -Seconds $snapshot.CurrentStepEstimate)"
+            } else { '' }
+            $line1 = "${ESC}[36m$frame${ESC}[0m $Title ${ESC}[90m[$elapsed$estSuffix]${ESC}[0m"
+            $line2 = Format-OverallProgressBar -Snapshot $snapshot
+            $hasSecondLine = -not [string]::IsNullOrWhiteSpace($line2)
+            Write-LiveProgressLines -Line1 $line1 -Line2 $line2 -IsRedraw ($i -gt 0)
             $i++
         }
         $proc.WaitForExit()
     }
     finally {
+        Clear-LiveProgressLines -HasSecondLine $hasSecondLine -HadOutput ($i -gt 0)
         [Console]::Write("${ESC}[?25h")
         Unregister-Event -SourceIdentifier $outEvent.Name -ErrorAction SilentlyContinue
         Unregister-Event -SourceIdentifier $errEvent.Name -ErrorAction SilentlyContinue
@@ -658,10 +983,12 @@ function Invoke-StepWithSpinner {
     $elapsedFinal = "{0:mm\:ss}" -f $sw.Elapsed
 
     if ($proc.ExitCode -eq 0) {
+        Complete-PipelineStep -StepKey $StepKey -Title $Title -ElapsedSeconds $sw.Elapsed.TotalSeconds
         Write-StepStatus -State 'ok' -Message $Title -Detail $elapsedFinal
         return $outBuilder.ToString()
     }
     else {
+        Set-CurrentPipelineStep -StepKey ''
         Write-StepStatus -State 'fail' -Message "$Title (Exit code $($proc.ExitCode))" -Detail $elapsedFinal
         $combinedLogs = ($outBuilder.ToString() + "`n" + $errBuilder.ToString()).Trim()
         if (-not [string]::IsNullOrWhiteSpace($combinedLogs)) {
@@ -677,9 +1004,11 @@ function Invoke-ActionWithSpinner {
     param(
         [Parameter(Mandatory = $true)] [string]$Title,
         [Parameter(Mandatory = $true)] [scriptblock]$Action,
-        [hashtable]$Variables = @{}
+        [hashtable]$Variables = @{},
+        [string]$StepKey = ''
     )
 
+    Set-CurrentPipelineStep -StepKey $StepKey
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
     $ps = [powershell]::Create()
@@ -690,12 +1019,20 @@ function Invoke-ActionWithSpinner {
     $asyncResult = $ps.BeginInvoke()
 
     [Console]::Write("${ESC}[?25l")
+    $i = 0
+    $hasSecondLine = $false
     try {
-        $i = 0
         while (-not $asyncResult.IsCompleted) {
             $frame = $SPINNER_FRAMES[$i % $SPINNER_FRAMES.Count]
             $elapsed = "{0:mm\:ss}" -f $sw.Elapsed
-            [Console]::Write("`r${ESC}[2K${ESC}[36m$frame${ESC}[0m $Title ${ESC}[90m[$elapsed]${ESC}[0m")
+            $snapshot = Get-PipelineProgressSnapshot -CurrentStepElapsedSeconds $sw.Elapsed.TotalSeconds
+            $estSuffix = if ($null -ne $snapshot -and -not [string]::IsNullOrWhiteSpace($StepKey)) {
+                " / ~$(Format-DurationShort -Seconds $snapshot.CurrentStepEstimate)"
+            } else { '' }
+            $line1 = "${ESC}[36m$frame${ESC}[0m $Title ${ESC}[90m[$elapsed$estSuffix]${ESC}[0m"
+            $line2 = Format-OverallProgressBar -Snapshot $snapshot
+            $hasSecondLine = -not [string]::IsNullOrWhiteSpace($line2)
+            Write-LiveProgressLines -Line1 $line1 -Line2 $line2 -IsRedraw ($i -gt 0)
             Start-Sleep -Milliseconds 80
             $i++
         }
@@ -706,15 +1043,24 @@ function Invoke-ActionWithSpinner {
         }
 
         $sw.Stop()
+        Clear-LiveProgressLines -HasSecondLine $hasSecondLine -HadOutput ($i -gt 0)
+        $hasSecondLine = $false
+        $i = 0
+        Complete-PipelineStep -StepKey $StepKey -Title $Title -ElapsedSeconds $sw.Elapsed.TotalSeconds
         Write-StepStatus -State 'ok' -Message $Title -Detail ("{0:mm\:ss}" -f $sw.Elapsed)
         return $result
     }
     catch {
         $sw.Stop()
+        Clear-LiveProgressLines -HasSecondLine $hasSecondLine -HadOutput ($i -gt 0)
+        $hasSecondLine = $false
+        $i = 0
+        Set-CurrentPipelineStep -StepKey ''
         Write-StepStatus -State 'fail' -Message $Title -Detail ("{0:mm\:ss}" -f $sw.Elapsed)
         throw
     }
     finally {
+        Clear-LiveProgressLines -HasSecondLine $hasSecondLine -HadOutput ($i -gt 0)
         [Console]::Write("${ESC}[?25h")
         $ps.Dispose()
     }
@@ -724,9 +1070,11 @@ function Send-AabWithProgress {
     param(
         [Parameter(Mandatory = $true)] [string]$UploadUrl,
         [Parameter(Mandatory = $true)] [string]$FilePath,
-        [Parameter(Mandatory = $true)] [string]$Token
+        [Parameter(Mandatory = $true)] [string]$Token,
+        [string]$StepKey = 'upload_aab'
     )
 
+    Set-CurrentPipelineStep -StepKey $StepKey
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Add-Type -AssemblyName System.Net.Http
 
@@ -742,6 +1090,8 @@ function Send-AabWithProgress {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
     [Console]::Write("${ESC}[?25l")
+    $i = 0
+    $hasSecondLine = $false
     try {
         $streamContent = New-Object System.Net.Http.StreamContent($fileStream)
         $streamContent.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/octet-stream")
@@ -751,28 +1101,42 @@ function Send-AabWithProgress {
         $barWidth = 28
         while (-not $uploadTask.Wait(80)) {
             $sentBytes = $fileStream.Position
-            $pct = if ($totalBytes -gt 0) { [math]::Min(100, [math]::Floor(($sentBytes / $totalBytes) * 100)) } else { 0 }
+            $fraction = if ($totalBytes -gt 0) { [math]::Min(1.0, ($sentBytes / $totalBytes)) } else { 0.0 }
+            $pct = [math]::Min(100, [math]::Floor($fraction * 100))
             $filled = [math]::Floor(($pct / 100) * $barWidth)
             $empty = $barWidth - $filled
             $bar = ($SYM_BLOCK * $filled) + ($SYM_SHADE * $empty)
             $sentMB = "{0:N1}" -f ($sentBytes / 1MB)
 
             $statusText = if ($pct -ge 100) { "Finalizing on Google Play..." } else { "$sentMB / $totalMB MB" }
-            [Console]::Write("`r${ESC}[2K${ESC}[36m${SYM_UP}${ESC}[0m Uploading AAB [${ESC}[36m$bar${ESC}[0m] $pct% ${ESC}[90m($statusText)${ESC}[0m")
+            $line1 = "${ESC}[36m${SYM_UP}${ESC}[0m Uploading AAB [${ESC}[36m$bar${ESC}[0m] $pct% ${ESC}[90m($statusText)${ESC}[0m"
+            $snapshot = Get-PipelineProgressSnapshot -CurrentStepElapsedSeconds $sw.Elapsed.TotalSeconds -CurrentStepFractionOverride $fraction
+            $line2 = Format-OverallProgressBar -Snapshot $snapshot
+            $hasSecondLine = -not [string]::IsNullOrWhiteSpace($line2)
+            Write-LiveProgressLines -Line1 $line1 -Line2 $line2 -IsRedraw ($i -gt 0)
+            $i++
         }
 
         $response = $uploadTask.GetAwaiter().GetResult()
         $responseBody = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
 
+        Clear-LiveProgressLines -HasSecondLine $hasSecondLine -HadOutput ($i -gt 0)
+        $hasSecondLine = $false
+        $i = 0
+
         if (-not $response.IsSuccessStatusCode) {
+            Set-CurrentPipelineStep -StepKey ''
             Write-StepStatus -State 'fail' -Message "Uploading AAB ($totalMB MB)" -Detail ("{0:mm\:ss}" -f $sw.Elapsed)
             throw "HTTP $([int]$response.StatusCode) ($($response.ReasonPhrase)): $responseBody"
         }
 
+        $sw.Stop()
+        Complete-PipelineStep -StepKey $StepKey -Title "Uploading AAB" -ElapsedSeconds $sw.Elapsed.TotalSeconds
         Write-StepStatus -State 'ok' -Message "Uploaded AAB ($totalMB MB)" -Detail ("{0:mm\:ss}" -f $sw.Elapsed)
         return ($responseBody | ConvertFrom-Json)
     }
     finally {
+        Clear-LiveProgressLines -HasSecondLine $hasSecondLine -HadOutput ($i -gt 0)
         [Console]::Write("${ESC}[?25h")
         $fileStream.Dispose()
         $httpClient.Dispose()
@@ -972,7 +1336,7 @@ function Invoke-PlayInternalTrackPublish {
 
     $token = $AccessToken
     if ([string]::IsNullOrWhiteSpace($token)) {
-        $token = (Invoke-StepWithSpinner -Title "Fetching Google Play access token" -FilePath "gcloud" -ArgumentList @("auth", "print-access-token", "--scopes=https://www.googleapis.com/auth/androidpublisher")).Trim()
+        $token = (Invoke-StepWithSpinner -Title "Fetching Google Play access token" -StepKey "fetch_access_token" -FilePath "gcloud" -ArgumentList @("auth", "print-access-token", "--scopes=https://www.googleapis.com/auth/androidpublisher")).Trim()
     }
     if ([string]::IsNullOrWhiteSpace($token)) {
         throw 'Failed to obtain Google access token for Android Publisher API.'
@@ -1006,7 +1370,7 @@ function Invoke-PlayInternalTrackPublish {
 
     try {
         try {
-            $editResponse = Invoke-ActionWithSpinner -Title "Creating Play Console edit" -Variables @{
+            $editResponse = Invoke-ActionWithSpinner -Title "Creating Play Console edit" -StepKey "create_edit" -Variables @{
                 baseUrl = $baseUrl
                 headers = $headers
             } -Action {
@@ -1022,7 +1386,7 @@ function Invoke-PlayInternalTrackPublish {
         $uploadUrl = "https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/$PackageName/edits/$editId/bundles?uploadType=media"
 
         try {
-            $uploadResponse = Send-AabWithProgress -UploadUrl $uploadUrl -FilePath $resolvedAabPath -Token $token
+            $uploadResponse = Send-AabWithProgress -UploadUrl $uploadUrl -FilePath $resolvedAabPath -Token $token -StepKey "upload_aab"
         } catch {
             $details = Get-ErrorDetails -ErrorRecord $_
             if ($details -match 'Version code\s+\d+\s+has already been used') {
@@ -1046,7 +1410,7 @@ function Invoke-PlayInternalTrackPublish {
         $trackUrl = "$baseUrl/$editId/tracks/$Track"
 
         try {
-            Invoke-ActionWithSpinner -Title "Assigning version $versionCode to '$Track' track" -Variables @{
+            Invoke-ActionWithSpinner -Title "Assigning version $versionCode to '$Track' track" -StepKey "assign_track" -Variables @{
                 fn = $setTrackReleaseScript
                 status = $releaseStatus
                 trackUrl = $trackUrl
@@ -1064,7 +1428,7 @@ function Invoke-PlayInternalTrackPublish {
         }
 
         try {
-            Invoke-ActionWithSpinner -Title "Committing Play Console edit" -Variables @{
+            Invoke-ActionWithSpinner -Title "Committing Play Console edit" -StepKey "commit_edit" -Variables @{
                 commitUrl = "$baseUrl/${editId}:commit"
                 headers = $headers
             } -Action {
@@ -1142,6 +1506,23 @@ function Invoke-PlayInternalTrackPublish {
 $pipelineStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 Write-Host "`n${ESC}[1mHousekeepr Build & Deploy Pipeline${ESC}[0m`n"
 
+$script:StepTimings = Get-StepTimingData -RepoRoot $ProjectPath
+$plannedSteps = @()
+if (-not $DryRun) {
+    if (-not $SkipPublish) {
+        $plannedSteps += @('activate_service_account', 'fetch_access_token', 'verify_permissions')
+    }
+    if (-not $PublishOnly) {
+        $plannedSteps += @('increment_version', 'build_appbundle')
+    }
+    if (-not $SkipPublish) {
+        $plannedSteps += @('create_edit', 'upload_aab', 'assign_track', 'commit_edit')
+    }
+}
+if ($plannedSteps.Count -gt 0) {
+    Initialize-PipelineProgress -RepoRoot $ProjectPath -PlannedSteps $plannedSteps -PipelineStopwatch $pipelineStopwatch
+}
+
 if ($DryRun) {
     Write-StepStatus -State 'warn' -Message "DRY RUN ENABLED"
 }
@@ -1170,11 +1551,11 @@ try {
     if (-not $SkipPublish -and -not $DryRun) {
         $resolvedKey = Resolve-RepoPath -Path $KeyFile -BasePath $ProjectPath
 
-        $null = Invoke-StepWithSpinner -Title "Activating service account" -FilePath "gcloud" -ArgumentList @(
+        $null = Invoke-StepWithSpinner -Title "Activating service account" -StepKey "activate_service_account" -FilePath "gcloud" -ArgumentList @(
             "auth", "activate-service-account", "--key-file=$resolvedKey"
         )
 
-        $cachedAccessToken = (Invoke-StepWithSpinner -Title "Fetching Google Play access token" -FilePath "gcloud" -ArgumentList @(
+        $cachedAccessToken = (Invoke-StepWithSpinner -Title "Fetching Google Play access token" -StepKey "fetch_access_token" -FilePath "gcloud" -ArgumentList @(
             "auth", "print-access-token", "--scopes=https://www.googleapis.com/auth/androidpublisher"
         )).Trim()
 
@@ -1186,7 +1567,7 @@ try {
         $appCheckUrl = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$PackageName/edits"
 
         try {
-            Invoke-ActionWithSpinner -Title "Verifying Google Play API permissions" -Variables @{
+            Invoke-ActionWithSpinner -Title "Verifying Google Play API permissions" -StepKey "verify_permissions" -Variables @{
                 appCheckUrl = $appCheckUrl
                 headers = $headers
             } -Action {
@@ -1209,13 +1590,17 @@ try {
         Write-StepStatus -State 'info' -Message "PublishOnly mode: using existing AAB" -Detail $AabPath
     }
     else {
-        $null = Invoke-StepWithSpinner -Title "Incrementing patch version" -FilePath "pubversion" -ArgumentList @("patch")
+        $null = Invoke-StepWithSpinner -Title "Incrementing patch version" -StepKey "increment_version" -FilePath "pubversion" -ArgumentList @("patch")
 
         Start-Sleep -Seconds 1
 
-        $null = Invoke-StepWithSpinner -Title "Building release App Bundle" -FilePath "flutter" -ArgumentList @(
-            "build", "appbundle", "--release", "--obfuscate", "--split-debug-info=./debug_info", "--dart-define-from-file=.env"
+        # $flutterBuildArgs = @(
+        #     "build", "appbundle", "--release", "--split-debug-info=./debug_info", "--dart-define-from-file=.env"#, "--obfuscate"
+        # )
+        $flutterBuildArgs = @(
+            "build", "appbundle", "--release", "--dart-define-from-file=.env", "--no-validate-deferred-components"
         )
+        $null = Invoke-StepWithSpinner -Title "Building release App Bundle" -StepKey "build_appbundle" -FilePath "flutter" -ArgumentList $flutterBuildArgs
     }
 
     # --- PUBLISH PHASE ---
@@ -1229,11 +1614,20 @@ try {
             -ReleaseConfigPath $ReleaseConfigPath `
             -AccessToken $cachedAccessToken `
             -DryRun:$DryRun
+
+        $pipelineStopwatch.Stop()
+        if (-not $DryRun) {
+            $totalTime = Format-DurationShort -Seconds $pipelineStopwatch.Elapsed.TotalSeconds
+            $fullBar = $SYM_BLOCK * 24
+            Write-Host "${ESC}[90mOverall [${ESC}[32m$fullBar${ESC}[90m] ${ESC}[32m100%${ESC}[90m | Completed in $totalTime${ESC}[0m`n"
+        }
     }
     else {
         $pipelineStopwatch.Stop()
-        $totalTime = "{0:mm\:ss}" -f $pipelineStopwatch.Elapsed
-        Write-Host "`n${ESC}[32m${SYM_OK} Build completed in $totalTime (publish skipped).${ESC}[0m`n"
+        $totalTime = Format-DurationShort -Seconds $pipelineStopwatch.Elapsed.TotalSeconds
+        $fullBar = $SYM_BLOCK * 24
+        Write-Host "`n${ESC}[90mOverall [${ESC}[32m$fullBar${ESC}[90m] ${ESC}[32m100%${ESC}[90m | Completed in $totalTime${ESC}[0m"
+        Write-Host "${ESC}[32m${SYM_OK} Build completed in $totalTime (publish skipped).${ESC}[0m`n"
     }
 }
 catch {

@@ -1,56 +1,52 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:hive/hive.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../contracts/health_data_store.dart';
 import '../contracts/health_record_metadata.dart';
+import 'storage_backend_stub.dart';
+import 'storage_backend_stub.dart'
+    if (dart.library.io) 'storage_backend_io.dart'
+    if (dart.library.js_interop) 'storage_backend_web.dart' as backend_impl;
 
-/// Signature for resolving the root directory where `health_keepr.db` lives.
-typedef HealthStorageDirectoryProvider = Future<Directory> Function();
+/// Signature for resolving a custom storage path (primarily for VM tests).
+typedef HealthStoragePathProvider = Future<String> Function();
 
 /// Hive-backed local-only implementation of [HealthDataStore].
 ///
-/// Lazily initializes a dedicated `health_keepr.db` directory on first access,
-/// keeping all HealthKeepr and mini-app data strictly on-device and isolated
-/// from HouseKeepr's Firebase/household boxes.
+/// Works on both Android (`health_keepr.db` directory) and Web (IndexedDB),
+/// lazily initializing on first access and keeping all HealthKeepr and
+/// mini-app data strictly on-device and isolated from HouseKeepr's storage.
 class LocalHealthDataStore implements HealthDataStore {
   LocalHealthDataStore({
-    HealthStorageDirectoryProvider? directoryProvider,
-  }) : _directoryProvider = directoryProvider ?? _defaultDirectoryProvider;
+    HealthStoragePathProvider? storagePathProvider,
+  })  : _storagePathProvider = storagePathProvider,
+        _backend = backend_impl.createHealthStorageBackend();
 
-  static const String _dbDirectoryName = 'health_keepr.db';
   static const String _manifestBoxName = '__health_keepr_manifest__';
 
-  final HealthStorageDirectoryProvider _directoryProvider;
+  final HealthStoragePathProvider? _storagePathProvider;
+  final HealthStorageBackend _backend;
+
   String? _dbPath;
+  bool _initialized = false;
   final Map<String, Box<String>> _openBoxes = <String, Box<String>>{};
   Box<String>? _manifestBox;
   Future<void>? _initFuture;
 
-  static Future<Directory> _defaultDirectoryProvider() async {
-    final appDocs = await getApplicationDocumentsDirectory();
-    return Directory('${appDocs.path}${Platform.pathSeparator}$_dbDirectoryName');
-  }
-
-  /// Whether the underlying `health_keepr.db` directory has been initialized.
-  bool get isInitialized => _dbPath != null;
+  /// Whether the underlying `health_keepr.db` store has been initialized.
+  bool get isInitialized => _initialized;
 
   Future<void> _ensureInitialized() {
     return _initFuture ??= _init();
   }
 
   Future<void> _init() async {
-    final dir = await _directoryProvider();
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    _dbPath = dir.path;
-    _manifestBox = await Hive.openBox<String>(
-      _manifestBoxName,
-      path: _dbPath,
-    );
+    final customPath =
+        _storagePathProvider != null ? await _storagePathProvider() : null;
+    _dbPath = await _backend.init(customPath: customPath);
+    _manifestBox = await _backend.openBox(_manifestBoxName, _dbPath);
+    _initialized = true;
   }
 
   String _boxName(String moduleId, String collection) {
@@ -70,7 +66,7 @@ class LocalHealthDataStore implements HealthDataStore {
     if (existing != null && existing.isOpen) {
       return existing;
     }
-    final box = await Hive.openBox<String>(name, path: _dbPath);
+    final box = await _backend.openBox(name, _dbPath);
     _openBoxes[name] = box;
     await _registerCollectionForModule(moduleId, name);
     return box;
@@ -176,13 +172,12 @@ class LocalHealthDataStore implements HealthDataStore {
           await openBox.clear();
           await openBox.deleteFromDisk();
         } else {
-          await Hive.deleteBoxFromDisk(name, path: _dbPath);
+          await _backend.deleteBox(name, _dbPath);
         }
       }
       await manifest.delete(moduleId);
     }
 
-    // Also clear any open boxes matching the module prefix if not yet flushed.
     final safeModule = moduleId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
     final prefix = 'hk_${safeModule}__';
     final matchingKeys =
@@ -210,5 +205,6 @@ class LocalHealthDataStore implements HealthDataStore {
     _manifestBox = null;
     _initFuture = null;
     _dbPath = null;
+    _initialized = false;
   }
 }

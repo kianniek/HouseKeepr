@@ -42,4 +42,5 @@
     <string name="preview_tiramisu_cocoa">Cocoa powder</string>
     <string name="preview_tiramisu_eggs">Eggs</string>
     <string name="title_open_gym">OpenGym</string>
+    <string name="openGymName">openGym</string>
 </resources>

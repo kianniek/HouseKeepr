@@ -4,13 +4,21 @@ import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.os.Bundle
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.FlutterInjector
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterJNI
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val channelName = "housekeepr/notification_intents"
     private val widgetChannelName = "housekeepr/widget_actions"
+    private val healthConnectChannelName = "housekeepr/health_connect"
+    private val deferredProgressChannelName = "housekeepr/deferred_component_progress"
+    private val deferredActionsChannelName = "housekeepr/deferred_component_actions"
+
+    private lateinit var healthConnectBridge: HealthConnectBridge
 
     private var pendingAction: String? = null
     private var shouldOpenShopping = false
@@ -22,6 +30,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        healthConnectBridge = HealthConnectBridge(this)
         launchedFromOnNewIntent = false
         handleIntent(intent)
         WidgetPreviewHelper.updateAll(this)
@@ -118,6 +127,72 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        // Health Connect Channel
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            healthConnectChannelName
+        ).setMethodCallHandler { call, result ->
+            healthConnectBridge.onMethodCall(call, result)
+        }
+
+        // Deferred Component Progress & Actions Channels
+        val deferredManager = FlutterInjector.instance()
+            .deferredComponentManager() as? FeatureDeliveryDeferredComponentManager
+        deferredManager?.setActivity(this)
+        val engineJni = runCatching {
+            val field = FlutterEngine::class.java.getDeclaredField("flutterJNI")
+            field.isAccessible = true
+            field.get(flutterEngine) as? FlutterJNI
+        }.getOrNull()
+        if (engineJni != null) {
+            deferredManager?.setJNI(engineJni)
+        }
+
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            deferredProgressChannelName
+        ).setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                deferredManager?.setProgressSink(events)
+            }
+
+            override fun onCancel(arguments: Any?) {
+                deferredManager?.setProgressSink(null)
+            }
+        })
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            deferredActionsChannelName
+        ).setMethodCallHandler { call, result ->
+            val moduleName = call.argument<String>("moduleName")
+            when (call.method) {
+                "getInstallState" -> {
+                    if (moduleName.isNullOrBlank()) {
+                        result.error("INVALID_ARGS", "moduleName is required", null)
+                    } else {
+                        result.success(deferredManager?.getLatestProgress(moduleName))
+                    }
+                }
+                "cancelInstall" -> {
+                    if (moduleName.isNullOrBlank()) {
+                        result.error("INVALID_ARGS", "moduleName is required", null)
+                    } else {
+                        result.success(deferredManager?.cancelInstall(moduleName) ?: false)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        val deferredManager = FlutterInjector.instance()
+            .deferredComponentManager() as? FeatureDeliveryDeferredComponentManager
+        deferredManager?.setActivity(null)
+        deferredManager?.setProgressSink(null)
+        super.onDestroy()
     }
 
     private fun refreshAppWidgetById(

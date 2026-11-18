@@ -4,13 +4,28 @@ import 'package:health_keepr/health_keepr.dart';
 import 'src/state/open_gym_controller.dart';
 import 'src/ui/open_gym_dashboard_screen.dart';
 
+export 'src/audio/open_gym_sound_service.dart';
+export 'src/audio/wav_synthesizer.dart';
+export 'src/data/exercise_media_service.dart';
+export 'src/models/body_measurement.dart';
 export 'src/models/exercise.dart';
 export 'src/models/exercise_set.dart';
+export 'src/models/health_connect_models.dart';
+export 'src/models/programme.dart';
+export 'src/models/progress_photo.dart';
+export 'src/models/server_connection.dart';
+export 'src/models/weigh_in.dart';
 export 'src/models/workout_log.dart';
 export 'src/models/workout_template.dart';
+export 'src/state/analytics_service.dart';
 export 'src/state/open_gym_controller.dart';
 export 'src/state/open_gym_repository.dart';
 export 'src/state/personal_record_service.dart';
+export 'src/state/progression_service.dart';
+export 'src/sync/health_connect_service.dart';
+export 'src/sync/open_gym_server_client.dart';
+export 'src/sync/open_gym_sync_service.dart';
+export 'src/sync/webdav_client.dart';
 
 /// Root entry widget for the deferred OpenGym mini-app.
 ///

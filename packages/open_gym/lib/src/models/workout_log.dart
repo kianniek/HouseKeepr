@@ -9,23 +9,36 @@ class WorkoutEntry {
     required this.exerciseName,
     required this.bodyPart,
     required this.equipment,
+    this.mode = ExerciseMode.reps,
     required this.sets,
     this.restSeconds = 90,
     this.notes,
+    this.countForProgression = true,
+    this.supersetId,
+    this.progressionMode = 'linear',
   });
 
   factory WorkoutEntry.fromJson(Map<String, dynamic> json) {
     final rawSets = json['sets'] as List<dynamic>? ?? const <dynamic>[];
+    final modeName = json['mode'] as String?;
+    final parsedMode = ExerciseMode.values.firstWhere(
+      (m) => m.name == modeName,
+      orElse: () => ExerciseMode.reps,
+    );
     return WorkoutEntry(
       exerciseId: (json['exerciseId'] as String?) ?? '',
       exerciseName: (json['exerciseName'] as String?) ?? '',
       bodyPart: (json['bodyPart'] as String?) ?? 'full body',
       equipment: (json['equipment'] as String?) ?? 'body weight',
+      mode: parsedMode,
       sets: rawSets
           .map((e) => ExerciseSet.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
       restSeconds: (json['restSeconds'] as num?)?.toInt() ?? 90,
       notes: json['notes'] as String?,
+      countForProgression: (json['countForProgression'] as bool?) ?? true,
+      supersetId: json['supersetId'] as String?,
+      progressionMode: (json['progressionMode'] as String?) ?? 'linear',
     );
   }
 
@@ -33,27 +46,45 @@ class WorkoutEntry {
   final String exerciseName;
   final String bodyPart;
   final String equipment;
+  final ExerciseMode mode;
   final List<ExerciseSet> sets;
   final int restSeconds;
   final String? notes;
+  final bool countForProgression;
+  final String? supersetId;
+  final String progressionMode;
 
   double get totalVolume => sets
       .where((s) => s.isCompleted)
       .fold<double>(0, (sum, s) => sum + s.volume);
 
   WorkoutEntry copyWith({
+    String? exerciseId,
+    String? exerciseName,
+    String? bodyPart,
+    String? equipment,
+    ExerciseMode? mode,
     List<ExerciseSet>? sets,
     int? restSeconds,
     String? notes,
+    bool clearNotes = false,
+    bool? countForProgression,
+    String? supersetId,
+    bool clearSuperset = false,
+    String? progressionMode,
   }) {
     return WorkoutEntry(
-      exerciseId: exerciseId,
-      exerciseName: exerciseName,
-      bodyPart: bodyPart,
-      equipment: equipment,
+      exerciseId: exerciseId ?? this.exerciseId,
+      exerciseName: exerciseName ?? this.exerciseName,
+      bodyPart: bodyPart ?? this.bodyPart,
+      equipment: equipment ?? this.equipment,
+      mode: mode ?? this.mode,
       sets: sets ?? this.sets,
       restSeconds: restSeconds ?? this.restSeconds,
-      notes: notes ?? this.notes,
+      notes: clearNotes ? null : (notes ?? this.notes),
+      countForProgression: countForProgression ?? this.countForProgression,
+      supersetId: clearSuperset ? null : (supersetId ?? this.supersetId),
+      progressionMode: progressionMode ?? this.progressionMode,
     );
   }
 
@@ -62,9 +93,13 @@ class WorkoutEntry {
         'exerciseName': exerciseName,
         'bodyPart': bodyPart,
         'equipment': equipment,
+        if (mode != ExerciseMode.reps) 'mode': mode.name,
         'sets': sets.map((s) => s.toJson()).toList(),
         'restSeconds': restSeconds,
         if (notes != null) 'notes': notes,
+        if (!countForProgression) 'countForProgression': false,
+        if (supersetId != null) 'supersetId': supersetId,
+        if (progressionMode != 'linear') 'progressionMode': progressionMode,
       };
 }
 
@@ -79,6 +114,11 @@ class WorkoutLog with HealthRecordMetadata {
     this.durationSeconds = 0,
     required this.entries,
     this.notes,
+    this.countForProgression = true,
+    this.healthConnectId,
+    this.caloriesKcal,
+    this.avgHeartRateBpm,
+    this.maxHeartRateBpm,
     required this.updatedAt,
     this.isSynced = false,
   });
@@ -88,6 +128,7 @@ class WorkoutLog with HealthRecordMetadata {
     required String title,
     List<WorkoutEntry> entries = const <WorkoutEntry>[],
     String? notes,
+    bool countForProgression = true,
   }) {
     final now = HealthRecordMetadata.nowUtcIso();
     return WorkoutLog(
@@ -97,6 +138,7 @@ class WorkoutLog with HealthRecordMetadata {
       startedAt: now,
       entries: entries,
       notes: notes,
+      countForProgression: countForProgression,
       updatedAt: now,
       isSynced: false,
     );
@@ -118,6 +160,11 @@ class WorkoutLog with HealthRecordMetadata {
           )
           .toList(),
       notes: json['notes'] as String?,
+      countForProgression: (json['countForProgression'] as bool?) ?? true,
+      healthConnectId: json['healthConnectId'] as String?,
+      caloriesKcal: (json['caloriesKcal'] as num?)?.toDouble(),
+      avgHeartRateBpm: (json['avgHeartRateBpm'] as num?)?.toInt(),
+      maxHeartRateBpm: (json['maxHeartRateBpm'] as num?)?.toInt(),
       updatedAt:
           (json['updatedAt'] as String?) ?? HealthRecordMetadata.nowUtcIso(),
       isSynced: (json['isSynced'] as bool?) ?? false,
@@ -133,6 +180,11 @@ class WorkoutLog with HealthRecordMetadata {
   final int durationSeconds;
   final List<WorkoutEntry> entries;
   final String? notes;
+  final bool countForProgression;
+  final String? healthConnectId;
+  final double? caloriesKcal;
+  final int? avgHeartRateBpm;
+  final int? maxHeartRateBpm;
   @override
   final String updatedAt;
   @override
@@ -155,6 +207,11 @@ class WorkoutLog with HealthRecordMetadata {
     int? durationSeconds,
     List<WorkoutEntry>? entries,
     String? notes,
+    bool? countForProgression,
+    String? healthConnectId,
+    double? caloriesKcal,
+    int? avgHeartRateBpm,
+    int? maxHeartRateBpm,
   }) {
     return WorkoutLog(
       id: id,
@@ -165,6 +222,11 @@ class WorkoutLog with HealthRecordMetadata {
       durationSeconds: durationSeconds ?? this.durationSeconds,
       entries: entries ?? this.entries,
       notes: notes ?? this.notes,
+      countForProgression: countForProgression ?? this.countForProgression,
+      healthConnectId: healthConnectId ?? this.healthConnectId,
+      caloriesKcal: caloriesKcal ?? this.caloriesKcal,
+      avgHeartRateBpm: avgHeartRateBpm ?? this.avgHeartRateBpm,
+      maxHeartRateBpm: maxHeartRateBpm ?? this.maxHeartRateBpm,
       updatedAt: HealthRecordMetadata.nowUtcIso(),
       isSynced: false,
     );
@@ -179,5 +241,10 @@ class WorkoutLog with HealthRecordMetadata {
         'durationSeconds': durationSeconds,
         'entries': entries.map((e) => e.toJson()).toList(),
         if (notes != null) 'notes': notes,
+        if (!countForProgression) 'countForProgression': false,
+        if (healthConnectId != null) 'healthConnectId': healthConnectId,
+        if (caloriesKcal != null) 'caloriesKcal': caloriesKcal,
+        if (avgHeartRateBpm != null) 'avgHeartRateBpm': avgHeartRateBpm,
+        if (maxHeartRateBpm != null) 'maxHeartRateBpm': maxHeartRateBpm,
       };
 }

@@ -10,7 +10,7 @@ void main() {
   setUp(() {
     tempDir = Directory.systemTemp.createTempSync('health_keepr_test_');
     store = LocalHealthDataStore(
-      directoryProvider: () async => tempDir,
+      storagePathProvider: () async => tempDir.path,
     );
   });
 
@@ -72,7 +72,7 @@ void main() {
     await store.close();
 
     final reopened = LocalHealthDataStore(
-      directoryProvider: () async => tempDir,
+      storagePathProvider: () async => tempDir.path,
     );
     final persisted = await reopened.readRecord('open_gym', 'routines', id);
     expect(persisted?['title'], 'Push Day v2');

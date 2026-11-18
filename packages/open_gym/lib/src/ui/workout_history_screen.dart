@@ -39,6 +39,7 @@ class WorkoutHistoryScreen extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
+        final unit = controller.preferences.weightUnit;
         final history = controller.history;
         final prs = controller.allPersonalRecords;
 
@@ -58,7 +59,7 @@ class WorkoutHistoryScreen extends StatelessWidget {
                 Expanded(
                   child: _StatCard(
                     label: 'Total Volume',
-                    value: '${controller.totalLifetimeVolume.toStringAsFixed(0)} kg',
+                    value: '${controller.totalLifetimeVolume.toStringAsFixed(0)} $unit',
                     icon: Icons.bar_chart_rounded,
                   ),
                 ),
@@ -78,10 +79,10 @@ class WorkoutHistoryScreen extends StatelessWidget {
                       ),
                       title: Text(pr.exerciseName),
                       subtitle: Text(
-                        'Best 1RM: ${pr.bestE1RM.toStringAsFixed(1)} kg',
+                        'Best 1RM: ${pr.bestE1RM.toStringAsFixed(1)} $unit',
                       ),
                       trailing: Text(
-                        '${pr.bestWeight.toStringAsFixed(1)} kg',
+                        '${pr.bestWeight.toStringAsFixed(1)} $unit',
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -118,7 +119,7 @@ class WorkoutHistoryScreen extends StatelessWidget {
                       '${_formatDate(log.startedAt)} • '
                       '${_formatDuration(log.durationSeconds)} • '
                       '${log.completedSetsCount} sets • '
-                      '${log.totalVolume.toStringAsFixed(0)} kg',
+                      '${log.totalVolume.toStringAsFixed(0)} $unit',
                     ),
                     trailing: IconButton(
                       tooltip: 'Delete log',
@@ -136,6 +137,7 @@ class WorkoutHistoryScreen extends StatelessWidget {
   }
 
   void _showLogDetails(BuildContext context, WorkoutLog log) {
+    final unit = controller.preferences.weightUnit;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -150,7 +152,7 @@ class WorkoutHistoryScreen extends StatelessWidget {
             Text(
               '${_formatDate(log.startedAt)} • '
               '${_formatDuration(log.durationSeconds)} • '
-              '${log.totalVolume.toStringAsFixed(0)} kg volume',
+              '${log.totalVolume.toStringAsFixed(0)} $unit volume',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 16),
@@ -171,7 +173,7 @@ class WorkoutHistoryScreen extends StatelessWidget {
                     const SizedBox(height: 4),
                     ...completed.asMap().entries.map(
                           (item) => Text(
-                            'Set ${item.key + 1}: ${item.value.weight} kg × ${item.value.reps} reps'
+                            'Set ${item.key + 1}: ${item.value.weight} $unit × ${item.value.reps} reps'
                             '${item.value.isWarmup ? ' (Warm-up)' : ''}',
                           ),
                         ),

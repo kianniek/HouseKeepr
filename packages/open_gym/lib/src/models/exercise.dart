@@ -12,6 +12,7 @@ class Exercise with HealthRecordMetadata {
     this.category = 'strength',
     this.description = '',
     this.instructions = const <String>[],
+    this.muscleWeights = const <String, double>{},
     this.isCustom = false,
     required this.updatedAt,
     this.isSynced = false,
@@ -27,6 +28,7 @@ class Exercise with HealthRecordMetadata {
     String category = 'strength',
     String description = '',
     List<String> instructions = const <String>[],
+    Map<String, double> muscleWeights = const <String, double>{},
     bool isCustom = true,
   }) {
     return Exercise(
@@ -39,6 +41,7 @@ class Exercise with HealthRecordMetadata {
       category: category,
       description: description,
       instructions: instructions,
+      muscleWeights: muscleWeights,
       isCustom: isCustom,
       updatedAt: HealthRecordMetadata.nowUtcIso(),
       isSynced: false,
@@ -46,22 +49,43 @@ class Exercise with HealthRecordMetadata {
   }
 
   factory Exercise.fromJson(Map<String, dynamic> json) {
+    final rawMap = json['muscleMap'];
+    final weights = <String, double>{};
+    if (rawMap is Map && rawMap['weights'] is Map) {
+      final wMap = rawMap['weights'] as Map;
+      for (final entry in wMap.entries) {
+        final v = entry.value;
+        if (v is num) weights[entry.key.toString()] = v.toDouble();
+      }
+    } else if (json['muscleWeights'] is Map) {
+      final wMap = json['muscleWeights'] as Map;
+      for (final entry in wMap.entries) {
+        final v = entry.value;
+        if (v is num) weights[entry.key.toString()] = v.toDouble();
+      }
+    }
+
+    final secondaryRaw = json['secondaryMuscles'];
+    final secondaryMuscles = secondaryRaw is List
+        ? <String>[for (final e in secondaryRaw) e.toString()]
+        : const <String>[];
+
+    final instructionsRaw = json['instructions'];
+    final instructions = instructionsRaw is List
+        ? <String>[for (final e in instructionsRaw) e.toString()]
+        : const <String>[];
+
     return Exercise(
       id: (json['id'] as String?) ?? HealthRecordMetadata.generateId(),
       name: (json['name'] as String?) ?? '',
       bodyPart: (json['bodyPart'] as String?) ?? 'full body',
       equipment: (json['equipment'] as String?) ?? 'body weight',
       target: (json['target'] as String?) ?? '',
-      secondaryMuscles: (json['secondaryMuscles'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const <String>[],
+      secondaryMuscles: secondaryMuscles,
       category: (json['category'] as String?) ?? 'strength',
       description: (json['description'] as String?) ?? '',
-      instructions: (json['instructions'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const <String>[],
+      instructions: instructions,
+      muscleWeights: weights,
       isCustom: (json['isCustom'] as bool?) ?? false,
       updatedAt:
           (json['updatedAt'] as String?) ?? HealthRecordMetadata.nowUtcIso(),
@@ -79,11 +103,16 @@ class Exercise with HealthRecordMetadata {
   final String category;
   final String description;
   final List<String> instructions;
+  final Map<String, double> muscleWeights;
   final bool isCustom;
   @override
   final String updatedAt;
   @override
   final bool isSynced;
+
+  bool get isAssisted =>
+      equipment.toLowerCase().contains('assisted') ||
+      name.toLowerCase().contains('assisted');
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         ...metadataToJson(),
@@ -95,6 +124,7 @@ class Exercise with HealthRecordMetadata {
         'category': category,
         'description': description,
         'instructions': instructions,
+        if (muscleWeights.isNotEmpty) 'muscleWeights': muscleWeights,
         'isCustom': isCustom,
       };
 }

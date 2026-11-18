@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:flutter/services.dart' show rootBundle;
+
 import '../models/exercise.dart';
 import '../models/workout_template.dart';
 
@@ -6,6 +10,30 @@ class ExerciseCatalog {
   ExerciseCatalog._();
 
   static const String _seedTimestamp = '2026-01-01T00:00:00.000Z';
+  static const String _assetPath = 'packages/open_gym/assets/exercises.json';
+
+  /// Loads the full bundled 5,632-exercise openGym catalogue from assets.
+  ///
+  /// Falls back to [builtInExercises] if the asset bundle is unavailable
+  /// (e.g. in pure Dart unit tests).
+  static Future<List<Exercise>> loadBundledExercises() async {
+    try {
+      final raw = await rootBundle.loadString(_assetPath);
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        final result = <Exercise>[];
+        for (final item in decoded) {
+          if (item is Map) {
+            result.add(Exercise.fromJson(Map<String, dynamic>.from(item)));
+          }
+        }
+        return result;
+      }
+    } catch (_) {
+      // Fallback to built-in curated list when asset bundle is not present.
+    }
+    return List<Exercise>.from(builtInExercises);
+  }
 
   static final List<Exercise> builtInExercises = <Exercise>[
     const Exercise(
@@ -329,6 +357,8 @@ class ExerciseCatalog {
         name: 'Push Day (PPL)',
         goal: 'hypertrophy',
         split: 'ppl',
+        iconKey: 'barbell',
+        sortOrder: 0,
         description: 'Chest, shoulders, and triceps compound & isolation work.',
         entries: const <WorkoutTemplateEntry>[
           WorkoutTemplateEntry(
@@ -374,6 +404,8 @@ class ExerciseCatalog {
         name: 'Pull Day (PPL)',
         goal: 'hypertrophy',
         split: 'ppl',
+        iconKey: 'pullup',
+        sortOrder: 1,
         description: 'Back width, thickness, rear delts, and biceps.',
         entries: const <WorkoutTemplateEntry>[
           WorkoutTemplateEntry(
@@ -419,6 +451,8 @@ class ExerciseCatalog {
         name: 'Leg Day (PPL)',
         goal: 'strength',
         split: 'ppl',
+        iconKey: 'legs',
+        sortOrder: 2,
         description: 'Quads, hamstrings, glutes, and calves.',
         entries: const <WorkoutTemplateEntry>[
           WorkoutTemplateEntry(
@@ -464,6 +498,8 @@ class ExerciseCatalog {
         name: '5×5 Strength',
         goal: 'strength',
         split: 'full-body',
+        iconKey: 'overhead_press',
+        sortOrder: 3,
         description:
             'Five sets of five on core barbell lifts with linear progression.',
         entries: const <WorkoutTemplateEntry>[
@@ -495,6 +531,131 @@ class ExerciseCatalog {
             restSeconds: 150,
           ),
         ],
+      ),
+    ];
+  }
+
+  /// Named starter plans for the "Load starter plan" sheet.
+  static List<
+      ({
+        String id,
+        String title,
+        String subtitle,
+        List<WorkoutTemplate> templates,
+        Map<int, List<String>> weeklySchedule,
+      })> starterPlans() {
+    final all = starterTemplates();
+    final push = all[0];
+    final pull = all[1];
+    final legs = all[2];
+    final fiveByFive = all[3];
+
+    final upper = WorkoutTemplate.create(
+      name: 'Upper Body',
+      goal: 'hypertrophy',
+      split: 'upper-lower',
+      iconKey: 'barbell',
+      entries: <WorkoutTemplateEntry>[
+        push.entries[0],
+        pull.entries[0],
+        push.entries[2],
+        pull.entries[1],
+      ],
+    );
+    final lower = WorkoutTemplate.create(
+      name: 'Lower Body',
+      goal: 'strength',
+      split: 'upper-lower',
+      iconKey: 'legs',
+      entries: legs.entries,
+    );
+    final homeBw = WorkoutTemplate.create(
+      name: 'Bodyweight Full Body',
+      goal: 'endurance',
+      split: 'home',
+      iconKey: 'core_torso',
+      entries: const <WorkoutTemplateEntry>[
+        WorkoutTemplateEntry(
+          exerciseId: '0662',
+          exerciseName: 'Push-Up',
+          bodyPart: 'chest',
+          equipment: 'body weight',
+          targetSets: 3,
+          targetReps: 12,
+          restSeconds: 60,
+        ),
+        WorkoutTemplateEntry(
+          exerciseId: '0651',
+          exerciseName: 'Pull-Up',
+          bodyPart: 'back',
+          equipment: 'body weight',
+          targetSets: 3,
+          targetReps: 8,
+          restSeconds: 90,
+        ),
+        WorkoutTemplateEntry(
+          exerciseId: '0620',
+          exerciseName: 'Plank',
+          bodyPart: 'waist',
+          equipment: 'body weight',
+          targetSets: 3,
+          targetReps: 1,
+          restSeconds: 45,
+        ),
+      ],
+    );
+
+    return <({
+      String id,
+      String title,
+      String subtitle,
+      List<WorkoutTemplate> templates,
+      Map<int, List<String>> weeklySchedule,
+    })>[
+      (
+        id: 'ppl',
+        title: 'Push / Pull / Legs',
+        subtitle: '3 days/week • Mon, Wed, Fri',
+        templates: <WorkoutTemplate>[push, pull, legs],
+        weeklySchedule: <int, List<String>>{
+          1: <String>[push.id],
+          3: <String>[pull.id],
+          5: <String>[legs.id],
+        },
+      ),
+      (
+        id: 'ul',
+        title: 'Upper / Lower',
+        subtitle: '4 days/week • Mon, Tue, Thu, Fri',
+        templates: <WorkoutTemplate>[upper, lower],
+        weeklySchedule: <int, List<String>>{
+          1: <String>[upper.id],
+          2: <String>[lower.id],
+          4: <String>[upper.id],
+          5: <String>[lower.id],
+        },
+      ),
+      (
+        id: '5x5',
+        title: '5×5 Strength',
+        subtitle: '3 days/week • Mon, Wed, Fri',
+        templates: <WorkoutTemplate>[fiveByFive],
+        weeklySchedule: <int, List<String>>{
+          1: <String>[fiveByFive.id],
+          3: <String>[fiveByFive.id],
+          5: <String>[fiveByFive.id],
+        },
+      ),
+      (
+        id: 'home_bw',
+        title: 'Bodyweight at home',
+        subtitle: '3 days/week • No equipment',
+        templates: <WorkoutTemplate>[homeBw],
+        weeklySchedule: <int, List<String>>{
+          1: <String>[homeBw.id],
+          3: <String>[homeBw.id],
+          5: <String>[homeBw.id],
+        },
       ),
     ];
   }
