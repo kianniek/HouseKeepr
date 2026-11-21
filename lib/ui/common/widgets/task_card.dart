@@ -5,7 +5,6 @@ import '../../../services/app_haptics.dart';
 import '../../features/tasks/utils/task_date_utils.dart';
 import '../app_theme.dart';
 import 'assignee_avatar.dart';
-import 'marquee_text.dart';
 
 class TaskCard extends StatelessWidget {
   final Task task;
@@ -123,8 +122,9 @@ class TaskCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    MarqueeText(
+                    Text(
                       displayTitle,
+                      softWrap: true,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w600,
                         decoration: isCompleted

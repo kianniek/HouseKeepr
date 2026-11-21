@@ -1,32 +1,138 @@
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../cubits/task_cubit.dart';
 import '../../../../home_screen.dart';
 import '../../../../models/task.dart';
 import '../../../../services/app_haptics.dart';
 import '../../common/app_theme.dart';
-import '../../common/widgets/marquee_text.dart';
 import '../../common/widgets/undo_toast.dart';
 import '../profile/pages/settings_page.dart';
 import '../tasks/pages/tasks_page.dart';
 import '../tasks/utils/task_date_utils.dart';
 import '../tasks/widgets/task_detail_sheet.dart';
+import 'models/dashboard_layout_store.dart';
 import 'widgets/calendar_widget.dart';
+import 'widgets/editable_bento_tile.dart';
+import 'widgets/medication_widget.dart';
+import 'widgets/shopping_list_widget.dart';
 import 'widgets/weather_card.dart';
 
 class DashboardPage extends StatefulWidget {
   final fb.User? currentUser;
   final String? householdId;
+  final SharedPreferences? preferences;
 
-  const DashboardPage({super.key, this.currentUser, this.householdId});
+  const DashboardPage({
+    super.key,
+    this.currentUser,
+    this.householdId,
+    this.preferences,
+  });
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage>
+    with SingleTickerProviderStateMixin {
+  late final DashboardLayoutStore _layoutStore;
+  late final AnimationController _jiggleController;
+  List<DashboardWidgetId> _order = List<DashboardWidgetId>.from(
+    DashboardWidgetId.values,
+  );
+  Set<DashboardWidgetId> _hidden = <DashboardWidgetId>{};
+  bool _isEditing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _layoutStore = DashboardLayoutStore(prefs: widget.preferences);
+    _jiggleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 140),
+    );
+    _loadLayout();
+  }
+
+  @override
+  void dispose() {
+    _jiggleController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadLayout() async {
+    final layout = await _layoutStore.load();
+    if (!mounted) return;
+    setState(() {
+      _order = layout.order;
+      _hidden = layout.hidden;
+    });
+  }
+
+  void _enterEditMode() {
+    if (_isEditing) return;
+    AppHaptics.instance.confirm();
+    setState(() => _isEditing = true);
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      _jiggleController.repeat(reverse: true);
+    }
+  }
+
+  void _exitEditMode() {
+    if (!_isEditing) return;
+    _jiggleController.stop();
+    _jiggleController.value = 0.5;
+    setState(() => _isEditing = false);
+  }
+
+  Future<void> _reorderWidget(
+    DashboardWidgetId dragged,
+    DashboardWidgetId target,
+  ) async {
+    final oldIndex = _order.indexOf(dragged);
+    final newIndex = _order.indexOf(target);
+    if (oldIndex == -1 || newIndex == -1 || oldIndex == newIndex) return;
+
+    AppHaptics.instance.confirm();
+    final updated = List<DashboardWidgetId>.from(_order);
+    updated.removeAt(oldIndex);
+    updated.insert(newIndex, dragged);
+    setState(() => _order = updated);
+    await _layoutStore.saveOrder(updated);
+  }
+
+  Future<void> _hideWidget(DashboardWidgetId id) async {
+    if (_hidden.contains(id)) return;
+    AppHaptics.instance.toggleOff();
+    final updated = Set<DashboardWidgetId>.from(_hidden)..add(id);
+    setState(() => _hidden = updated);
+    await _layoutStore.saveHidden(updated);
+  }
+
+  Future<void> _restoreWidget(DashboardWidgetId id) async {
+    if (!_hidden.contains(id)) return;
+    AppHaptics.instance.confirm();
+    final updated = Set<DashboardWidgetId>.from(_hidden)..remove(id);
+    setState(() => _hidden = updated);
+    await _layoutStore.saveHidden(updated);
+  }
+
+  Widget _buildBentoWidget(BuildContext context, DashboardWidgetId id) {
+    switch (id) {
+      case DashboardWidgetId.weather:
+        return const WeatherCard();
+      case DashboardWidgetId.calendar:
+        return _buildCalendarCard(context);
+      case DashboardWidgetId.shopping:
+        return const ShoppingListWidget();
+      case DashboardWidgetId.medications:
+        return const MedicationWidget();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -37,96 +143,217 @@ class _DashboardPageState extends State<DashboardPage> {
         widget.currentUser?.email?.split('@').first ??
         'User';
 
-    return Scaffold(
-      backgroundColor: scheme.surface,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'House Keepr',
-                        style: textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
+    return PopScope(
+      canPop: !_isEditing,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _isEditing) {
+          _exitEditMode();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: scheme.surface,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'House Keepr',
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          'Welcome back, $userName 👋',
+                          style: textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                    if (_isEditing)
+                      FilledButton.tonal(
+                        onPressed: _exitEditMode,
+                        child: const Text('Done'),
+                      )
+                    else
+                      Container(
+                        decoration: BoxDecoration(
+                          color: scheme.surfaceContainerHighest,
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.settings_outlined),
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const SettingsPage(),
+                              ),
+                            );
+                          },
                         ),
                       ),
-                      Text(
-                        'Welcome back, $userName 👋',
-                        style: textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHighest,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.settings_outlined),
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const SettingsPage(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  0,
-                  16,
-                  24 + MediaQuery.paddingOf(context).bottom,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 8),
-
-                    // Bento Grid Layout
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        // Use a column for narrow screens, or a 2-column bento row layout for wider screens
-                        return Column(
-                          children: [
-                            // Full-width Daily Progress Bento Box
-                            _buildDailyProgressCard(context),
-                            const SizedBox(height: 16),
-
-                            // Two-column Bento Row for Weather & Calendar Events
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(child: const WeatherCard()),
-                                const SizedBox(width: 16),
-                                Expanded(child: _buildCalendarCard(context)),
-                              ],
-                            ),
-                          ],
-                        );
-                      },
-                    ),
                   ],
                 ),
               ),
-            ),
-          ],
+
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    0,
+                    16,
+                    24 + MediaQuery.paddingOf(context).bottom,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 8),
+
+                      // Bento Grid Layout
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final columnWidth = (constraints.maxWidth - 16) / 2;
+                          final visibleOrder = _order
+                              .where((id) => !_hidden.contains(id))
+                              .toList();
+                          final hiddenOrder = _order
+                              .where((id) => _hidden.contains(id))
+                              .toList();
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Full-width Daily Progress Bento Box (pinned)
+                              _buildDailyProgressCard(context),
+                              const SizedBox(height: 16),
+
+                              if (visibleOrder.isEmpty && !_isEditing)
+                                _buildEmptyWidgetsCard(context)
+                              else if (visibleOrder.isNotEmpty)
+                                _buildTwoColumnGrid(
+                                  context,
+                                  ids: visibleOrder,
+                                  itemBuilder: (id, index) => EditableBentoTile(
+                                    key: ValueKey('bento_${id.name}'),
+                                    id: id,
+                                    index: index,
+                                    cardWidth: columnWidth,
+                                    isEditing: _isEditing,
+                                    jiggleAnimation: _jiggleController,
+                                    onEnterEditMode: _enterEditMode,
+                                    onRemove: () => _hideWidget(id),
+                                    onReorder: _reorderWidget,
+                                    child: _buildBentoWidget(context, id),
+                                  ),
+                                ),
+
+                              if (_isEditing && hiddenOrder.isNotEmpty) ...[
+                                const SizedBox(height: 24),
+                                Text(
+                                  'Hidden widgets · Tap to restore',
+                                  style: textTheme.labelMedium?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                _buildTwoColumnGrid(
+                                  context,
+                                  ids: hiddenOrder,
+                                  itemBuilder: (id, _) => HiddenBentoTile(
+                                    key: ValueKey('hidden_${id.name}'),
+                                    id: id,
+                                    onRestore: () => _restoreWidget(id),
+                                    child: _buildBentoWidget(context, id),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTwoColumnGrid(
+    BuildContext context, {
+    required List<DashboardWidgetId> ids,
+    required Widget Function(DashboardWidgetId id, int index) itemBuilder,
+  }) {
+    final leftItems = <Widget>[];
+    final rightItems = <Widget>[];
+
+    for (var i = 0; i < ids.length; i++) {
+      final tile = itemBuilder(ids[i], i);
+      if (i.isEven) {
+        if (leftItems.isNotEmpty) leftItems.add(const SizedBox(height: 16));
+        leftItems.add(tile);
+      } else {
+        if (rightItems.isNotEmpty) rightItems.add(const SizedBox(height: 16));
+        rightItems.add(tile);
+      }
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: leftItems,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: rightItems,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyWidgetsCard(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'No widgets on dashboard',
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.tonalIcon(
+            onPressed: _enterEditMode,
+            icon: const Icon(Icons.tune, size: 18),
+            label: const Text('Customize'),
+          ),
+        ],
       ),
     );
   }
@@ -428,8 +655,9 @@ class _DashboardPageState extends State<DashboardPage> {
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                MarqueeText(
+                                Text(
                                   sanitizeTaskTitle(nextUpTask.title),
+                                  softWrap: true,
                                   style: textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.w600,
                                     color: scheme.onPrimaryContainer,

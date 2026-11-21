@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../services/calendar_service.dart';
 import '../../../../core/extensions.dart';
+import 'stable_loading_card.dart';
 
 class CalendarWidget extends StatefulWidget {
   final CalendarService? calendarService;
@@ -132,26 +133,15 @@ class _CalendarWidgetState extends State<CalendarWidget> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _openCalendarPicker,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 180),
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: scheme.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-              ? _ErrorContent(onRetry: _loadEvent, error: _error)
-              : Column(
+    return StableLoadingCard(
+      storageKey: 'dashboard_card_height_calendar_v1',
+      isLoading: _loading,
+      onTap: _openCalendarPicker,
+      child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? _ErrorContent(onRetry: _loadEvent, error: _error)
+          : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -244,8 +234,6 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                     ),
                   ],
                 ),
-        ),
-      ),
     );
   }
 

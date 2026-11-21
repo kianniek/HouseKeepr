@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../core/extensions.dart';
 import '../../../../../services/weather_service.dart';
 import '../../../common/widgets/keyboard_inset_padding.dart';
+import 'stable_loading_card.dart';
 
 class ScheduledForecast {
   final TimeOfDay time;
@@ -247,26 +248,15 @@ class _WeatherCardState extends State<WeatherCard> {
             showMultiple: _showMultipleForecasts,
           );
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _openLocationPicker,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 180),
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: scheme.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-              ? _ErrorContent(onRetry: _loadForecast)
-              : Column(
+    return StableLoadingCard(
+      storageKey: 'dashboard_card_height_weather_v1',
+      isLoading: _loading,
+      onTap: _openLocationPicker,
+      child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? _ErrorContent(onRetry: _loadForecast)
+          : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
@@ -313,8 +303,6 @@ class _WeatherCardState extends State<WeatherCard> {
                     ],
                   ],
                 ),
-        ),
-      ),
     );
   }
 }
