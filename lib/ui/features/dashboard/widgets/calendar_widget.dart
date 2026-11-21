@@ -142,98 +142,97 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           : _error != null
           ? _ErrorContent(onRetry: _loadEvent, error: _error)
           : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Next Event',
-                                style: textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Icon(
-                                Icons.calendar_today_rounded,
-                                color: scheme.primary,
-                                size: 20,
-                              ),
-                            ],
+                          Text(
+                            'Next Event',
+                            style: textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          const SizedBox(height: 12),
-                          if (_nextEvent == null)
-                            Text(
-                              'No upcoming events',
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            )
-                          else ...[
-                            Text(
-                              _nextEvent!.summary ?? 'Untitled event',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _formatEventStart(_nextEvent!),
-                              style: textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                            if ((_nextEvent!.location ??
-                                    _nextEvent!.hangoutLink) !=
-                                null) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                _nextEvent!.location ?? 'Google Meet',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ],
+                          Icon(
+                            Icons.calendar_today_rounded,
+                            color: scheme.primary,
+                            size: 20,
+                          ),
                         ],
                       ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _selectedCalendar?.summary ?? 'Google Calendar',
+                      const SizedBox(height: 12),
+                      if (_nextEvent == null)
+                        Text(
+                          'No upcoming events',
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        )
+                      else ...[
+                        Text(
+                          _nextEvent!.summary ?? 'Untitled event',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _formatEventStart(_nextEvent!),
+                          style: textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if ((_nextEvent!.location ?? _nextEvent!.hangoutLink) !=
+                            null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            _nextEvent!.location ?? 'Google Meet',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: textTheme.bodySmall?.copyWith(
-                              color: scheme.primary,
-                              fontWeight: FontWeight.w500,
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
-                        ),
-                        if (_nextEvent != null)
-                          IconButton(
-                            tooltip: 'Go to Calendar',
-                            onPressed: _openEvent,
-                            icon: const Icon(Icons.open_in_new),
-                            color: scheme.primary,
-                            visualDensity: VisualDensity.compact,
-                          ),
+                        ],
                       ],
+                    ],
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _selectedCalendar?.summary ?? 'Google Calendar',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
+                    if (_nextEvent != null)
+                      IconButton(
+                        tooltip: 'Go to Calendar',
+                        onPressed: _openEvent,
+                        icon: const Icon(Icons.open_in_new),
+                        color: scheme.primary,
+                        visualDensity: VisualDensity.compact,
+                      ),
                   ],
                 ),
+              ],
+            ),
     );
   }
 

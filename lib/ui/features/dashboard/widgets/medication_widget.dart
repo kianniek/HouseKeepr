@@ -133,130 +133,130 @@ class _MedicationWidgetState extends State<MedicationWidget>
               ),
             )
           : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
                   children: [
+                    Icon(
+                      Icons.medication_outlined,
+                      size: 18,
+                      color: scheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Medications',
+                        style: textTheme.labelMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (activeMeds.isEmpty || !hasAnyDosesToday)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        activeMeds.isEmpty
+                            ? 'No meds set up'
+                            : 'None due today',
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap to manage',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  )
+                else ...[
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      if (summary.hasMorningDoses)
+                        _SlotPill(
+                          icon: Icons.wb_sunny_outlined,
+                          label: 'AM',
+                          done: summary.isMorningTaken,
+                        ),
+                      if (summary.hasEveningDoses)
+                        _SlotPill(
+                          icon: Icons.nightlight_outlined,
+                          label: 'PM',
+                          done: summary.isEveningTaken,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (nextDose != null) ...[
+                    Text(
+                      nextDose.medicationName,
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      nextDose.dosage.isNotEmpty
+                          ? '${nextDose.time.format24h()} · ${nextDose.dosage}'
+                          : nextDose.time.format24h(),
+                      style: textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.tonalIcon(
+                        onPressed: () => _markTaken(nextDose),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          minimumSize: const Size(0, 32),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.check, size: 16),
+                        label: const Text('Mark Taken'),
+                      ),
+                    ),
+                  ] else
                     Row(
                       children: [
                         Icon(
-                          Icons.medication_outlined,
+                          Icons.check_circle_outline,
                           size: 18,
                           color: scheme.primary,
                         ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Medications',
-                            style: textTheme.labelMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
+                            'All doses taken',
+                            style: textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    if (activeMeds.isEmpty || !hasAnyDosesToday)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            activeMeds.isEmpty
-                                ? 'No meds set up'
-                                : 'None due today',
-                            style: textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Tap to manage',
-                            style: textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      )
-                    else ...[
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          if (summary.hasMorningDoses)
-                            _SlotPill(
-                              icon: Icons.wb_sunny_outlined,
-                              label: 'AM',
-                              done: summary.isMorningTaken,
-                            ),
-                          if (summary.hasEveningDoses)
-                            _SlotPill(
-                              icon: Icons.nightlight_outlined,
-                              label: 'PM',
-                              done: summary.isEveningTaken,
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      if (nextDose != null) ...[
-                        Text(
-                          nextDose.medicationName,
-                          style: textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          nextDose.dosage.isNotEmpty
-                              ? '${nextDose.time.format24h()} · ${nextDose.dosage}'
-                              : nextDose.time.format24h(),
-                          style: textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.tonalIcon(
-                            onPressed: () => _markTaken(nextDose),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              minimumSize: const Size(0, 32),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            icon: const Icon(Icons.check, size: 16),
-                            label: const Text('Mark Taken'),
-                          ),
-                        ),
-                      ] else
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.check_circle_outline,
-                              size: 18,
-                              color: scheme.primary,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'All doses taken',
-                                style: textTheme.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ],
-                ),
+                ],
+              ],
+            ),
     );
   }
 }

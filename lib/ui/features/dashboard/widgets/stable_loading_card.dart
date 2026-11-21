@@ -28,7 +28,8 @@ class StableLoadingCard extends StatefulWidget {
 
   /// Clears the in-memory height cache (intended for tests).
   @visibleForTesting
-  static void clearMemoryCache() => _StableLoadingCardState._memoryCache.clear();
+  static void clearMemoryCache() =>
+      _StableLoadingCardState._memoryCache.clear();
 
   @override
   State<StableLoadingCard> createState() => _StableLoadingCardState();

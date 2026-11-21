@@ -257,52 +257,52 @@ class _WeatherCardState extends State<WeatherCard> {
           : _error != null
           ? _ErrorContent(onRetry: _loadForecast)
           : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Weather',
-                          style: textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          condition?.icon ?? '🌡️',
-                          style: const TextStyle(fontSize: 24),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
                     Text(
-                      formatTemperature(_forecast!.currentTemperature, context),
-                      style: textTheme.headlineMedium?.copyWith(
+                      'Weather',
+                      style: textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
-                      _location.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                      condition?.icon ?? '🌡️',
+                      style: const TextStyle(fontSize: 24),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      condition!.label,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                    if (upcoming.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      _UpcomingForecastCard(upcoming: upcoming),
-                    ],
                   ],
                 ),
+                const SizedBox(height: 12),
+                Text(
+                  formatTemperature(_forecast!.currentTemperature, context),
+                  style: textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  _location.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  condition!.label,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+                if (upcoming.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _UpcomingForecastCard(upcoming: upcoming),
+                ],
+              ],
+            ),
     );
   }
 }

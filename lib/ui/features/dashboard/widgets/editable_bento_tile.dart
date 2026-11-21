@@ -168,10 +168,7 @@ class HiddenBentoTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             child: ColorFiltered(
               colorFilter: _kGreyscaleFilter,
-              child: Opacity(
-                opacity: 0.45,
-                child: IgnorePointer(child: child),
-              ),
+              child: Opacity(opacity: 0.45, child: IgnorePointer(child: child)),
             ),
           ),
         ),
