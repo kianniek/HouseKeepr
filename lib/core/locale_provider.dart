@@ -87,9 +87,10 @@ class LocaleProvider extends ChangeNotifier {
             _locale = legacy;
             await settings.setLocaleMigrated(true);
             if (legacy != null) {
-              await channel.invokeMethod<bool>('setAppLocale', <String, String?>{
-                'languageCode': legacy.languageCode,
-              });
+              await channel.invokeMethod<bool>(
+                'setAppLocale',
+                <String, String?>{'languageCode': legacy.languageCode},
+              );
             }
           } else {
             _locale = null;

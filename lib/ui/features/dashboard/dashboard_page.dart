@@ -357,7 +357,9 @@ class _DashboardPageState extends State<DashboardPage> {
                                       color: scheme.onPrimaryContainer,
                                     )
                                   : Text(
-                                      totalToday > 0 ? '$animatedPercent%' : '—',
+                                      totalToday > 0
+                                          ? '$animatedPercent%'
+                                          : '—',
                                       style: textTheme.titleMedium?.copyWith(
                                         fontWeight: FontWeight.bold,
                                         color: scheme.onPrimaryContainer,
@@ -392,11 +394,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       child: Row(
                         children: [
                           InkWell(
-                            onTap: () => _completeNextUpTask(
-                              context,
-                              nextUpTask,
-                              today,
-                            ),
+                            onTap: () =>
+                                _completeNextUpTask(context, nextUpTask, today),
                             borderRadius: BorderRadius.circular(16),
                             child: Padding(
                               padding: const EdgeInsets.all(2),

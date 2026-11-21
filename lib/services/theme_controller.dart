@@ -105,9 +105,7 @@ class ThemeController extends ChangeNotifier {
 
   void _syncToShortcuts() {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
-    unawaited(
-      _invokeUpdateShortcutTheme(),
-    );
+    unawaited(_invokeUpdateShortcutTheme());
   }
 
   Future<void> _invokeUpdateShortcutTheme() async {
@@ -145,17 +143,17 @@ class ThemeController extends ChangeNotifier {
     if (_current == AppThemeType.dynamic && _dynamicLightScheme != null) {
       return _dynamicLightScheme!;
     }
-    return AppThemePalette.forType(_current)
-        .lightScheme()
-        .harmonizedWithPrimary();
+    return AppThemePalette.forType(
+      _current,
+    ).lightScheme().harmonizedWithPrimary();
   }
 
   ColorScheme get darkScheme {
     if (_current == AppThemeType.dynamic && _dynamicDarkScheme != null) {
       return _dynamicDarkScheme!;
     }
-    return AppThemePalette.forType(_current)
-        .darkScheme()
-        .harmonizedWithPrimary();
+    return AppThemePalette.forType(
+      _current,
+    ).darkScheme().harmonizedWithPrimary();
   }
 }

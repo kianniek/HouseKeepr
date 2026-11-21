@@ -362,16 +362,10 @@ class NotificationService implements WorkoutNotificationScheduler {
         ),
       );
       await android.createNotificationChannelGroup(
-        const AndroidNotificationChannelGroup(
-          groupMedications,
-          'Medications',
-        ),
+        const AndroidNotificationChannelGroup(groupMedications, 'Medications'),
       );
       await android.createNotificationChannelGroup(
-        const AndroidNotificationChannelGroup(
-          groupOpenGym,
-          'OpenGym Fitness',
-        ),
+        const AndroidNotificationChannelGroup(groupOpenGym, 'OpenGym Fitness'),
       );
 
       for (final cfg in channelConfigs.values) {

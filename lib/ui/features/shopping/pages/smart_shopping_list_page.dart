@@ -782,8 +782,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                             // Scroll Down FAB (appears when not at bottom)
                             Positioned(
                               right: 16,
-                              bottom:
-                                  16 + MediaQuery.paddingOf(context).bottom,
+                              bottom: 16 + MediaQuery.paddingOf(context).bottom,
                               child: AnimatedSlide(
                                 duration: _fabAnimDur,
                                 offset: _showScrollDownFab
@@ -823,8 +822,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                             // Scroll Up FAB (appears when at bottom)
                             Positioned(
                               right: 16,
-                              bottom:
-                                  16 + MediaQuery.paddingOf(context).bottom,
+                              bottom: 16 + MediaQuery.paddingOf(context).bottom,
                               child: AnimatedSlide(
                                 duration: _fabAnimDur,
                                 offset: _showScrollUpFab

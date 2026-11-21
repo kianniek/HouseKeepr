@@ -223,7 +223,9 @@ String toIsoDateString(DateTime localDay) {
 /// Returns whether [task] is completed for [localDay].
 bool isTaskCompletedOnDate(Task task, DateTime localDay) {
   if (task.isRepeating) {
-    return (task.completedDates ?? const []).contains(toIsoDateString(localDay));
+    return (task.completedDates ?? const []).contains(
+      toIsoDateString(localDay),
+    );
   }
   return task.completed;
 }
@@ -258,7 +260,9 @@ bool doesTaskOccurOnDate(Task task, DateTime localDay, {DateTime? now}) {
         ? task.repeatDays!
         : <int>[startDate.weekday];
     if (!days.contains(target.weekday)) return false;
-    final startMonday = startDate.subtract(Duration(days: startDate.weekday - 1));
+    final startMonday = startDate.subtract(
+      Duration(days: startDate.weekday - 1),
+    );
     final targetMonday = target.subtract(Duration(days: target.weekday - 1));
     final weekDiff = targetMonday.difference(startMonday).inDays ~/ 7;
     return weekDiff >= 0 && weekDiff % interval == 0;

@@ -221,32 +221,41 @@ class WorkloadCalendarCard extends StatelessWidget {
             switchOutCurve: Curves.easeIn,
             child: Row(
               key: ValueKey('weekdays_${isMonthView}_${rangeStart.weekday}'),
-              children: (isMonthView
-                      ? const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                      : List.generate(
-                          7,
-                          (i) => DateFormat('E').format(
-                            DateTime(
-                              rangeStart.year,
-                              rangeStart.month,
-                              rangeStart.day + i,
+              children:
+                  (isMonthView
+                          ? const [
+                              'Mon',
+                              'Tue',
+                              'Wed',
+                              'Thu',
+                              'Fri',
+                              'Sat',
+                              'Sun',
+                            ]
+                          : List.generate(
+                              7,
+                              (i) => DateFormat('E').format(
+                                DateTime(
+                                  rangeStart.year,
+                                  rangeStart.month,
+                                  rangeStart.day + i,
+                                ),
+                              ),
+                            ))
+                      .map(
+                        (label) => Expanded(
+                          child: Center(
+                            child: Text(
+                              label,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
-                        ))
-                  .map(
-                    (label) => Expanded(
-                      child: Center(
-                        child: Text(
-                          label,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
                         ),
-                      ),
-                    ),
-                  )
-                  .toList(),
+                      )
+                      .toList(),
             ),
           ),
           const SizedBox(height: 6),
@@ -264,14 +273,13 @@ class WorkloadCalendarCard extends StatelessWidget {
               layoutBuilder: (currentChild, previousChildren) {
                 return Stack(
                   alignment: Alignment.topCenter,
-                  children: [
-                    ...previousChildren,
-                    ?currentChild,
-                  ],
+                  children: [...previousChildren, ?currentChild],
                 );
               },
               child: GridView.builder(
-                key: ValueKey('grid_${isMonthView}_${rangeStart.year}_${rangeStart.month}_${rangeStart.day}'),
+                key: ValueKey(
+                  'grid_${isMonthView}_${rangeStart.year}_${rangeStart.month}_${rangeStart.day}',
+                ),
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: cells.length,
@@ -335,7 +343,9 @@ class WorkloadCalendarCard extends StatelessWidget {
                               fontWeight: (isSelected || isToday)
                                   ? FontWeight.w700
                                   : FontWeight.w500,
-                              fontFeatures: const [FontFeature.tabularFigures()],
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -465,10 +475,9 @@ class _LegendDotGroup extends StatelessWidget {
         ),
         Text(
           label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: textColor,
-            fontSize: 11,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: textColor, fontSize: 11),
         ),
       ],
     );

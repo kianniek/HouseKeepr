@@ -44,7 +44,9 @@ abstract class BaseFirestoreTaskRepository implements RemoteTaskRepository {
     const chunkSize = 500;
     try {
       for (var i = 0; i < tasks.length; i += chunkSize) {
-        final end = (i + chunkSize < tasks.length) ? i + chunkSize : tasks.length;
+        final end = (i + chunkSize < tasks.length)
+            ? i + chunkSize
+            : tasks.length;
         final chunk = tasks.sublist(i, end);
         final batch = tasksCollection.firestore.batch();
         for (final task in chunk) {

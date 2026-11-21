@@ -93,12 +93,7 @@ const List<_TaskIconKeyword> _taskIconKeywords = [
     'dog',
     'cat',
   ]),
-  _TaskIconKeyword(Icons.directions_car, [
-    'car',
-    'auto',
-    'vehicle',
-    'garage',
-  ]),
+  _TaskIconKeyword(Icons.directions_car, ['car', 'auto', 'vehicle', 'garage']),
   _TaskIconKeyword(Icons.receipt_long, [
     'bill',
     'bills',

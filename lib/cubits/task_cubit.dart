@@ -81,13 +81,10 @@ class TaskCubit extends Cubit<TaskState> {
     if (settings == null) return;
     if (debounce) {
       _syncNotifDebounceTimer?.cancel();
-      _syncNotifDebounceTimer = Timer(
-        const Duration(milliseconds: 400),
-        () {
-          if (isClosed) return;
-          unawaited(_runSyncNotifications(tasks));
-        },
-      );
+      _syncNotifDebounceTimer = Timer(const Duration(milliseconds: 400), () {
+        if (isClosed) return;
+        unawaited(_runSyncNotifications(tasks));
+      });
       return;
     }
     _syncNotifDebounceTimer?.cancel();
@@ -762,9 +759,7 @@ class TaskCubit extends Cubit<TaskState> {
     } catch (_) {}
 
     final prevIds = prevs.map((t) => t.id).toSet();
-    final modified = updatedTasks
-        .where((t) => prevIds.contains(t.id))
-        .toList();
+    final modified = updatedTasks.where((t) => prevIds.contains(t.id)).toList();
     final prevById = {for (final p in prevs) p.id: p};
     _dispatchBatchSave(modified, prevById);
 
