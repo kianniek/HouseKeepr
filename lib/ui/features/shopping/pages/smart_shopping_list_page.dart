@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,8 +11,10 @@ import '../../../../core/grocery_parser.dart';
 import '../../../../core/quantity_unit_formatter.dart';
 import '../../../../cubits/shopping_cubit.dart';
 import '../../../../generated/app_localizations.dart';
+import '../../../../home_screen.dart';
 import '../../../../models/grocery_category.dart';
 import '../../../../models/grocery_item.dart';
+import '../../../../services/app_haptics.dart';
 import '../../../../services/firestore_sync_service.dart';
 import '../../../../services/recipe_import_service.dart';
 import '../../../../services/shopping_products_service.dart';
@@ -46,18 +50,57 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
   final ScrollController _scrollController = ScrollController();
   bool _showScrollDownFab = false;
   bool _showScrollUpFab = false;
+  bool _canPinShortcuts = false;
   static const Duration _fabAnimDur = Duration(milliseconds: 200);
+  static const MethodChannel _shortcutsChannel = MethodChannel(
+    'housekeepr/shortcuts',
+  );
 
   @override
   void initState() {
     super.initState();
     _itemController.addListener(_onTextChanged);
     _scrollController.addListener(_onScroll);
+    HomeScreen.focusShoppingQuickAddNotifier.addListener(_onFocusQuickAdd);
     if (context.read<ShoppingCubit>().state.aisleModeEnabled) {
       WakelockPlus.enable();
     }
     _loadCompletedExpandedPreference();
+    _checkPinShortcutSupport();
     WidgetsBinding.instance.addPostFrameCallback((_) => _updateFabVisibility());
+  }
+
+  void _onFocusQuickAdd() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _itemFocusNode.requestFocus();
+      }
+    });
+  }
+
+  Future<void> _checkPinShortcutSupport() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final supported =
+          await _shortcutsChannel.invokeMethod<bool>('canPinShortcuts') ??
+          false;
+      if (mounted && supported) {
+        setState(() => _canPinShortcuts = true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _pinShoppingShortcut(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await _shortcutsChannel.invokeMethod<bool>('pinShortcut', {
+        'id': 'shopping_list',
+        'shortLabel': l10n.shoppingList,
+        'longLabel': l10n.shoppingList,
+        'uri': 'housekeepr://shopping/quick-add',
+        'iconKey': 'shopping',
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadCompletedExpandedPreference() async {
@@ -89,6 +132,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
 
   @override
   void dispose() {
+    HomeScreen.focusShoppingQuickAddNotifier.removeListener(_onFocusQuickAdd);
     _itemController.removeListener(_onTextChanged);
     _itemController.dispose();
     _ghostController.dispose();
@@ -175,6 +219,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
       unit: parsed.hasExplicitQuantity ? parsed.unit : null,
       category: category,
     );
+    AppHaptics.instance.confirm();
 
     _itemController.clear();
     _itemFocusNode.requestFocus();
@@ -196,6 +241,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
       imageUrl: result.imageUrl,
       ingredients: result.ingredients,
     );
+    AppHaptics.instance.confirm();
 
     if (initialUrl != null) {
       _itemController.clear();
@@ -284,7 +330,10 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
       message: deleted.name.isEmpty
           ? l10n.itemDeleted
           : l10n.namedItemDeleted(deleted.name),
-      onUndo: () => cubit.restoreItems([id]),
+      onUndo: () {
+        AppHaptics.instance.confirm();
+        cubit.restoreItems([id]);
+      },
     );
   }
 
@@ -362,7 +411,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
         }
       },
       child: Scaffold(
-        resizeToAvoidBottomInset: false,
+        resizeToAvoidBottomInset: true,
         appBar: AppBar(
           title: Text(l10n.shoppingList),
           elevation: 0,
@@ -395,7 +444,14 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                       _openRecentlyDeleted(context);
                     } else if (value == 'addProduct') {
                       _openAddProductDialog(context);
+                    } else if (value == 'pin') {
+                      await _pinShoppingShortcut(context);
                     } else if (value == 'mode') {
+                      if (state.aisleModeEnabled) {
+                        AppHaptics.instance.toggleOff();
+                      } else {
+                        AppHaptics.instance.toggleOn();
+                      }
                       context.read<ShoppingCubit>().toggleAisleMode();
                     } else if (value == 'flat') {
                       context.read<ShoppingCubit>().toggleFlatView();
@@ -513,6 +569,20 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                         ],
                       ),
                     ),
+                    if (_canPinShortcuts)
+                      PopupMenuItem(
+                        value: 'pin',
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.add_to_home_screen_outlined,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(l10n.pinShoppingList),
+                          ],
+                        ),
+                      ),
                   ],
                 );
               },
@@ -523,6 +593,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
           behavior: HitTestBehavior.translucent,
           onTap: () => FocusScope.of(context).unfocus(),
           child: SafeArea(
+            bottom: false,
             child: Column(
               children: [
                 // Quick Add Section
@@ -546,6 +617,8 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                           },
                           child: CustomScrollView(
                             physics: const AlwaysScrollableScrollPhysics(),
+                            keyboardDismissBehavior:
+                                ScrollViewKeyboardDismissBehavior.onDrag,
                             slivers: [
                               SliverFillRemaining(
                                 child: EmptyStateWidget(
@@ -628,6 +701,8 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                               child: CustomScrollView(
                                 controller: _scrollController,
                                 physics: const AlwaysScrollableScrollPhysics(),
+                                keyboardDismissBehavior:
+                                    ScrollViewKeyboardDismissBehavior.onDrag,
                                 slivers: [
                                   // Unchecked items - flat or grouped
                                   if (state.flatViewEnabled)
@@ -693,6 +768,9 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                       ),
                                     ),
                                   const SliverSafeArea(
+                                    top: false,
+                                    left: false,
+                                    right: false,
                                     sliver: SliverToBoxAdapter(
                                       child: SizedBox(height: 16),
                                     ),
@@ -704,7 +782,8 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                             // Scroll Down FAB (appears when not at bottom)
                             Positioned(
                               right: 16,
-                              bottom: 16,
+                              bottom:
+                                  16 + MediaQuery.paddingOf(context).bottom,
                               child: AnimatedSlide(
                                 duration: _fabAnimDur,
                                 offset: _showScrollDownFab
@@ -744,7 +823,8 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                             // Scroll Up FAB (appears when at bottom)
                             Positioned(
                               right: 16,
-                              bottom: 16,
+                              bottom:
+                                  16 + MediaQuery.paddingOf(context).bottom,
                               child: AnimatedSlide(
                                 duration: _fabAnimDur,
                                 offset: _showScrollUpFab
@@ -931,6 +1011,7 @@ class _SmartShoppingListPageState extends State<SmartShoppingListPage> {
                                 await context.read<ShoppingCubit>().addItems(
                                   confirmedItems,
                                 );
+                                AppHaptics.instance.confirm();
                               }
                             }
                           },

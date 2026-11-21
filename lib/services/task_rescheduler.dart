@@ -144,6 +144,120 @@ class TaskRescheduler {
     );
   }
 
+  /// Returns unfinished tasks that are overdue (or due today when
+  /// [includeToday] is `true`).
+  static List<Task> getEligibleRebalanceTasks(
+    List<Task> tasks, {
+    DateTime? now,
+    bool includeToday = true,
+  }) {
+    final today = _dateOnly(now ?? DateTime.now());
+    return tasks.where((t) {
+      if (t.archived || t.completed) return false;
+      final due = effectiveDueDate(t, now: today);
+      if (due == null) return false;
+      final dueDay = _dateOnly(due);
+      if (dueDay.isBefore(today)) return true;
+      return includeToday && dueDay.isAtSameMomentAs(today);
+    }).toList();
+  }
+
+  /// Computes a full rebalance preview mapping task IDs to their suggested
+  /// [RescheduleSuggestion] (target date + reason).
+  ///
+  /// When [includeToday] is `true`, unfinished tasks due today are also
+  /// eligible to be redistributed. When [keepTodayCapacity] is `true`, up to
+  /// [maxDailyTasks] highest-priority tasks remain on today; when `false`, all
+  /// eligible tasks are pushed to tomorrow or later.
+  ///
+  /// Tasks whose proposed date is already their current due date are omitted
+  /// from the returned map.
+  static Map<String, RescheduleSuggestion> previewRebalance(
+    List<Task> allTasks, {
+    DateTime? now,
+    int maxDailyTasks = 4,
+    Set<String>? targetTaskIds,
+    bool includeToday = true,
+    bool keepTodayCapacity = true,
+  }) {
+    final today = _dateOnly(now ?? DateTime.now());
+    final todayUtc = DateTime(today.year, today.month, today.day).toUtc();
+
+    final eligible = allTasks.where((t) {
+      if (t.archived || t.completed) return false;
+      if (targetTaskIds != null && !targetTaskIds.contains(t.id)) return false;
+      final due = effectiveDueDate(t, now: today);
+      if (due == null) return false;
+      final dueDay = _dateOnly(due);
+      if (dueDay.isBefore(today)) return true;
+      return includeToday && dueDay.isAtSameMomentAs(today);
+    }).toList();
+
+    if (eligible.isEmpty) return const {};
+
+    // Sort highest priority first so urgent items land on today/tomorrow.
+    eligible.sort((a, b) => b.priority.index.compareTo(a.priority.index));
+
+    final suggestions = <String, RescheduleSuggestion>{};
+    final simulatedTasks = List<Task>.from(allTasks);
+
+    // Count tasks already due today that are NOT being rebalanced so we don't
+    // exceed maxDailyTasks on today.
+    final eligibleIds = eligible.map((t) => t.id).toSet();
+    int keptToday = keepTodayCapacity
+        ? allTasks.where((t) {
+            if (t.archived || t.completed) return false;
+            if (eligibleIds.contains(t.id)) return false;
+            final due = effectiveDueDate(t, now: today);
+            return due != null && _dateOnly(due).isAtSameMomentAs(today);
+          }).length
+        : maxDailyTasks;
+
+    for (final task in eligible) {
+      final currentDue = effectiveDueDate(task, now: today);
+      final isAlreadyToday =
+          currentDue != null && _dateOnly(currentDue).isAtSameMomentAs(today);
+
+      if (keepTodayCapacity && keptToday < maxDailyTasks) {
+        keptToday++;
+        if (!isAlreadyToday) {
+          suggestions[task.id] = RescheduleSuggestion(
+            targetDate: todayUtc,
+            reason: 'Kept for today (top priority)',
+            existingTaskCount: keptToday - 1,
+          );
+          final idx = simulatedTasks.indexWhere((t) => t.id == task.id);
+          if (idx != -1) {
+            simulatedTasks[idx] = task.copyWith(
+              deadline: todayUtc,
+              inactiveUntil: task.isRepeating ? todayUtc : null,
+            );
+          }
+        }
+        continue;
+      }
+
+      final suggestion = suggestBestDate(
+        task,
+        simulatedTasks,
+        now: today,
+        minOffsetDays: 1,
+      );
+      suggestions[task.id] = suggestion;
+
+      // Update simulated list so subsequent tasks see the newly assigned load.
+      final idx = simulatedTasks.indexWhere((t) => t.id == task.id);
+      if (idx != -1) {
+        simulatedTasks[idx] = task.copyWith(
+          deadline: suggestion.targetDate,
+          inactiveUntil: task.isRepeating ? suggestion.targetDate : null,
+        );
+      }
+    }
+
+    return suggestions;
+  }
+
   /// Automatically spreads out a backlog of overdue tasks across upcoming days
   /// so the user isn't greeted by a wall of overdue badges.
   ///
@@ -156,52 +270,14 @@ class TaskRescheduler {
     int maxDailyTasks = 4,
     Set<String>? targetTaskIds,
   }) {
-    final today = _dateOnly(now ?? DateTime.now());
-    final overdue = allTasks.where((t) {
-      if (t.archived || t.completed) return false;
-      if (targetTaskIds != null && !targetTaskIds.contains(t.id)) return false;
-      final due = effectiveDueDate(t, now: today);
-      return due != null && isOverdue(due, now: today);
-    }).toList();
-
-    // Sort highest priority first so urgent items land on today/tomorrow.
-    overdue.sort((a, b) => b.priority.index.compareTo(a.priority.index));
-
-    final updates = <String, DateTime>{};
-    final simulatedTasks = List<Task>.from(allTasks);
-
-    // Keep up to `maxDailyTasks` on today; spread the overflow forward.
-    int keptToday = allTasks.where((t) {
-      if (t.archived || t.completed) return false;
-      final due = effectiveDueDate(t, now: today);
-      return due != null && _dateOnly(due).isAtSameMomentAs(today);
-    }).length;
-
-    for (final task in overdue) {
-      if (keptToday < maxDailyTasks) {
-        updates[task.id] = DateTime(today.year, today.month, today.day).toUtc();
-        keptToday++;
-        continue;
-      }
-
-      final suggestion = suggestBestDate(
-        task,
-        simulatedTasks,
-        now: today,
-        minOffsetDays: 1,
-      );
-      updates[task.id] = suggestion.targetDate;
-
-      // Update simulated list so subsequent overdue tasks see the newly assigned load.
-      final idx = simulatedTasks.indexWhere((t) => t.id == task.id);
-      if (idx != -1) {
-        simulatedTasks[idx] = task.copyWith(
-          deadline: suggestion.targetDate,
-          inactiveUntil: task.isRepeating ? suggestion.targetDate : null,
-        );
-      }
-    }
-
-    return updates;
+    final preview = previewRebalance(
+      allTasks,
+      now: now,
+      maxDailyTasks: maxDailyTasks,
+      targetTaskIds: targetTaskIds,
+      includeToday: false,
+      keepTodayCapacity: true,
+    );
+    return preview.map((id, s) => MapEntry(id, s.targetDate));
   }
 }

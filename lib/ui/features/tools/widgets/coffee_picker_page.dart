@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:housekeepr/models/coffee_recipe.dart';
+import 'package:housekeepr/services/app_haptics.dart';
 import 'package:housekeepr/services/coffee_firebase_service.dart';
 import 'package:housekeepr/services/widget_service.dart';
 import 'package:housekeepr/ui/common/widgets/color_picker.dart';
@@ -117,9 +118,11 @@ class _CoffeePickerPageState extends State<CoffeePickerPage> {
 
   void _spin() {
     if (_spinning) return;
+    AppHaptics.instance.tick();
     setState(() => _spinning = true);
     Future<void>.delayed(_spinDuration, () {
       if (!mounted) return;
+      AppHaptics.instance.confirm();
       setState(() {
         _recipe = _recipes[Random().nextInt(_recipes.length)];
         _spinning = false;
@@ -299,7 +302,12 @@ class _CoffeePickerPageState extends State<CoffeePickerPage> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          8,
+          20,
+          32 + MediaQuery.paddingOf(context).bottom,
+        ),
         children: [
           _PickerCard(
             recipe: _recipe,

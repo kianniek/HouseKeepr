@@ -249,5 +249,63 @@ void main() {
       expect(updates['low2']?.toLocal().isAfter(monday), isTrue);
     });
   });
+
+  group('TaskRescheduler.previewRebalance', () {
+    test('includes today tasks and omits tasks that stay on today', () {
+      final yesterday = monday.subtract(const Duration(days: 1));
+      final tasks = [
+        makeTask(id: 'over1', deadline: yesterday, priority: TaskPriority.urgent),
+        makeTask(id: 'today1', deadline: monday, priority: TaskPriority.high),
+        makeTask(id: 'today2', deadline: monday, priority: TaskPriority.low),
+      ];
+
+      final preview = TaskRescheduler.previewRebalance(
+        tasks,
+        now: monday,
+        maxDailyTasks: 2,
+        includeToday: true,
+        keepTodayCapacity: true,
+      );
+
+      // urgent overdue moves to today; high due-today stays on today (omitted);
+      // low due-today overflows to tomorrow.
+      expect(preview.containsKey('today1'), isFalse);
+      expect(preview['over1']?.targetDate.toLocal(), monday);
+      expect(preview['today2']?.targetDate.toLocal().isAfter(monday), isTrue);
+    });
+
+    test('pushes all eligible tasks to future days when keepTodayCapacity is false', () {
+      final yesterday = monday.subtract(const Duration(days: 1));
+      final tasks = [
+        makeTask(id: 'over1', deadline: yesterday, priority: TaskPriority.urgent),
+        makeTask(id: 'today1', deadline: monday, priority: TaskPriority.high),
+      ];
+
+      final preview = TaskRescheduler.previewRebalance(
+        tasks,
+        now: monday,
+        includeToday: true,
+        keepTodayCapacity: false,
+      );
+
+      expect(preview.length, 2);
+      expect(preview['over1']?.targetDate.toLocal().isAfter(monday), isTrue);
+      expect(preview['today1']?.targetDate.toLocal().isAfter(monday), isTrue);
+    });
+
+    test('getEligibleRebalanceTasks returns overdue and due-today unfinished tasks', () {
+      final yesterday = monday.subtract(const Duration(days: 1));
+      final tomorrow = monday.add(const Duration(days: 1));
+      final tasks = [
+        makeTask(id: 'over', deadline: yesterday),
+        makeTask(id: 'today', deadline: monday),
+        makeTask(id: 'tomorrow', deadline: tomorrow),
+        makeTask(id: 'done', deadline: yesterday, completed: true),
+      ];
+
+      final eligible = TaskRescheduler.getEligibleRebalanceTasks(tasks, now: monday);
+      expect(eligible.map((t) => t.id), ['over', 'today']);
+    });
+  });
 }
 

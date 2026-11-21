@@ -1,11 +1,11 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/coffee_root"
+    style="@style/Widget.Android.AppWidget.Container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#1F1B18"
-    android:padding="8dp">
+    android:padding="8dp"
+    android:theme="@style/Theme.Android.AppWidgetContainer">
 
     <LinearLayout
         android:id="@+id/coffee_idle_state"
@@ -20,7 +20,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="9dp"
-            android:text="What to brew?"
+            android:text="@string/coffee_what_to_brew"
             android:textColor="#A1887F"
             android:textSize="11sp" />
 
@@ -54,7 +54,7 @@
             android:paddingTop="5dp"
             android:paddingRight="12dp"
             android:paddingBottom="5dp"
-            android:text="TAP TO SPIN"
+            android:text="@string/coffee_tap_to_spin"
             android:textColor="#1F1B18"
             android:textSize="10sp"
             android:textStyle="bold" />
@@ -62,8 +62,6 @@
     </LinearLayout>
 
     <LinearLayout
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:tools="http://schemas.android.com/tools"
         android:id="@+id/coffee_recipe_state"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

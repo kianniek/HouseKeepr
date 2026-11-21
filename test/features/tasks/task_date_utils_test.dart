@@ -102,4 +102,96 @@ void main() {
       );
     });
   });
+
+  group('doesTaskOccurOnDate & computeCalendarWorkload', () {
+    final now = DateTime(2026, 11, 16, 10, 0); // Monday
+
+    test('matches non-repeating tasks by local calendar day', () {
+      final task = Task(
+        id: '1',
+        title: 'Take out trash',
+        deadline: DateTime(2026, 11, 18, 18, 0),
+      );
+      expect(doesTaskOccurOnDate(task, DateTime(2026, 11, 18), now: now), isTrue);
+      expect(doesTaskOccurOnDate(task, DateTime(2026, 11, 19), now: now), isFalse);
+    });
+
+    test('projects weekly repeating tasks across repeatDays', () {
+      final task = Task(
+        id: '2',
+        title: 'Water plants',
+        deadline: DateTime(2026, 11, 16), // Mon
+        isRepeating: true,
+        repeatRule: 'every:1:week',
+        repeatDays: const [DateTime.monday, DateTime.thursday],
+      );
+      expect(doesTaskOccurOnDate(task, DateTime(2026, 11, 16), now: now), isTrue);
+      expect(doesTaskOccurOnDate(task, DateTime(2026, 11, 17), now: now), isFalse);
+      expect(doesTaskOccurOnDate(task, DateTime(2026, 11, 19), now: now), isTrue);
+      expect(doesTaskOccurOnDate(task, DateTime(2026, 11, 23), now: now), isTrue);
+    });
+
+    test('computes light, moderate, and heavy workload dot levels', () {
+      final tasks = [
+        // Day 16: 1 low task (weight 1) -> light (1 dot)
+        Task(
+          id: 'a',
+          title: 'Low chore',
+          priority: TaskPriority.low,
+          deadline: DateTime(2026, 11, 16),
+        ),
+        // Day 17: 2 medium tasks (weight 4) -> moderate (2 dots)
+        Task(
+          id: 'b1',
+          title: 'Med 1',
+          priority: TaskPriority.medium,
+          deadline: DateTime(2026, 11, 17),
+        ),
+        Task(
+          id: 'b2',
+          title: 'Med 2',
+          priority: TaskPriority.medium,
+          deadline: DateTime(2026, 11, 17),
+        ),
+        // Day 18: urgent + high + medium (weight 9) -> heavy (3 dots)
+        Task(
+          id: 'c1',
+          title: 'Urgent',
+          priority: TaskPriority.urgent,
+          deadline: DateTime(2026, 11, 18),
+        ),
+        Task(
+          id: 'c2',
+          title: 'High',
+          priority: TaskPriority.high,
+          deadline: DateTime(2026, 11, 18),
+        ),
+        Task(
+          id: 'c3',
+          title: 'Med',
+          priority: TaskPriority.medium,
+          deadline: DateTime(2026, 11, 18),
+        ),
+      ];
+
+      final map = computeCalendarWorkload(
+        tasks,
+        DateTime(2026, 11, 16),
+        DateTime(2026, 11, 19),
+        now: now,
+      );
+
+      expect(map[DateTime(2026, 11, 16)]!.level, WorkloadLevel.light);
+      expect(map[DateTime(2026, 11, 16)]!.level.dots, 1);
+
+      expect(map[DateTime(2026, 11, 17)]!.level, WorkloadLevel.moderate);
+      expect(map[DateTime(2026, 11, 17)]!.level.dots, 2);
+
+      expect(map[DateTime(2026, 11, 18)]!.level, WorkloadLevel.heavy);
+      expect(map[DateTime(2026, 11, 18)]!.level.dots, 3);
+
+      expect(map[DateTime(2026, 11, 19)]!.level, WorkloadLevel.none);
+      expect(map[DateTime(2026, 11, 19)]!.level.dots, 0);
+    });
+  });
 }

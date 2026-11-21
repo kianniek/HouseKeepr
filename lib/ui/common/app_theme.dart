@@ -1,6 +1,75 @@
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 
-enum AppThemeType { orange, strawberry, blueberry, lime, grape }
+enum AppThemeType { orange, strawberry, blueberry, lime, grape, dynamic }
+
+/// Harmonizes semantic error tokens on Flutter's [ColorScheme] toward [primary].
+extension FlutterColorSchemeHarmonization on ColorScheme {
+  ColorScheme harmonizedWithPrimary() {
+    return copyWith(
+      error: error.harmonizeWith(primary),
+      onError: onError.harmonizeWith(primary),
+      errorContainer: errorContainer.harmonizeWith(primary),
+      onErrorContainer: onErrorContainer.harmonizeWith(primary),
+    );
+  }
+}
+
+/// Converts a dynamic `ColorScheme` (from `dynamic_color`/`material_ui` or Flutter)
+/// into a harmonized Flutter [ColorScheme].
+ColorScheme? colorSchemeFromDynamic(dynamic dyn) {
+  if (dyn == null) return null;
+  if (dyn is ColorScheme) return dyn.harmonizedWithPrimary();
+  return ColorScheme(
+    brightness: dyn.brightness as Brightness,
+    primary: dyn.primary as Color,
+    onPrimary: dyn.onPrimary as Color,
+    primaryContainer: dyn.primaryContainer as Color,
+    onPrimaryContainer: dyn.onPrimaryContainer as Color,
+    primaryFixed: dyn.primaryFixed as Color,
+    primaryFixedDim: dyn.primaryFixedDim as Color,
+    onPrimaryFixed: dyn.onPrimaryFixed as Color,
+    onPrimaryFixedVariant: dyn.onPrimaryFixedVariant as Color,
+    secondary: dyn.secondary as Color,
+    onSecondary: dyn.onSecondary as Color,
+    secondaryContainer: dyn.secondaryContainer as Color,
+    onSecondaryContainer: dyn.onSecondaryContainer as Color,
+    secondaryFixed: dyn.secondaryFixed as Color,
+    secondaryFixedDim: dyn.secondaryFixedDim as Color,
+    onSecondaryFixed: dyn.onSecondaryFixed as Color,
+    onSecondaryFixedVariant: dyn.onSecondaryFixedVariant as Color,
+    tertiary: dyn.tertiary as Color,
+    onTertiary: dyn.onTertiary as Color,
+    tertiaryContainer: dyn.tertiaryContainer as Color,
+    onTertiaryContainer: dyn.onTertiaryContainer as Color,
+    tertiaryFixed: dyn.tertiaryFixed as Color,
+    tertiaryFixedDim: dyn.tertiaryFixedDim as Color,
+    onTertiaryFixed: dyn.onTertiaryFixed as Color,
+    onTertiaryFixedVariant: dyn.onTertiaryFixedVariant as Color,
+    error: dyn.error as Color,
+    onError: dyn.onError as Color,
+    errorContainer: dyn.errorContainer as Color,
+    onErrorContainer: dyn.onErrorContainer as Color,
+    surface: dyn.surface as Color,
+    onSurface: dyn.onSurface as Color,
+    surfaceDim: dyn.surfaceDim as Color,
+    surfaceBright: dyn.surfaceBright as Color,
+    surfaceContainerLowest: dyn.surfaceContainerLowest as Color,
+    surfaceContainerLow: dyn.surfaceContainerLow as Color,
+    surfaceContainer: dyn.surfaceContainer as Color,
+    surfaceContainerHigh: dyn.surfaceContainerHigh as Color,
+    surfaceContainerHighest: dyn.surfaceContainerHighest as Color,
+    onSurfaceVariant: dyn.onSurfaceVariant as Color,
+    outline: dyn.outline as Color,
+    outlineVariant: dyn.outlineVariant as Color,
+    shadow: dyn.shadow as Color,
+    scrim: dyn.scrim as Color,
+    inverseSurface: dyn.inverseSurface as Color,
+    onInverseSurface: dyn.onInverseSurface as Color,
+    inversePrimary: dyn.inversePrimary as Color,
+    surfaceTint: dyn.surfaceTint as Color,
+  ).harmonizedWithPrimary();
+}
 
 extension AppThemeTypeX on AppThemeType {
   String get label {
@@ -15,6 +84,8 @@ extension AppThemeTypeX on AppThemeType {
         return 'Lime';
       case AppThemeType.grape:
         return 'Grape';
+      case AppThemeType.dynamic:
+        return 'Wallpaper';
     }
   }
 }
@@ -56,6 +127,18 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
     final ext = Theme.of(context).extension<AppSemanticColors>();
     if (ext != null) return ext;
     return Theme.of(context).brightness == Brightness.dark ? dark : light;
+  }
+
+  /// Returns a semantic color set subtly harmonized toward [primary].
+  static AppSemanticColors harmonized(Color primary, Brightness brightness) {
+    final base = brightness == Brightness.dark ? dark : light;
+    return AppSemanticColors(
+      warningContainer: base.warningContainer.harmonizeWith(primary),
+      onWarningContainer: base.onWarningContainer.harmonizeWith(primary),
+      daytimeAccent: base.daytimeAccent.harmonizeWith(primary),
+      eveningAccent: base.eveningAccent.harmonizeWith(primary),
+      favoriteAccent: base.favoriteAccent.harmonizeWith(primary),
+    );
   }
 
   @override
@@ -202,7 +285,8 @@ class AppThemePalette {
     );
   }
 
-  static AppThemePalette forType(AppThemeType t) => _palettes[t]!;
+  static AppThemePalette forType(AppThemeType t) =>
+      _palettes[t] ?? _palettes[AppThemeType.orange]!;
 
   /// Lookup [AppThemeType] by enum or legacy name, falling back to [AppThemeType.orange].
   static AppThemeType typeFromName(String? name) {
@@ -226,9 +310,8 @@ class AppThemePalette {
   /// Lookup palette by enum name, falling back to [AppThemeType.orange].
   static AppThemePalette forName(String? name) => forType(typeFromName(name));
 
-  /// Exports ARGB color integers for Android home-screen widgets.
-  Map<String, int> toWidgetColorsMap(Brightness brightness) {
-    final scheme = brightness == Brightness.dark ? darkScheme() : lightScheme();
+  /// Exports ARGB color integers from an arbitrary [ColorScheme] for Android widgets.
+  static Map<String, int> widgetColorsMapFromScheme(ColorScheme scheme) {
     return {
       'surface': scheme.surface.toARGB32(),
       'surfaceContainer': scheme.surfaceContainerHighest.toARGB32(),
@@ -240,6 +323,12 @@ class AppThemePalette {
       'onPrimaryContainer': scheme.onPrimaryContainer.toARGB32(),
       'outline': scheme.outline.toARGB32(),
     };
+  }
+
+  /// Exports ARGB color integers for Android home-screen widgets.
+  Map<String, int> toWidgetColorsMap(Brightness brightness) {
+    final scheme = brightness == Brightness.dark ? darkScheme() : lightScheme();
+    return widgetColorsMapFromScheme(scheme);
   }
 
   static const Map<AppThemeType, AppThemePalette> _palettes = {

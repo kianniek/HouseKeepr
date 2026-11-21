@@ -149,9 +149,24 @@ class WidgetService {
           ? (appMode?.name ?? ThemeController.instance.themeMode.name)
           : settings.widgetThemeMode;
 
-      final palette = AppThemePalette.forName(resolvedThemeName);
-      final lightColors = palette.toWidgetColorsMap(Brightness.light);
-      final darkColors = palette.toWidgetColorsMap(Brightness.dark);
+      final controller = ThemeController.instance;
+      final useDynamic =
+          resolvedThemeName == AppThemeType.dynamic.name &&
+          controller.isDynamicSupported;
+      final Map<String, int> lightColors;
+      final Map<String, int> darkColors;
+      if (useDynamic) {
+        lightColors = AppThemePalette.widgetColorsMapFromScheme(
+          controller.dynamicLightScheme!,
+        );
+        darkColors = AppThemePalette.widgetColorsMapFromScheme(
+          controller.dynamicDarkScheme!,
+        );
+      } else {
+        final palette = AppThemePalette.forName(resolvedThemeName);
+        lightColors = palette.toWidgetColorsMap(Brightness.light);
+        darkColors = palette.toWidgetColorsMap(Brightness.dark);
+      }
 
       await Future.wait([
         HomeWidget.saveWidgetData<String>(
@@ -267,37 +282,51 @@ class WidgetService {
       // Clear pending queue
       await HomeWidget.saveWidgetData<String>(_pillPendingTogglesKey, '');
 
-      final actions = data.split(',').where((s) => s.isNotEmpty);
-      final today = DateTime.now();
+      await reconcilePendingPillTogglesData(data, repository);
 
-      for (final action in actions) {
-        final parts = action.split(':');
-        if (parts.isEmpty) continue;
-        final slotName = parts[0];
-        final isTaken = parts.length > 1
-            ? parts[1].toLowerCase() == 'true'
-            : true;
-        final status = isTaken ? DoseStatus.taken : DoseStatus.pending;
-
-        if (slotName == 'morning') {
-          await repository.setSlotDosesStatus(
-            date: today,
-            slot: TimeOfDaySlot.morning,
-            status: status,
-          );
-        } else if (slotName == 'evening') {
-          await repository.setSlotDosesStatus(
-            date: today,
-            slot: TimeOfDaySlot.evening,
-            status: status,
-          );
-        }
-      }
-
-      final freshSummary = await repository.getWidgetSummary(today);
+      final freshSummary = await repository.getWidgetSummary(DateTime.now());
       await updateMedicationWidget(freshSummary);
     } catch (e) {
       debugPrint('WidgetService: failed to process pending pill toggles: $e');
+    }
+  }
+
+  /// Reconciles raw pending pill toggle entries (`slot:taken[:YYYY-MM-DD]`)
+  /// into [repository].
+  @visibleForTesting
+  Future<void> reconcilePendingPillTogglesData(
+    String data,
+    LocalMedicationRepository repository, {
+    DateTime? now,
+  }) async {
+    final actions = data.split(',').where((s) => s.isNotEmpty);
+    final fallbackDate = now ?? DateTime.now();
+
+    for (final action in actions) {
+      final parts = action.split(':');
+      if (parts.isEmpty) continue;
+      final slotName = parts[0];
+      final isTaken = parts.length > 1
+          ? parts[1].toLowerCase() == 'true'
+          : true;
+      final targetDate = parts.length > 2
+          ? (DateTime.tryParse(parts[2]) ?? fallbackDate)
+          : fallbackDate;
+      final status = isTaken ? DoseStatus.taken : DoseStatus.pending;
+
+      if (slotName == 'morning') {
+        await repository.setSlotDosesStatus(
+          date: targetDate,
+          slot: TimeOfDaySlot.morning,
+          status: status,
+        );
+      } else if (slotName == 'evening') {
+        await repository.setSlotDosesStatus(
+          date: targetDate,
+          slot: TimeOfDaySlot.evening,
+          status: status,
+        );
+      }
     }
   }
 

@@ -110,5 +110,36 @@ void main() {
         greaterThanOrEqualTo(4.5),
       );
     });
+
+    test('AppSemanticColors.harmonized preserves >= 4.5:1 contrast across palettes', () {
+      for (final type in AppThemeType.values) {
+        final palette = AppThemePalette.forType(type);
+        final lightSemantic = AppSemanticColors.harmonized(
+          palette.lightPrimary,
+          Brightness.light,
+        );
+        final darkSemantic = AppSemanticColors.harmonized(
+          palette.darkPrimary,
+          Brightness.dark,
+        );
+
+        expect(
+          _contrastRatio(
+            lightSemantic.warningContainer,
+            lightSemantic.onWarningContainer,
+          ),
+          greaterThanOrEqualTo(4.5),
+          reason: '${type.name} light harmonized warning contrast',
+        );
+        expect(
+          _contrastRatio(
+            darkSemantic.warningContainer,
+            darkSemantic.onWarningContainer,
+          ),
+          greaterThanOrEqualTo(4.5),
+          reason: '${type.name} dark harmonized warning contrast',
+        );
+      }
+    });
   });
 }

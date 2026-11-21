@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/widget_settings.dart';
+import '../../../../services/theme_controller.dart';
 import '../../../../services/widget_service.dart';
 import '../../../common/app_theme.dart';
 
@@ -135,15 +136,22 @@ class _WidgetThemeSectionState extends State<_WidgetThemeSection> {
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: AppThemeType.values.map((t) {
-                final selected = _settings.widgetThemeType == t.name;
-                return ChoiceChip(
-                  label: Text(t.label),
-                  selected: selected,
-                  onSelected: (_) =>
-                      _update(_settings.copyWith(widgetThemeType: t.name)),
-                );
-              }).toList(),
+              children: AppThemeType.values
+                  .where(
+                    (t) =>
+                        t != AppThemeType.dynamic ||
+                        ThemeController.instance.isDynamicSupported,
+                  )
+                  .map((t) {
+                    final selected = _settings.widgetThemeType == t.name;
+                    return ChoiceChip(
+                      label: Text(t.label),
+                      selected: selected,
+                      onSelected: (_) =>
+                          _update(_settings.copyWith(widgetThemeType: t.name)),
+                    );
+                  })
+                  .toList(),
             ),
           ),
           Padding(

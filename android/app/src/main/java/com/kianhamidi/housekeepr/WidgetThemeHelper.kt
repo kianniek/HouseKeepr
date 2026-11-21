@@ -1,7 +1,10 @@
 package com.kianhamidi.housekeepr
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.content.res.Configuration
+import android.os.Build
+import android.widget.RemoteViews
 import org.json.JSONObject
 
 data class WidgetThemePalette(
@@ -69,6 +72,18 @@ object WidgetThemeHelper {
             onPrimaryContainer = defaultOnPrimaryContainer(isDark),
             outline = defaultOutline(isDark),
         )
+    }
+
+    fun applyRoundedBackground(views: RemoteViews, viewId: Int, color: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            views.setColorStateList(
+                viewId,
+                "setBackgroundTintList",
+                ColorStateList.valueOf(color),
+            )
+        } else {
+            views.setInt(viewId, "setBackgroundColor", color)
+        }
     }
 
     private fun JSONObject.colorInt(key: String, fallback: Int): Int =

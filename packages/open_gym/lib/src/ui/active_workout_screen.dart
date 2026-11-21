@@ -17,6 +17,8 @@ class ActiveWorkoutScreen extends StatefulWidget {
     required this.controller,
   });
 
+  static const String routeName = '/active_workout';
+
   final OpenGymController controller;
 
   @override
@@ -24,7 +26,6 @@ class ActiveWorkoutScreen extends StatefulWidget {
 }
 
 class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
-  int _selectedEntryIndex = 0;
   int _lastRestCompletedNonce = 0;
   bool _showScreenFlash = false;
   final Set<String> _expandedAnimationIds = <String>{};
@@ -36,11 +37,15 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     super.initState();
     _lastRestCompletedNonce = widget.controller.restCompletedNonce;
     widget.controller.addListener(_onControllerChanged);
+    widget.controller.setInActiveWorkoutScreen(true);
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
+    if (widget.controller.hasActiveWorkout) {
+      widget.controller.setInActiveWorkoutScreen(false);
+    }
     super.dispose();
   }
 
@@ -75,7 +80,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     if (picked != null) {
       widget.controller.addExerciseToActiveWorkout(picked);
       final count = widget.controller.activeWorkout?.entries.length ?? 1;
-      setState(() => _selectedEntryIndex = (count - 1).clamp(0, count));
+      widget.controller.setSelectedEntryIndex((count - 1).clamp(0, count));
     }
   }
 
@@ -147,13 +152,12 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
         final progress = totalSets > 0 ? doneSets / totalSets : 0.0;
         final layout = prefs.workoutLayout;
 
-        if (_selectedEntryIndex >= workout.entries.length &&
-            workout.entries.isNotEmpty) {
-          _selectedEntryIndex = workout.entries.length - 1;
-        }
+        final selectedIndex = workout.entries.isEmpty
+            ? 0
+            : controller.selectedEntryIndex.clamp(0, workout.entries.length - 1);
 
         final currentEntry = workout.entries.isNotEmpty
-            ? workout.entries[_selectedEntryIndex]
+            ? workout.entries[selectedIndex]
             : null;
         final activeBodyParts = <String, int>{
           for (final e in workout.entries) e.bodyPart: 4,
@@ -263,13 +267,13 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                             children: List<Widget>.generate(
                               workout.entries.length,
                               (i) {
-                                final isSelected = i == _selectedEntryIndex;
+                                final isSelected = i == selectedIndex;
                                 return Padding(
                                   padding: const EdgeInsets.only(right: 8),
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(20),
                                     onTap: () =>
-                                        setState(() => _selectedEntryIndex = i),
+                                        controller.setSelectedEntryIndex(i),
                                     child: CircleAvatar(
                                       radius: 17,
                                       backgroundColor: isSelected
@@ -324,12 +328,17 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                         ),
                       )
                     : ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          8,
+                          16,
+                          24 + MediaQuery.paddingOf(context).bottom,
+                        ),
                         children: <Widget>[
                           if (layout == 'focus')
                             _buildFocusSection(
                               context,
-                              entryIndex: _selectedEntryIndex,
+                              entryIndex: selectedIndex,
                               entry: currentEntry,
                               unit: unit,
                             )
@@ -351,7 +360,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                           else
                             _buildExerciseSection(
                               context,
-                              entryIndex: _selectedEntryIndex,
+                              entryIndex: selectedIndex,
                               entry: currentEntry,
                               workout: workout,
                               unit: unit,
@@ -363,18 +372,18 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: <Widget>[
                                 TextButton.icon(
-                                  onPressed: _selectedEntryIndex > 0
-                                      ? () => setState(
-                                          () => _selectedEntryIndex--)
+                                  onPressed: selectedIndex > 0
+                                      ? () => controller.setSelectedEntryIndex(
+                                          selectedIndex - 1)
                                       : null,
                                   icon: const Icon(Icons.chevron_left),
                                   label: const Text('Prev'),
                                 ),
                                 TextButton(
-                                  onPressed: _selectedEntryIndex <
+                                  onPressed: selectedIndex <
                                           workout.entries.length - 1
-                                      ? () => setState(
-                                          () => _selectedEntryIndex++)
+                                      ? () => controller.setSelectedEntryIndex(
+                                          selectedIndex + 1)
                                       : null,
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,

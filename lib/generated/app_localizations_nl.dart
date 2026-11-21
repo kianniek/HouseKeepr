@@ -34,7 +34,13 @@ class AppLocalizationsNl extends AppLocalizations {
   String get selectTheme => 'Thema kiezen';
 
   @override
+  String get themeDynamic => 'Achtergrond';
+
+  @override
   String get language => 'Taal';
+
+  @override
+  String get languageSystemDefault => 'Systeemstandaard';
 
   @override
   String get languageEnglish => 'Engels';
@@ -47,6 +53,13 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get floatingNavSubtitle => 'Gebruik een zwevende navigatiebalkstijl';
+
+  @override
+  String get hapticsTitle => 'Voelbare feedback';
+
+  @override
+  String get hapticsSubtitle =>
+      'Subtiele trillingen bij tikken, vegen en timers';
 
   @override
   String get dailyNotificationsTitle => 'Dagelijkse meldingen';
@@ -511,4 +524,25 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get notifHouseholdSubtitle =>
       'Gedeelde lijst- en taakupdates van huisgenoten';
+
+  @override
+  String get pinShoppingList => 'Vastmaken op startscherm';
+
+  @override
+  String get pinToHomeScreen => 'Vastmaken op startscherm';
+
+  @override
+  String get shortcutPinRequested => 'Snelkoppeling vastmaken geopend';
+
+  @override
+  String get shareActionTitle => 'Gedeelde inhoud toevoegen aan HouseKeepr';
+
+  @override
+  String get shareToShoppingList => 'Toevoegen aan boodschappenlijst';
+
+  @override
+  String get shareImportRecipe => 'Recept importeren';
+
+  @override
+  String get shareCreateTask => 'Taak aanmaken';
 }

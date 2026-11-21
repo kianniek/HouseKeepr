@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
 import 'package:health_keepr/health_keepr.dart';
 
 import '../audio/open_gym_sound_service.dart';
 import '../data/exercise_media_service.dart';
+import '../models/active_workout_snapshot.dart';
 import '../models/body_measurement.dart';
 import '../models/exercise.dart';
 import '../models/exercise_set.dart';
@@ -20,7 +22,9 @@ import '../sync/open_gym_server_client.dart';
 import '../sync/open_gym_sync_service.dart';
 import '../sync/webdav_client.dart';
 import 'analytics_service.dart';
+import 'open_gym_live_notification_service.dart';
 import 'open_gym_repository.dart';
+import 'open_gym_shortcut_service.dart';
 import 'personal_record_service.dart';
 import 'progression_service.dart';
 
@@ -66,6 +70,9 @@ class OpenGymController extends ChangeNotifier {
     ProgressionService progressionService = const ProgressionService(),
     OpenGymServerClient? serverClient,
     HealthConnectService? healthConnectService,
+    OpenGymShortcutService? shortcutService,
+    WorkoutNotificationScheduler? notificationScheduler,
+    OpenGymLiveNotificationService? liveNotificationService,
     void Function(bool keepAwake)? onWakeLockChanged,
   })  : _repository = OpenGymRepository(store),
         _prService = prService,
@@ -77,6 +84,10 @@ class OpenGymController extends ChangeNotifier {
           client: serverClient,
         ),
         _healthConnect = healthConnectService ?? HealthConnectService(),
+        _shortcutService = shortcutService ?? const OpenGymShortcutService(),
+        _notificationScheduler = notificationScheduler,
+        _liveNotificationService =
+            liveNotificationService ?? OpenGymLiveNotificationService(),
         _mediaService = ExerciseMediaService(store: store),
         _soundService = OpenGymSoundService(),
         _onWakeLockChanged = onWakeLockChanged;
@@ -90,12 +101,22 @@ class OpenGymController extends ChangeNotifier {
   final OpenGymServerClient _serverClient;
   final OpenGymSyncService _syncService;
   final HealthConnectService _healthConnect;
+  final OpenGymShortcutService _shortcutService;
+  final WorkoutNotificationScheduler? _notificationScheduler;
+  final OpenGymLiveNotificationService _liveNotificationService;
   final ExerciseMediaService _mediaService;
   final OpenGymSoundService _soundService;
   final void Function(bool keepAwake)? _onWakeLockChanged;
 
+  OpenGymLiveUpdateStatus _liveUpdateStatus = const OpenGymLiveUpdateStatus();
+  StreamSubscription<OpenGymLiveAction>? _liveActionSub;
+  OpenGymLiveWorkoutPayload? _lastSentLivePayload;
+
   bool _isLoading = true;
   bool _isSyncing = false;
+  Color _shortcutIconColor = OpenGymShortcutService.defaultIconColor;
+  Color _shortcutBackgroundColor =
+      OpenGymShortcutService.defaultBackgroundColor;
   List<Exercise> _exercises = <Exercise>[];
   List<WorkoutTemplate> _templates = <WorkoutTemplate>[];
   List<WorkoutLog> _history = <WorkoutLog>[];
@@ -132,6 +153,8 @@ class OpenGymController extends ChangeNotifier {
 
   final Map<String, List<RecordKind>> _sessionPrs =
       <String, List<RecordKind>>{};
+  int _selectedEntryIndex = 0;
+  bool _isInActiveWorkoutScreen = false;
 
   bool get isLoading => _isLoading;
   bool get isSyncing => _isSyncing;
@@ -176,12 +199,36 @@ class OpenGymController extends ChangeNotifier {
 
   Map<String, List<RecordKind>> get sessionPrs =>
       Map<String, List<RecordKind>>.unmodifiable(_sessionPrs);
+  int get selectedEntryIndex => _selectedEntryIndex;
+  bool get isInActiveWorkoutScreen => _isInActiveWorkoutScreen;
+  OpenGymLiveUpdateStatus get liveUpdateStatus => _liveUpdateStatus;
+
+  void setSelectedEntryIndex(int index) {
+    final entries = _activeWorkout?.entries ?? const <WorkoutEntry>[];
+    final clamped = entries.isEmpty ? 0 : index.clamp(0, entries.length - 1);
+    if (_selectedEntryIndex == clamped) return;
+    _selectedEntryIndex = clamped;
+    _persistActiveSession();
+    _syncLiveNotification();
+    notifyListeners();
+  }
+
+  void setInActiveWorkoutScreen(bool value) {
+    if (_isInActiveWorkoutScreen == value) return;
+    _isInActiveWorkoutScreen = value;
+    _persistActiveSession();
+  }
 
   Future<void> initialize() async {
     _isLoading = true;
     notifyListeners();
     try {
       await _reloadAllFromStore();
+      _liveUpdateStatus =
+          await _liveNotificationService.getLiveUpdateStatus();
+      _liveActionSub ??=
+          _liveNotificationService.actions.listen(_applyLiveAction);
+      await syncPendingLiveNotificationActions();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -226,6 +273,37 @@ class OpenGymController extends ChangeNotifier {
       _preferences = prefsUpdated;
       await _repository.savePreferences(prefsUpdated);
     }
+    final activeSnapshot = await _repository.loadActiveSession();
+    _restoreActiveSession(activeSnapshot);
+    _syncNextWorkoutShortcut();
+  }
+
+  void updateShortcutColors({
+    required Color iconColor,
+    required Color backgroundColor,
+  }) {
+    if (_shortcutIconColor == iconColor &&
+        _shortcutBackgroundColor == backgroundColor) {
+      return;
+    }
+    _shortcutIconColor = iconColor;
+    _shortcutBackgroundColor = backgroundColor;
+    if (!_isLoading) {
+      _syncNextWorkoutShortcut();
+      if (_activeWorkout != null) {
+        _syncLiveNotification();
+      }
+    }
+  }
+
+  void _syncNextWorkoutShortcut() {
+    unawaited(
+      _shortcutService.updateNextWorkoutShortcut(
+        todaysScheduledTemplate(),
+        iconColor: _shortcutIconColor,
+        backgroundColor: _shortcutBackgroundColor,
+      ),
+    );
   }
 
   // ── Progression Helpers ──────────────────────────────────────────────────
@@ -324,9 +402,105 @@ class OpenGymController extends ChangeNotifier {
     );
   }
 
+  void _restoreActiveSession(ActiveWorkoutSnapshot? snapshot) {
+    if (snapshot == null) return;
+    _workoutTimer?.cancel();
+    _restTimer?.cancel();
+    _activeWorkout = snapshot.workout;
+    _workoutStartedAt =
+        DateTime.tryParse(snapshot.workoutStartedAt)?.toLocal() ??
+            DateTime.now();
+    _pausedAt = snapshot.pausedAt != null
+        ? DateTime.tryParse(snapshot.pausedAt!)?.toLocal()
+        : null;
+    _accumulatedPaused = Duration(milliseconds: snapshot.accumulatedPausedMs);
+    _isPaused = snapshot.isPaused;
+
+    final referenceNow = _isPaused ? (_pausedAt ?? DateTime.now()) : DateTime.now();
+    final elapsed = referenceNow.difference(_workoutStartedAt!).inSeconds -
+        _accumulatedPaused.inSeconds;
+    _elapsedSeconds = elapsed < 0 ? 0 : elapsed;
+
+    _sessionPrs
+      ..clear()
+      ..addAll(snapshot.sessionPrs);
+    final entries = snapshot.workout.entries;
+    _selectedEntryIndex = entries.isEmpty
+        ? 0
+        : snapshot.selectedEntryIndex.clamp(0, entries.length - 1);
+    _isInActiveWorkoutScreen = snapshot.isInActiveWorkoutScreen;
+
+    _countdownBeepedSeconds.clear();
+    _restRemainingSeconds = 0;
+    _restTotalSeconds = 0;
+    _restEndsAt = null;
+    if (snapshot.restEndsAt != null) {
+      final parsedEnd = DateTime.tryParse(snapshot.restEndsAt!)?.toLocal();
+      if (parsedEnd != null) {
+        final remainingMs = parsedEnd.difference(referenceNow).inMilliseconds;
+        if (remainingMs > 0) {
+          _restEndsAt = parsedEnd;
+          _restRemainingSeconds = (remainingMs / 1000.0).ceil();
+          _restTotalSeconds = snapshot.restTotalSeconds > 0
+              ? snapshot.restTotalSeconds
+              : _restRemainingSeconds;
+          if (!_isPaused) {
+            _startRestTicker();
+          }
+        }
+      }
+    }
+
+    _startWorkoutTicker();
+    _notifyWakeLock();
+    _syncLiveNotification();
+  }
+
+  void _persistActiveSession() {
+    final current = _activeWorkout;
+    if (current == null) return;
+    final snapshot = ActiveWorkoutSnapshot(
+      workout: current,
+      workoutStartedAt:
+          (_workoutStartedAt ?? DateTime.now()).toUtc().toIso8601String(),
+      pausedAt: _pausedAt?.toUtc().toIso8601String(),
+      accumulatedPausedMs: _accumulatedPaused.inMilliseconds,
+      isPaused: _isPaused,
+      restEndsAt: _restEndsAt?.toUtc().toIso8601String(),
+      restTotalSeconds: _restTotalSeconds,
+      sessionPrs: Map<String, List<RecordKind>>.from(_sessionPrs),
+      selectedEntryIndex: _selectedEntryIndex,
+      isInActiveWorkoutScreen: _isInActiveWorkoutScreen,
+      updatedAt: HealthRecordMetadata.nowUtcIso(),
+    );
+    unawaited(_repository.saveActiveSession(snapshot));
+  }
+
+  void _scheduleRestNotification() {
+    final endsAt = _restEndsAt;
+    final scheduler = _notificationScheduler;
+    if (endsAt == null || scheduler == null || _isPaused) return;
+    unawaited(
+      scheduler.scheduleRestEnd(
+        endsAt: endsAt,
+        soundProfileId: _preferences.restSound,
+        soundEnabled: _preferences.soundEnabled,
+        hapticsEnabled: _preferences.hapticsEnabled,
+        workoutTitle: _activeWorkout?.title ?? 'OpenGym',
+      ),
+    );
+  }
+
+  void _cancelRestNotification() {
+    final scheduler = _notificationScheduler;
+    if (scheduler == null) return;
+    unawaited(scheduler.cancelRestEnd());
+  }
+
   void _startSession(WorkoutLog log) {
     _workoutTimer?.cancel();
     _restTimer?.cancel();
+    _cancelRestNotification();
     _activeWorkout = log;
     _elapsedSeconds = 0;
     _isPaused = false;
@@ -338,8 +512,13 @@ class OpenGymController extends ChangeNotifier {
     _restEndsAt = null;
     _countdownBeepedSeconds.clear();
     _sessionPrs.clear();
+    _selectedEntryIndex = 0;
+    _isInActiveWorkoutScreen = false;
     _startWorkoutTicker();
     _notifyWakeLock();
+    _persistActiveSession();
+    _lastSentLivePayload = null;
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -370,6 +549,7 @@ class OpenGymController extends ChangeNotifier {
     final now = DateTime.now();
     if (_isPaused) {
       _pausedAt = now;
+      _cancelRestNotification();
     } else {
       if (_pausedAt != null) {
         final pauseSpan = now.difference(_pausedAt!);
@@ -379,8 +559,13 @@ class OpenGymController extends ChangeNotifier {
         }
         _pausedAt = null;
       }
+      if (_restEndsAt != null) {
+        _scheduleRestNotification();
+      }
     }
     _notifyWakeLock();
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -388,6 +573,8 @@ class OpenGymController extends ChangeNotifier {
     final current = _activeWorkout;
     if (current == null || title.trim().isEmpty) return;
     _activeWorkout = current.copyWith(title: title.trim());
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -398,6 +585,7 @@ class OpenGymController extends ChangeNotifier {
     _activeWorkout = current.copyWith(
       notes: (trimmed == null || trimmed.isEmpty) ? null : trimmed,
     );
+    _persistActiveSession();
     notifyListeners();
   }
 
@@ -405,6 +593,7 @@ class OpenGymController extends ChangeNotifier {
     final current = _activeWorkout;
     if (current == null) return;
     _activeWorkout = current.copyWith(countForProgression: count);
+    _persistActiveSession();
     notifyListeners();
   }
 
@@ -449,6 +638,8 @@ class OpenGymController extends ChangeNotifier {
     _activeWorkout = current.copyWith(
       entries: <WorkoutEntry>[...current.entries, ...newEntries],
     );
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -470,6 +661,8 @@ class OpenGymController extends ChangeNotifier {
     _activeWorkout = current.copyWith(
       entries: <WorkoutEntry>[...current.entries, entry],
     );
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -483,6 +676,13 @@ class OpenGymController extends ChangeNotifier {
     final updated = List<WorkoutEntry>.from(current.entries)
       ..removeAt(entryIndex);
     _activeWorkout = current.copyWith(entries: updated);
+    if (updated.isEmpty) {
+      _selectedEntryIndex = 0;
+    } else if (_selectedEntryIndex >= updated.length) {
+      _selectedEntryIndex = updated.length - 1;
+    }
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -499,6 +699,8 @@ class OpenGymController extends ChangeNotifier {
     final updatedEntries = List<WorkoutEntry>.from(current.entries);
     updatedEntries[entryIndex] = transform(updatedEntries[entryIndex]);
     _activeWorkout = current.copyWith(entries: updatedEntries);
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -573,6 +775,7 @@ class OpenGymController extends ChangeNotifier {
       updated[entryIndex + 1] = second.copyWith(supersetId: id);
     }
     _activeWorkout = current.copyWith(entries: updated);
+    _persistActiveSession();
     notifyListeners();
   }
 
@@ -587,6 +790,8 @@ class OpenGymController extends ChangeNotifier {
     final item = updated.removeAt(entryIndex);
     updated.insert(entryIndex - 1, item);
     _activeWorkout = current.copyWith(entries: updated);
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -601,6 +806,8 @@ class OpenGymController extends ChangeNotifier {
     final item = updated.removeAt(entryIndex);
     updated.insert(entryIndex + 1, item);
     _activeWorkout = current.copyWith(entries: updated);
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -623,6 +830,8 @@ class OpenGymController extends ChangeNotifier {
     updatedEntries[entryIndex] =
         entry.copyWith(sets: <ExerciseSet>[...entry.sets, newSet]);
     _activeWorkout = current.copyWith(entries: updatedEntries);
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -656,6 +865,8 @@ class OpenGymController extends ChangeNotifier {
     final updatedEntries = List<WorkoutEntry>.from(current.entries);
     updatedEntries[entryIndex] = entry.copyWith(sets: updatedSets);
     _activeWorkout = current.copyWith(entries: updatedEntries);
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -672,6 +883,8 @@ class OpenGymController extends ChangeNotifier {
     final updatedEntries = List<WorkoutEntry>.from(current.entries);
     updatedEntries[entryIndex] = entry.copyWith(sets: updatedSets);
     _activeWorkout = current.copyWith(entries: updatedEntries);
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -715,6 +928,8 @@ class OpenGymController extends ChangeNotifier {
     final updatedEntries = List<WorkoutEntry>.from(current.entries);
     updatedEntries[entryIndex] = entry.copyWith(sets: updatedSets);
     _activeWorkout = current.copyWith(entries: updatedEntries);
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -731,8 +946,69 @@ class OpenGymController extends ChangeNotifier {
     }
 
     final target = entry.sets[setIndex];
-    final nowCompleted = !target.isCompleted;
-    final updatedSet = target.copyWith(isCompleted: nowCompleted);
+    if (!target.isCompleted) {
+      return _completeSetAt(
+        entryIndex,
+        setIndex,
+        startRestTimer: true,
+        playFeedback: true,
+        advanceSelectedEntry: false,
+      );
+    }
+
+    final updatedSet = target.copyWith(isCompleted: false);
+    final updatedSets = List<ExerciseSet>.from(entry.sets);
+    updatedSets[setIndex] = updatedSet;
+
+    final updatedEntries = List<WorkoutEntry>.from(current.entries);
+    updatedEntries[entryIndex] = entry.copyWith(sets: updatedSets);
+    _activeWorkout = current.copyWith(entries: updatedEntries);
+    _sessionPrs.remove(updatedSet.id);
+
+    _persistActiveSession();
+    _syncLiveNotification();
+    notifyListeners();
+    return const <RecordKind>[];
+  }
+
+  /// Marks the next incomplete set completed (starting from the currently
+  /// selected entry). Notification actions call this with
+  /// [startRestTimer] set to `false`.
+  List<RecordKind> completeNextSet({bool startRestTimer = true}) {
+    final nextLoc = _findNextIncompleteSet();
+    if (nextLoc == null) {
+      _syncLiveNotification();
+      return const <RecordKind>[];
+    }
+    return _completeSetAt(
+      nextLoc.$1,
+      nextLoc.$2,
+      startRestTimer: startRestTimer,
+      playFeedback: true,
+      advanceSelectedEntry: true,
+    );
+  }
+
+  List<RecordKind> _completeSetAt(
+    int entryIndex,
+    int setIndex, {
+    required bool startRestTimer,
+    required bool playFeedback,
+    required bool advanceSelectedEntry,
+  }) {
+    final current = _activeWorkout;
+    if (current == null ||
+        entryIndex < 0 ||
+        entryIndex >= current.entries.length) {
+      return const <RecordKind>[];
+    }
+    final entry = current.entries[entryIndex];
+    if (setIndex < 0 || setIndex >= entry.sets.length) {
+      return const <RecordKind>[];
+    }
+
+    final target = entry.sets[setIndex];
+    final updatedSet = target.copyWith(isCompleted: true);
 
     final updatedSets = List<ExerciseSet>.from(entry.sets);
     updatedSets[setIndex] = updatedSet;
@@ -741,38 +1017,67 @@ class OpenGymController extends ChangeNotifier {
     updatedEntries[entryIndex] = entry.copyWith(sets: updatedSets);
     _activeWorkout = current.copyWith(entries: updatedEntries);
 
-    List<RecordKind> earnedPrs = const <RecordKind>[];
-    if (nowCompleted) {
+    if (playFeedback) {
       _soundService.playSetTick(
         soundEnabled: _preferences.soundEnabled,
         hapticsEnabled: _preferences.hapticsEnabled,
       );
-      startRest(entry.restSeconds);
-      if (current.countForProgression && entry.countForProgression) {
-        final baseline = _prService.baselineFor(
-          entry.exerciseId,
-          _history,
-          exerciseName: entry.exerciseName,
-          formula: _preferences.oneRmFormula,
-        );
-        earnedPrs = _prService.evaluateSet(
-          updatedSet,
-          baseline,
-          formula: _preferences.oneRmFormula,
-        );
-        if (earnedPrs.isNotEmpty) {
-          _sessionPrs[updatedSet.id] = earnedPrs;
-          if (_preferences.prSoundEnabled) {
-            _soundService.playPrChime(soundEnabled: _preferences.soundEnabled);
-          }
-        }
-      }
-    } else {
-      _sessionPrs.remove(updatedSet.id);
     }
 
-    notifyListeners();
+    List<RecordKind> earnedPrs = const <RecordKind>[];
+    if (current.countForProgression && entry.countForProgression) {
+      final baseline = _prService.baselineFor(
+        entry.exerciseId,
+        _history,
+        exerciseName: entry.exerciseName,
+        formula: _preferences.oneRmFormula,
+      );
+      earnedPrs = _prService.evaluateSet(
+        updatedSet,
+        baseline,
+        formula: _preferences.oneRmFormula,
+      );
+      if (earnedPrs.isNotEmpty) {
+        _sessionPrs[updatedSet.id] = earnedPrs;
+        if (playFeedback && _preferences.prSoundEnabled) {
+          _soundService.playPrChime(soundEnabled: _preferences.soundEnabled);
+        }
+      }
+    }
+
+    if (advanceSelectedEntry) {
+      final upcoming = _findNextIncompleteSet(preferredEntryIndex: entryIndex);
+      if (upcoming != null) {
+        _selectedEntryIndex = upcoming.$1;
+      }
+    }
+
+    if (startRestTimer && entry.restSeconds > 0) {
+      startRest(entry.restSeconds);
+    } else {
+      _persistActiveSession();
+      _syncLiveNotification();
+      notifyListeners();
+    }
     return earnedPrs;
+  }
+
+  (int, int)? _findNextIncompleteSet({int? preferredEntryIndex}) {
+    final current = _activeWorkout;
+    if (current == null || current.entries.isEmpty) return null;
+    final entries = current.entries;
+    final startIdx =
+        (preferredEntryIndex ?? _selectedEntryIndex).clamp(0, entries.length - 1);
+    for (var offset = 0; offset < entries.length; offset++) {
+      final eIdx = (startIdx + offset) % entries.length;
+      final sets = entries[eIdx].sets;
+      for (var sIdx = 0; sIdx < sets.length; sIdx++) {
+        if (!sets[sIdx].isCompleted) {
+          return (eIdx, sIdx);
+        }
+      }
+    }
+    return null;
   }
 
   // ── Wall-Clock Anchored Rest Countdown Timer ─────────────────────────────
@@ -784,20 +1089,33 @@ class OpenGymController extends ChangeNotifier {
     _restRemainingSeconds = seconds;
     _restEndsAt = DateTime.now().add(Duration(seconds: seconds));
     _countdownBeepedSeconds.clear();
+    _startRestTicker();
+    _scheduleRestNotification();
+    _persistActiveSession();
+    _syncLiveNotification();
+    notifyListeners();
+  }
+
+  void _startRestTicker() {
+    _restTimer?.cancel();
     _restTimer = Timer.periodic(const Duration(milliseconds: 250), (timer) {
       if (_isPaused || _restEndsAt == null) return;
       final remainingMs = _restEndsAt!.difference(DateTime.now()).inMilliseconds;
       final next = (remainingMs / 1000.0).ceil();
       if (next <= 0) {
         _restRemainingSeconds = 0;
+        _restTotalSeconds = 0;
         _restEndsAt = null;
         _restCompletedNonce++;
         timer.cancel();
+        _cancelRestNotification();
         _soundService.playRestEndChime(
           kind: _preferences.restSound,
           soundEnabled: _preferences.soundEnabled,
           hapticsEnabled: _preferences.hapticsEnabled,
         );
+        _persistActiveSession();
+        _syncLiveNotification();
         notifyListeners();
       } else if (next != _restRemainingSeconds) {
         _restRemainingSeconds = next;
@@ -812,7 +1130,6 @@ class OpenGymController extends ChangeNotifier {
         notifyListeners();
       }
     });
-    notifyListeners();
   }
 
   void addRest(int deltaSeconds) {
@@ -828,6 +1145,9 @@ class OpenGymController extends ChangeNotifier {
         _restEndsAt = DateTime.now().add(Duration(seconds: next));
       }
       if (next > _restTotalSeconds) _restTotalSeconds = next;
+      _scheduleRestNotification();
+      _persistActiveSession();
+      _syncLiveNotification();
       notifyListeners();
     }
   }
@@ -838,6 +1158,9 @@ class OpenGymController extends ChangeNotifier {
     _restTotalSeconds = 0;
     _restEndsAt = null;
     _countdownBeepedSeconds.clear();
+    _cancelRestNotification();
+    _persistActiveSession();
+    _syncLiveNotification();
     notifyListeners();
   }
 
@@ -847,6 +1170,9 @@ class OpenGymController extends ChangeNotifier {
 
     _workoutTimer?.cancel();
     _restTimer?.cancel();
+    _cancelRestNotification();
+    _stopLiveNotification();
+    await _repository.clearActiveSession();
 
     final completed = current.copyWith(
       finishedAt: HealthRecordMetadata.nowUtcIso(),
@@ -861,6 +1187,7 @@ class OpenGymController extends ChangeNotifier {
     _history = <WorkoutLog>[completed, ..._history];
 
     await _advanceRotationAfterWorkout(completed);
+    _syncNextWorkoutShortcut();
 
     _activeWorkout = null;
     _elapsedSeconds = 0;
@@ -872,6 +1199,8 @@ class OpenGymController extends ChangeNotifier {
     _restTotalSeconds = 0;
     _restEndsAt = null;
     _sessionPrs.clear();
+    _selectedEntryIndex = 0;
+    _isInActiveWorkoutScreen = false;
     _notifyWakeLock();
     notifyListeners();
 
@@ -926,6 +1255,9 @@ class OpenGymController extends ChangeNotifier {
   void discardWorkout() {
     _workoutTimer?.cancel();
     _restTimer?.cancel();
+    _cancelRestNotification();
+    _stopLiveNotification();
+    unawaited(_repository.clearActiveSession());
     _activeWorkout = null;
     _elapsedSeconds = 0;
     _isPaused = false;
@@ -936,6 +1268,8 @@ class OpenGymController extends ChangeNotifier {
     _restTotalSeconds = 0;
     _restEndsAt = null;
     _sessionPrs.clear();
+    _selectedEntryIndex = 0;
+    _isInActiveWorkoutScreen = false;
     _notifyWakeLock();
     notifyListeners();
   }
@@ -1099,6 +1433,7 @@ class OpenGymController extends ChangeNotifier {
     } else {
       _templates = <WorkoutTemplate>[..._templates, template];
     }
+    _syncNextWorkoutShortcut();
     notifyListeners();
   }
 
@@ -1385,6 +1720,7 @@ class OpenGymController extends ChangeNotifier {
   Future<void> saveProgramme(Programme programme) async {
     await _repository.saveProgramme(programme);
     _programmes = await _repository.loadProgrammes();
+    _syncNextWorkoutShortcut();
     notifyListeners();
   }
 
@@ -1396,6 +1732,7 @@ class OpenGymController extends ChangeNotifier {
       }
     }
     _programmes = await _repository.loadProgrammes();
+    _syncNextWorkoutShortcut();
     notifyListeners();
   }
 
@@ -1495,6 +1832,10 @@ class OpenGymController extends ChangeNotifier {
     await _repository.savePreferences(prefs);
     _preferences = prefs;
     _notifyWakeLock();
+    _syncNextWorkoutShortcut();
+    if (_activeWorkout != null) {
+      _syncLiveNotification();
+    }
     notifyListeners();
   }
 
@@ -1898,8 +2239,178 @@ class OpenGymController extends ChangeNotifier {
     return '$y-$m-$d';
   }
 
+  // ── Android Live Update Notification Sync ────────────────────────────────
+
+  Future<void> refreshLiveUpdateStatus() async {
+    final next = await _liveNotificationService.getLiveUpdateStatus();
+    if (next != _liveUpdateStatus) {
+      _liveUpdateStatus = next;
+      notifyListeners();
+    }
+  }
+
+  Future<void> openLiveUpdateSettings() =>
+      _liveNotificationService.openLiveUpdateSettings();
+
+  Future<void> syncPendingLiveNotificationActions() async {
+    final pending = await _liveNotificationService.consumePendingActions();
+    if (pending.isEmpty) return;
+    for (final action in pending) {
+      _applyLiveAction(action);
+    }
+    if (_activeWorkout != null) {
+      _lastSentLivePayload = null;
+      _syncLiveNotification();
+    }
+  }
+
+  void _applyLiveAction(OpenGymLiveAction action) {
+    if (_activeWorkout == null) {
+      _stopLiveNotification();
+      return;
+    }
+    _lastSentLivePayload = null;
+    switch (action.type) {
+      case OpenGymLiveActionType.skipRest:
+        if (isResting) {
+          skipRest();
+        } else {
+          _syncLiveNotification();
+        }
+        break;
+      case OpenGymLiveActionType.addRest:
+        if (isResting) {
+          addRest(action.deltaSeconds > 0 ? action.deltaSeconds : 30);
+        } else {
+          _syncLiveNotification();
+        }
+        break;
+      case OpenGymLiveActionType.togglePause:
+        togglePause();
+        break;
+      case OpenGymLiveActionType.completeNextSet:
+        completeNextSet(startRestTimer: false);
+        break;
+    }
+  }
+
+  OpenGymLiveWorkoutPayload? _buildLiveWorkoutPayload() {
+    final current = _activeWorkout;
+    if (current == null) return null;
+
+    final entries = current.entries;
+    final unit = _preferences.weightUnit;
+    final queuePairs = <(int, int)>[];
+    if (entries.isNotEmpty) {
+      final startIdx = _selectedEntryIndex.clamp(0, entries.length - 1);
+      for (var offset = 0; offset < entries.length; offset++) {
+        final eIdx = (startIdx + offset) % entries.length;
+        final sets = entries[eIdx].sets;
+        for (var sIdx = 0; sIdx < sets.length; sIdx++) {
+          if (!sets[sIdx].isCompleted) {
+            queuePairs.add((eIdx, sIdx));
+          }
+        }
+      }
+    }
+
+    final nextQueue = queuePairs
+        .take(10)
+        .map(
+          (pair) => OpenGymLiveNextSet(
+            exerciseName: entries[pair.$1].exerciseName,
+            setSummary: _formatSetSummary(entries[pair.$1], pair.$2, unit),
+          ),
+        )
+        .toList();
+
+    final String exerciseName;
+    final String setSummary;
+    if (nextQueue.isNotEmpty) {
+      exerciseName = nextQueue.first.exerciseName;
+      setSummary = nextQueue.first.setSummary;
+    } else if (entries.isNotEmpty) {
+      final selected =
+          entries[_selectedEntryIndex.clamp(0, entries.length - 1)];
+      exerciseName = selected.exerciseName;
+      setSummary = current.totalSetsCount > 0
+          ? 'All sets complete'
+          : 'No sets added yet';
+    } else {
+      exerciseName = '';
+      setSummary = 'No exercises added yet';
+    }
+
+    final effectiveStartMs = (_workoutStartedAt ?? DateTime.now())
+            .millisecondsSinceEpoch +
+        _accumulatedPaused.inMilliseconds;
+    final restActive = !_isPaused &&
+        _restEndsAt != null &&
+        _restRemainingSeconds > 0;
+
+    return OpenGymLiveWorkoutPayload(
+      workoutTitle: current.title,
+      exerciseName: exerciseName,
+      setSummary: setSummary,
+      completedSets: current.completedSetsCount,
+      totalSets: current.totalSetsCount,
+      workoutStartedAtMs: effectiveStartMs,
+      elapsedSecondsAtUpdate: _elapsedSeconds,
+      isPaused: _isPaused,
+      pausedAtMs: _isPaused ? (_pausedAt?.millisecondsSinceEpoch ?? 0) : 0,
+      restEndsAtMs: restActive ? _restEndsAt!.millisecondsSinceEpoch : 0,
+      restTotalSeconds: restActive ? _restTotalSeconds : 0,
+      hasNextIncompleteSet: queuePairs.isNotEmpty,
+      nextSetsQueue: nextQueue,
+      accentColor: _shortcutIconColor.toARGB32(),
+    );
+  }
+
+  String _formatSetSummary(WorkoutEntry entry, int setIndex, String unit) {
+    final set = entry.sets[setIndex];
+    final prefix =
+        set.isWarmup ? 'Warm-up' : 'Set ${setIndex + 1}/${entry.sets.length}';
+    switch (entry.mode) {
+      case ExerciseMode.reps:
+        if (set.weight > 0 && set.reps > 0) {
+          final w = set.weight;
+          final weightStr = w == w.roundToDouble()
+              ? w.toStringAsFixed(0)
+              : w.toStringAsFixed(1);
+          return '$prefix • $weightStr $unit × ${set.reps}';
+        }
+        if (set.reps > 0) {
+          return '$prefix • ${set.reps} reps';
+        }
+        return prefix;
+      case ExerciseMode.time:
+        final dur = set.durationSeconds ?? 0;
+        return dur > 0 ? '$prefix • ${dur}s' : prefix;
+      case ExerciseMode.distance:
+        final dist = set.distanceMeters ?? 0;
+        return dist > 0 ? '$prefix • ${dist.toStringAsFixed(0)}m' : prefix;
+      case ExerciseMode.cardio:
+        final dur = set.durationSeconds ?? 0;
+        return dur > 0 ? '$prefix • ${(dur / 60).round()} min' : prefix;
+    }
+  }
+
+  void _syncLiveNotification() {
+    final payload = _buildLiveWorkoutPayload();
+    if (payload == null) return;
+    if (payload == _lastSentLivePayload) return;
+    _lastSentLivePayload = payload;
+    unawaited(_liveNotificationService.updateWorkout(payload));
+  }
+
+  void _stopLiveNotification() {
+    _lastSentLivePayload = null;
+    unawaited(_liveNotificationService.stopWorkout());
+  }
+
   @override
   void dispose() {
+    unawaited(_liveActionSub?.cancel());
     _workoutTimer?.cancel();
     _restTimer?.cancel();
     _soundService.dispose();

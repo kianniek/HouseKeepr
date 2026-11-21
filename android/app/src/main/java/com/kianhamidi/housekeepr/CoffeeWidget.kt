@@ -7,8 +7,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.SizeF
 import android.widget.RemoteViews
 import org.json.JSONArray
 import org.json.JSONObject
@@ -37,6 +40,7 @@ class CoffeeWidget : AppWidgetProvider() {
             val manager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, CoffeeWidget::class.java)
             CoffeeWidget().onUpdate(context, manager, manager.getAppWidgetIds(component))
+            WidgetPreviewHelper.updateCoffeePreview(context)
         }
 
         private fun recipe(context: Context): JSONObject {
@@ -97,19 +101,102 @@ class CoffeeWidget : AppWidgetProvider() {
         }
 
         internal fun updateAppWidget(context: Context, manager: AppWidgetManager, id: Int) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val responsive = RemoteViews(
+                    mapOf(
+                        SizeF(110f, 50f) to buildCoffeeViews(context, id, compact = true),
+                        SizeF(180f, 140f) to buildCoffeeViews(context, id, compact = false),
+                    )
+                )
+                manager.updateAppWidget(id, responsive)
+                return
+            }
+            val minHeight = manager.getAppWidgetOptions(id)
+                .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+            val isCompact = minHeight in 1 until 102
+            manager.updateAppWidget(id, buildCoffeeViews(context, id, compact = isCompact))
+        }
+
+        private fun buildCoffeeViews(
+            context: Context,
+            id: Int,
+            compact: Boolean,
+        ): RemoteViews {
             val data = recipe(context)
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val state = prefs.getString(STATE_KEY, STATE_IDLE) ?: STATE_IDLE
             val showSubtitle = prefs.getBoolean(SHOW_SUBTITLE_KEY, true)
             val palette = WidgetThemeHelper.resolve(context)
-            val views = RemoteViews(context.packageName, R.layout.coffee_widget).apply {
-                setInt(R.id.coffee_root, "setBackgroundColor", palette.surface)
+
+            val spinIntent = Intent(context, CoffeeWidget::class.java).setAction(ACTION_SPIN)
+            val spinPendingIntent = PendingIntent.getBroadcast(
+                context,
+                id,
+                spinIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val openIntent =
+                Intent(Intent.ACTION_VIEW, Uri.parse("housekeepr://coffee/recipe/${data.optString("id", "latte")}"))
+                    .setClass(context, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            val openPendingIntent = PendingIntent.getActivity(
+                context,
+                id + 1000,
+                openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            if (compact) {
+                return RemoteViews(context.packageName, R.layout.coffee_widget_compact).apply {
+                    WidgetThemeHelper.applyRoundedBackground(this, R.id.coffee_root, palette.surface)
+                    setTextColor(R.id.coffee_recipe_title, palette.onSurface)
+                    setTextColor(R.id.coffee_recipe_subtitle, palette.onSurfaceVariant)
+                    WidgetThemeHelper.applyRoundedBackground(this, R.id.coffee_spin_status, palette.primary)
+                    setTextColor(R.id.coffee_spin_status, palette.onPrimary)
+
+                    val recipeName = data.optString(
+                        "displayName",
+                        data.optString("name", context.getString(R.string.latte)),
+                    )
+                    val title = if (state == STATE_RECIPE) {
+                        recipeName
+                    } else {
+                        context.getString(R.string.coffee_what_to_brew)
+                    }
+                    val subtitle = if (state == STATE_RECIPE) {
+                        val desc = data.optString("description", "")
+                        if (desc.isBlank()) context.getString(R.string.coffee_tap_for_recipe_short) else desc
+                    } else {
+                        context.getString(R.string.coffee_tap_for_recipe_short)
+                    }
+
+                    setTextViewText(R.id.coffee_recipe_title, title)
+                    setViewVisibility(
+                        R.id.coffee_recipe_subtitle,
+                        if (showSubtitle) android.view.View.VISIBLE else android.view.View.GONE,
+                    )
+                    setTextViewText(R.id.coffee_recipe_subtitle, subtitle)
+                    setTextViewText(
+                        R.id.coffee_spin_status,
+                        context.getString(
+                            if (state == STATE_SPINNING) R.string.coffee_spinning else R.string.coffee_spin_short
+                        ),
+                    )
+                    setOnClickPendingIntent(R.id.coffee_spin_status, spinPendingIntent)
+                    setOnClickPendingIntent(R.id.coffee_root, openPendingIntent)
+                }
+            }
+
+            return RemoteViews(context.packageName, R.layout.coffee_widget).apply {
+                WidgetThemeHelper.applyRoundedBackground(this, R.id.coffee_root, palette.surface)
                 setTextColor(R.id.coffee_title, palette.onSurfaceVariant)
+                setTextViewText(R.id.coffee_title, context.getString(R.string.coffee_what_to_brew))
                 setTextColor(R.id.coffee_arrow, palette.primary)
-                setInt(R.id.coffee_spin_status, "setBackgroundColor", palette.primary)
+                WidgetThemeHelper.applyRoundedBackground(this, R.id.coffee_spin_status, palette.primary)
                 setTextColor(R.id.coffee_spin_status, palette.onPrimary)
                 setTextColor(R.id.coffee_recipe_title, palette.onSurface)
                 setTextColor(R.id.coffee_recipe_subtitle, palette.onSurfaceVariant)
+                setTextViewText(R.id.coffee_reset, context.getString(R.string.spin_again))
                 setViewVisibility(
                     R.id.coffee_idle_state,
                     if (state == STATE_RECIPE) android.view.View.GONE else android.view.View.VISIBLE,
@@ -120,45 +207,26 @@ class CoffeeWidget : AppWidgetProvider() {
                 )
                 setTextViewText(
                     R.id.coffee_spin_status,
-                    if (state == STATE_SPINNING) "SPINNING..." else "TAP TO SPIN",
+                    context.getString(
+                        if (state == STATE_SPINNING) R.string.coffee_spinning else R.string.coffee_tap_to_spin
+                    ),
                 )
                 setFloat(R.id.coffee_spinner, "setRotation", 0f)
 
-                val spinIntent = Intent(context, CoffeeWidget::class.java).setAction(ACTION_SPIN)
-                setOnClickPendingIntent(
-                    R.id.coffee_spinner,
-                    PendingIntent.getBroadcast(
-                        context,
-                        id,
-                        spinIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    ),
-                )
-                setOnClickPendingIntent(
-                    R.id.coffee_spin_status,
-                    PendingIntent.getBroadcast(
-                        context,
-                        id,
-                        spinIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    ),
-                )
+                setOnClickPendingIntent(R.id.coffee_spinner, spinPendingIntent)
+                setOnClickPendingIntent(R.id.coffee_spin_status, spinPendingIntent)
 
-                val openIntent =
-                    Intent(Intent.ACTION_VIEW, Uri.parse("housekeepr://coffee/recipe/${data.optString("id", "latte")}"))
-                        .setClass(context, MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 if (state == STATE_RECIPE) {
                     setTextViewText(
                         R.id.coffee_recipe_title,
                         data.optString(
                             "displayName",
-                            data.optString("name", "Latte"),
+                            data.optString("name", context.getString(R.string.latte)),
                         ),
                     )
                     val description = data.optString(
                         "description",
-                        data.optString("description", "Latte"),
+                        data.optString("description", ""),
                     )
                     setViewVisibility(
                         R.id.coffee_recipe_subtitle,
@@ -166,21 +234,13 @@ class CoffeeWidget : AppWidgetProvider() {
                     )
                     setTextViewText(
                         R.id.coffee_recipe_subtitle,
-                        if (description.isEmpty() || description.isNullOrBlank()) {
-                            "Tap for recipe"
+                        if (description.isBlank()) {
+                            context.getString(R.string.coffee_tap_for_recipe_short)
                         } else {
                             description
                         },
                     )
-                    setOnClickPendingIntent(
-                        R.id.coffee_root,
-                        PendingIntent.getActivity(
-                            context,
-                            id + 1000,
-                            openIntent,
-                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                        ),
-                    )
+                    setOnClickPendingIntent(R.id.coffee_root, openPendingIntent)
                 }
 
                 val resetIntent = Intent(context, CoffeeWidget::class.java).setAction(ACTION_RESET)
@@ -219,7 +279,6 @@ class CoffeeWidget : AppWidgetProvider() {
                     )
                 }
             }
-            manager.updateAppWidget(id, views)
         }
 
         private fun isLightColor(color: Int): Boolean {
@@ -233,6 +292,17 @@ class CoffeeWidget : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         ids.forEach { updateAppWidget(context, manager, it) }
+        WidgetPreviewHelper.updateCoffeePreview(context)
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        manager: AppWidgetManager,
+        id: Int,
+        newOptions: Bundle,
+    ) {
+        updateAppWidget(context, manager, id)
+        super.onAppWidgetOptionsChanged(context, manager, id, newOptions)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -261,10 +331,12 @@ class CoffeeWidget : AppWidgetProvider() {
                     val component = ComponentName(context, CoffeeWidget::class.java)
 
                     manager.getAppWidgetIds(component).forEach { id ->
-                        val views = RemoteViews(context.packageName, R.layout.coffee_widget)
-                        currentRotation += currentVelocity
-                        views.setFloat(R.id.coffee_spinner, "setRotation", currentRotation)
-                        manager.partiallyUpdateAppWidget(id, views)
+                        runCatching {
+                            val views = RemoteViews(context.packageName, R.layout.coffee_widget)
+                            currentRotation += currentVelocity
+                            views.setFloat(R.id.coffee_spinner, "setRotation", currentRotation)
+                            manager.partiallyUpdateAppWidget(id, views)
+                        }
                     }
 
                     handler.postDelayed(this, 30L)

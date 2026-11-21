@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 // Optional platform notifications
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:health_keepr/health_keepr.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -37,6 +38,7 @@ class NotificationChannelConfig {
   final String id;
   final String name;
   final String description;
+  final String groupId;
   final Importance androidImportance;
   final Priority androidPriority;
   final bool playSound;
@@ -49,6 +51,7 @@ class NotificationChannelConfig {
     required this.id,
     required this.name,
     required this.description,
+    required this.groupId,
     this.androidImportance = Importance.defaultImportance,
     this.androidPriority = Priority.defaultPriority,
     this.playSound = true,
@@ -99,7 +102,7 @@ Future<void> notificationTapBackground(NotificationResponse response) async {
   }
 }
 
-class NotificationService {
+class NotificationService implements WorkoutNotificationScheduler {
   NotificationService._private();
   static final NotificationService instance = NotificationService._private();
 
@@ -113,10 +116,21 @@ class NotificationService {
   VoidCallback? _onOpenTasks;
   VoidCallback? _onOpenTasksRebalance;
   VoidCallback? _onOpenMedications;
+  VoidCallback? _onOpenOpenGym;
 
   static const _kPayloadOpenTasks = 'open_tasks';
   static const _kPayloadOpenTasksRebalance = 'open_tasks_rebalance';
   static const _kPayloadOpenMedications = 'open_medications';
+  static const _kPayloadOpenOpenGym = 'open_gym_active';
+  static const int openGymRestNotificationId = 2001;
+  static const List<String> _openGymRestProfiles = <String>[
+    'chime',
+    'classic',
+    'bell',
+    'beep',
+    'whistle',
+    'soft',
+  ];
   static const _kActionRemindLater = 'remind_later';
   static const _kActionMarkTaken = 'mark_taken';
   static const _kActionTaskDone = 'task_done';
@@ -136,9 +150,20 @@ class NotificationService {
   /// active isolate (or background isolate).
   final ValueNotifier<int> taskUpdatesNotifier = ValueNotifier<int>(0);
 
+  static const String groupHouseholdTasks = 'group_household_tasks';
+  static const String groupMedications = 'group_medications';
+  static const String groupOpenGym = 'group_opengym';
+
   static const _kRemindersKey = 'scheduled_reminders_v1';
   static const _kScheduledTaskReminderIdsKey = 'scheduled_task_reminder_ids_v1';
   static const _kMedicationRemindersKey = 'scheduled_medication_reminders_v1';
+  static const _kLegacyChannelsCleanedKey = 'notif_legacy_channels_cleaned_v1';
+  static const _kLegacyStartCleanedKey = 'notif_legacy_start_1000_cleaned_v1';
+
+  bool _legacyStartCleaned = false;
+  bool _syncInProgress = false;
+  List<Task>? _queuedSyncTasks;
+  SettingsRepository? _queuedSyncSettings;
 
   /// Centralized channel registry. Add new [NotificationChannelType] entries
   /// here to configure custom Android Importance/Priority and sound/vibration
@@ -149,6 +174,7 @@ class NotificationService {
       id: 'housekeepr_task_digest',
       name: 'Task Digest & Check-ins',
       description: 'Morning daily summary and gentle evening pile-up check-in',
+      groupId: groupHouseholdTasks,
       androidImportance: Importance.defaultImportance,
       androidPriority: Priority.defaultPriority,
       enableVibration: false,
@@ -157,6 +183,7 @@ class NotificationService {
       id: 'housekeepr_task_reminders',
       name: 'Task Reminders',
       description: 'Scheduled alerts for tasks with a specific reminder time',
+      groupId: groupHouseholdTasks,
       androidImportance: Importance.high,
       androidPriority: Priority.high,
     ),
@@ -164,6 +191,7 @@ class NotificationService {
       id: 'housekeepr_medications',
       name: 'Medication Reminders',
       description: 'Scheduled daytime and evening medication dose reminders',
+      groupId: groupMedications,
       androidImportance: Importance.max,
       androidPriority: Priority.max,
     ),
@@ -171,6 +199,7 @@ class NotificationService {
       id: 'housekeepr_household',
       name: 'Household Updates',
       description: 'Shared list and chore updates from household members',
+      groupId: groupHouseholdTasks,
       androidImportance: Importance.defaultImportance,
       androidPriority: Priority.defaultPriority,
     ),
@@ -245,6 +274,7 @@ class NotificationService {
     VoidCallback? onOpenTasks,
     VoidCallback? onOpenTasksRebalance,
     VoidCallback? onOpenMedications,
+    VoidCallback? onOpenOpenGym,
     String? userId,
     bool isBackground = false,
   }) async {
@@ -253,6 +283,7 @@ class NotificationService {
     _onOpenTasks = onOpenTasks;
     _onOpenTasksRebalance = onOpenTasksRebalance;
     _onOpenMedications = onOpenMedications;
+    _onOpenOpenGym = onOpenOpenGym;
     if (userId != null && userId.isNotEmpty) {
       await prefs.setString(_kActiveUserIdKey, userId);
     }
@@ -324,17 +355,70 @@ class NotificationService {
         >();
     if (android == null) return;
     try {
+      await android.createNotificationChannelGroup(
+        const AndroidNotificationChannelGroup(
+          groupHouseholdTasks,
+          'Household & Tasks',
+        ),
+      );
+      await android.createNotificationChannelGroup(
+        const AndroidNotificationChannelGroup(
+          groupMedications,
+          'Medications',
+        ),
+      );
+      await android.createNotificationChannelGroup(
+        const AndroidNotificationChannelGroup(
+          groupOpenGym,
+          'OpenGym Fitness',
+        ),
+      );
+
       for (final cfg in channelConfigs.values) {
         await android.createNotificationChannel(
           AndroidNotificationChannel(
             cfg.id,
             cfg.name,
             description: cfg.description,
+            groupId: cfg.groupId,
             importance: cfg.androidImportance,
             playSound: cfg.playSound,
             enableVibration: cfg.enableVibration,
           ),
         );
+      }
+      for (final profile in _openGymRestProfiles) {
+        await android.createNotificationChannel(
+          AndroidNotificationChannel(
+            'housekeepr_opengym_rest_$profile',
+            'OpenGym Rest Timer ($profile)',
+            description: 'Rest timer completion alerts for OpenGym',
+            groupId: groupOpenGym,
+            importance: Importance.high,
+            playSound: true,
+            sound: RawResourceAndroidNotificationSound('opengym_$profile'),
+            audioAttributesUsage: AudioAttributesUsage.notification,
+            enableVibration: true,
+          ),
+        );
+      }
+      await android.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'housekeepr_opengym_rest_silent',
+          'OpenGym Rest Timer (Silent)',
+          description: 'Silent rest timer completion alerts for OpenGym',
+          groupId: groupOpenGym,
+          importance: Importance.high,
+          playSound: false,
+          enableVibration: true,
+        ),
+      );
+
+      if (_prefs != null &&
+          _prefs!.getBool(_kLegacyChannelsCleanedKey) != true) {
+        await android.deleteNotificationChannel(channelId: 'task_reminders');
+        await android.deleteNotificationChannel(channelId: 'daily_reminders');
+        await _prefs!.setBool(_kLegacyChannelsCleanedKey, true);
       }
     } catch (_) {
       // ignore
@@ -380,6 +464,10 @@ class NotificationService {
             _onOpenMedications?.call();
             return;
           }
+          if (action == _kPayloadOpenOpenGym) {
+            _onOpenOpenGym?.call();
+            return;
+          }
         } catch (_) {}
       }
       if (payload == _kPayloadOpenTasksRebalance) {
@@ -389,6 +477,10 @@ class NotificationService {
       if (payload == _kPayloadOpenMedications ||
           payload.startsWith('open_medication')) {
         _onOpenMedications?.call();
+        return;
+      }
+      if (payload == _kPayloadOpenOpenGym) {
+        _onOpenOpenGym?.call();
         return;
       }
     }
@@ -418,7 +510,9 @@ class NotificationService {
       final action = await channel.invokeMethod<String>(
         'getNotificationAction',
       );
-      if (action == _kPayloadOpenTasks || action == _kPayloadOpenMedications) {
+      if (action == _kPayloadOpenTasks ||
+          action == _kPayloadOpenTasksRebalance ||
+          action == _kPayloadOpenMedications) {
         _handleNotificationPayload(action);
       }
     } catch (_) {
@@ -450,14 +544,8 @@ class NotificationService {
           id: id,
           title: 'Test notification',
           body: 'Notifications are working on this device.',
-          notificationDetails: const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'task_reminders',
-              'Task Reminders',
-              importance: Importance.low,
-              icon: 'ic_launcher_monochrome',
-            ),
-            iOS: DarwinNotificationDetails(),
+          notificationDetails: buildNotificationDetails(
+            NotificationChannelType.taskReminders,
           ),
           payload: _kPayloadOpenTasks,
         );
@@ -711,12 +799,56 @@ class NotificationService {
 
   /// Synchronizes all task-related OS notifications (individual task reminders,
   /// morning digest, and evening pile-up nudge) with [tasks] and [settings].
+  ///
+  /// Concurrent invocations are coalesced so only the latest snapshot runs
+  /// after an in-flight sync finishes.
   Future<void> syncTaskNotifications({
     required List<Task> tasks,
     required SettingsRepository settings,
   }) async {
-    // Cancel legacy start-of-day ID if present from older app versions.
-    await _cancelPlatformId(_kLegacyStartNotificationId);
+    if (_syncInProgress) {
+      _queuedSyncTasks = tasks;
+      _queuedSyncSettings = settings;
+      return;
+    }
+
+    _syncInProgress = true;
+    var currentTasks = tasks;
+    var currentSettings = settings;
+    try {
+      while (true) {
+        await _performSyncTaskNotifications(
+          tasks: currentTasks,
+          settings: currentSettings,
+        );
+        final nextTasks = _queuedSyncTasks;
+        final nextSettings = _queuedSyncSettings;
+        _queuedSyncTasks = null;
+        _queuedSyncSettings = null;
+        if (nextTasks == null || nextSettings == null) break;
+        currentTasks = nextTasks;
+        currentSettings = nextSettings;
+      }
+    } finally {
+      _syncInProgress = false;
+    }
+  }
+
+  Future<void> _performSyncTaskNotifications({
+    required List<Task> tasks,
+    required SettingsRepository settings,
+  }) async {
+    // Cancel legacy start-of-day ID once per install from older app versions.
+    final alreadyCleaned =
+        _legacyStartCleaned ||
+        (_prefs?.getBool(_kLegacyStartCleanedKey) == true);
+    if (!alreadyCleaned) {
+      _legacyStartCleaned = true;
+      await _cancelPlatformId(_kLegacyStartNotificationId);
+      if (_prefs != null) {
+        await _prefs!.setBool(_kLegacyStartCleanedKey, true);
+      }
+    }
 
     // 1. Respect master & per-feature switches for individual reminders.
     if (!settings.taskRemindersEnabled()) {
@@ -1165,15 +1297,9 @@ class NotificationService {
           title: title ?? 'Reminder',
           body: body ?? '',
           scheduledDate: scheduled,
-          notificationDetails: NotificationDetails(
-            android: AndroidNotificationDetails(
-              'task_reminders',
-              'Task Reminders',
-              importance: Importance.low,
-              icon: 'ic_launcher_monochrome',
-              color: color,
-            ),
-            iOS: const DarwinNotificationDetails(),
+          notificationDetails: buildNotificationDetails(
+            NotificationChannelType.taskReminders,
+            color: color,
           ),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           matchDateTimeComponents: DateTimeComponents.dateAndTime,
@@ -1264,14 +1390,8 @@ class NotificationService {
           title: 'Start of day',
           body: 'Tasks for your day',
           scheduledDate: nextStart,
-          notificationDetails: const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'daily_reminders',
-              'Daily reminders',
-              importance: Importance.low,
-              icon: 'ic_launcher_monochrome',
-            ),
-            iOS: DarwinNotificationDetails(),
+          notificationDetails: buildNotificationDetails(
+            NotificationChannelType.taskDigest,
           ),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           matchDateTimeComponents: DateTimeComponents.time,
@@ -1283,14 +1403,8 @@ class NotificationService {
           title: 'End of day',
           body: 'Review completed tasks',
           scheduledDate: nextEnd,
-          notificationDetails: const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'daily_reminders',
-              'Daily reminders',
-              importance: Importance.low,
-              icon: 'ic_launcher_monochrome',
-            ),
-            iOS: DarwinNotificationDetails(),
+          notificationDetails: buildNotificationDetails(
+            NotificationChannelType.taskDigest,
           ),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           matchDateTimeComponents: DateTimeComponents.time,
@@ -1471,5 +1585,71 @@ class NotificationService {
       }
     }
     await _prefs!.setStringList(_kMedicationRemindersKey, medRemaining);
+  }
+
+  @override
+  Future<void> scheduleRestEnd({
+    required DateTime endsAt,
+    required String soundProfileId,
+    required bool soundEnabled,
+    required bool hapticsEnabled,
+    required String workoutTitle,
+  }) async {
+    if (!_pluginAvailable || _plugin == null || kIsWeb) return;
+    if (!endsAt.isAfter(DateTime.now())) return;
+
+    final normalizedProfile = _openGymRestProfiles.contains(soundProfileId)
+        ? soundProfileId
+        : 'chime';
+    final channelId = soundEnabled
+        ? 'housekeepr_opengym_rest_$normalizedProfile'
+        : 'housekeepr_opengym_rest_silent';
+    final channelName = soundEnabled
+        ? 'OpenGym Rest Timer ($normalizedProfile)'
+        : 'OpenGym Rest Timer (Silent)';
+
+    final details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        channelName,
+        channelDescription: 'Rest timer completion alerts for OpenGym',
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: soundEnabled,
+        sound: soundEnabled
+            ? RawResourceAndroidNotificationSound('opengym_$normalizedProfile')
+            : null,
+        audioAttributesUsage: AudioAttributesUsage.notification,
+        enableVibration: hapticsEnabled,
+        icon: 'ic_launcher_monochrome',
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: soundEnabled,
+        presentBadge: false,
+      ),
+    );
+
+    try {
+      await _plugin!.cancel(id: openGymRestNotificationId);
+      await _zonedScheduleWithFallback(
+        id: openGymRestNotificationId,
+        title: 'Rest complete',
+        body: '$workoutTitle — Ready for your next set',
+        scheduledDate: tz.TZDateTime.from(endsAt.toUtc(), tz.UTC),
+        notificationDetails: details,
+        payload: _kPayloadOpenOpenGym,
+      );
+    } catch (e) {
+      debugPrint('Failed to schedule OpenGym rest notification: $e');
+    }
+  }
+
+  @override
+  Future<void> cancelRestEnd() async {
+    if (!_pluginAvailable || _plugin == null || kIsWeb) return;
+    try {
+      await _plugin!.cancel(id: openGymRestNotificationId);
+    } catch (_) {}
   }
 }

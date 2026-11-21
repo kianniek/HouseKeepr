@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:health_keepr/health_keepr.dart';
 import 'package:marquee/marquee.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +15,9 @@ class ToolItem {
   final ToolCategory category;
   final IconData icon;
   final Widget destination;
+  final String? shortcutId;
+  final String? shortcutUri;
+  final String? shortcutIconKey;
 
   const ToolItem({
     required this.title,
@@ -20,6 +25,9 @@ class ToolItem {
     required this.category,
     required this.icon,
     required this.destination,
+    this.shortcutId,
+    this.shortcutUri,
+    this.shortcutIconKey,
   });
 }
 
@@ -48,16 +56,49 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
   static const String _isGridViewKey = 'tools_library_is_grid_view';
   static const String _selectedCategoryKey =
       'tools_library_selected_category_v1';
+  static const MethodChannel _shortcutsChannel = MethodChannel(
+    'housekeepr/shortcuts',
+  );
 
   ToolCategory? _selectedCategory;
   bool _isGridView = false;
   bool _hasUserToggledView = false;
   bool _hasUserSelectedCategory = false;
+  bool _canPinShortcuts = false;
 
   @override
   void initState() {
     super.initState();
     _loadPreferences();
+    _checkPinShortcutSupport();
+  }
+
+  Future<void> _checkPinShortcutSupport() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final supported =
+          await _shortcutsChannel.invokeMethod<bool>('canPinShortcuts') ??
+          false;
+      if (mounted && supported) {
+        setState(() => _canPinShortcuts = true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _pinToolShortcut(ToolItem tool) async {
+    final id = tool.shortcutId;
+    final uri = tool.shortcutUri;
+    final iconKey = tool.shortcutIconKey;
+    if (id == null || uri == null || iconKey == null) return;
+    try {
+      await _shortcutsChannel.invokeMethod<bool>('pinShortcut', {
+        'id': id,
+        'shortLabel': tool.title,
+        'longLabel': tool.title,
+        'uri': uri,
+        'iconKey': iconKey,
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadPreferences() async {
@@ -124,6 +165,9 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
       category: ToolCategory.healthUtilities,
       icon: Icons.health_and_safety_rounded,
       destination: HealthKeeprHubScreen(),
+      shortcutId: 'open_gym',
+      shortcutUri: 'housekeepr://opengym',
+      shortcutIconKey: 'open_gym',
     ),
     ToolItem(
       title: 'Personal Budget Contribution',
@@ -138,6 +182,9 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
       category: ToolCategory.statusUtilities,
       icon: Icons.medication_outlined,
       destination: const MedicationRemindersPage(),
+      shortcutId: 'medications',
+      shortcutUri: 'housekeepr://medications',
+      shortcutIconKey: 'medications',
     ),
     ToolItem(
       title: 'Coffee Picker',
@@ -145,6 +192,9 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
       category: ToolCategory.kitchenUtilities,
       icon: Icons.coffee,
       destination: CoffeePickerPage(householdId: widget.householdId),
+      shortcutId: 'coffee',
+      shortcutUri: 'housekeepr://coffee/recipe/latte',
+      shortcutIconKey: 'coffee',
     ),
   ];
 
@@ -253,13 +303,23 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
 
                 if (!_isGridView) {
                   return ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      8,
+                      16,
+                      16 + MediaQuery.paddingOf(context).bottom,
                     ),
                     itemCount: tools.length,
                     itemBuilder: (context, index) {
-                      return _ToolCard(tool: tools[index], isGrid: false);
+                      final tool = tools[index];
+                      return _ToolCard(
+                        tool: tool,
+                        isGrid: false,
+                        onPinShortcut:
+                            (_canPinShortcuts && tool.shortcutId != null)
+                            ? () => _pinToolShortcut(tool)
+                            : null,
+                      );
                     },
                   );
                 }
@@ -292,7 +352,12 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
                     desiredItemWidth / (desiredItemWidth + extraVertical);
 
                 return GridView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    16,
+                    16,
+                    16 + MediaQuery.paddingOf(context).bottom,
+                  ),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: spacing,
@@ -301,7 +366,15 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
                   ),
                   itemCount: tools.length,
                   itemBuilder: (context, index) {
-                    return _ToolCard(tool: tools[index], isGrid: true);
+                    final tool = tools[index];
+                    return _ToolCard(
+                      tool: tool,
+                      isGrid: true,
+                      onPinShortcut:
+                          (_canPinShortcuts && tool.shortcutId != null)
+                          ? () => _pinToolShortcut(tool)
+                          : null,
+                    );
                   },
                 );
               },
@@ -316,8 +389,13 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
 class _ToolCard extends StatelessWidget {
   final ToolItem tool;
   final bool isGrid;
+  final VoidCallback? onPinShortcut;
 
-  const _ToolCard({required this.tool, required this.isGrid});
+  const _ToolCard({
+    required this.tool,
+    required this.isGrid,
+    this.onPinShortcut,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -341,6 +419,14 @@ class _ToolCard extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(tool.subtitle),
+        trailing: onPinShortcut == null
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.add_to_home_screen_outlined),
+                tooltip: 'Pin to home screen',
+                onPressed: onPinShortcut,
+              ),
+        onLongPress: onPinShortcut,
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => tool.destination),
@@ -353,6 +439,7 @@ class _ToolCard extends StatelessWidget {
         context,
         MaterialPageRoute(builder: (_) => tool.destination),
       ),
+      onLongPress: onPinShortcut,
       borderRadius: BorderRadius.circular(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -373,6 +460,20 @@ class _ToolCard extends StatelessWidget {
                     size: 80,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
+                  if (onPinShortcut != null)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(
+                          Icons.add_to_home_screen_outlined,
+                          size: 18,
+                        ),
+                        tooltip: 'Pin to home screen',
+                        onPressed: onPinShortcut,
+                      ),
+                    ),
                 ],
               ),
             ),

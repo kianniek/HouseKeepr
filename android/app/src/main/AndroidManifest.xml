@@ -12,6 +12,10 @@
         tools:node="remove" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Android Health Connect permissions for OpenGym -->
@@ -45,13 +49,15 @@
 
     <application
         android:name=".HouseKeeprApplication"
+        android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/launcher_icon"
-        android:label="housekeepr">
+        android:label="housekeepr"
+        android:localeConfig="@xml/locales_config">
 
         <receiver
             android:name=".ShoppingListWidget"
             android:exported="false"
-            android:label="HouseKeepr Shopping List">
+            android:label="@string/shopping_widget_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -66,7 +72,7 @@
         <receiver
             android:name=".CoffeeWidget"
             android:exported="false"
-            android:label="HouseKeepr Coffee Picker">
+            android:label="@string/coffee_widget_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -81,9 +87,15 @@
             android:label="@string/pill_widget_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
             <intent-filter>
                 <action android:name="com.kianhamidi.housekeepr.ACTION_TOGGLE_PILL_SLOT" />
+                <action android:name="com.kianhamidi.housekeepr.ACTION_MIDNIGHT_RESET" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -94,6 +106,12 @@
             android:name=".ShoppingListRemoteViewsService"
             android:permission="android.permission.BIND_REMOTEVIEWS"
             android:exported="false" />
+
+        <service
+            android:name=".OpenGymLiveWorkoutService"
+            android:exported="false"
+            android:foregroundServiceType="health"
+            android:stopWithTask="false" />
 
         <activity
             android:name=".MainActivity"
@@ -121,6 +139,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
+            <!-- Custom scheme for OpenGym shortcuts -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="housekeepr"
+                    android:host="opengym" />
+            </intent-filter>
+
             <!-- Custom scheme for Shopping App Action -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -130,6 +162,9 @@
                 <data android:scheme="housekeepr"
                     android:host="shopping"
                     android:path="/add" />
+                <data android:scheme="housekeepr"
+                    android:host="shopping"
+                    android:path="/quick-add" />
             </intent-filter>
 
             <intent-filter>
@@ -137,6 +172,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="housekeepr" android:host="coffee" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="housekeepr" android:host="medications" />
             </intent-filter>
 
             <!-- Custom scheme for Tasks App Action -->
@@ -148,6 +190,16 @@
                 <data android:scheme="housekeepr"
                     android:host="tasks"
                     android:path="/add" />
+                <data android:scheme="housekeepr"
+                    android:host="tasks"
+                    android:path="/new" />
+            </intent-filter>
+
+            <!-- Inbound plain-text & URL sharing (+ Direct Share Targets) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
 
             <intent-filter>
@@ -218,6 +270,20 @@
         <meta-data
             android:name="io.flutter.embedding.engine.deferredcomponents.DeferredComponentManager.loadingUnitMapping"
             android:value="2:openGym" />
+
+        <!-- Google Play services Photo Picker backport for Android 11-12 (API 30-32) -->
+        <service
+            android:name="com.google.android.gms.metadata.ModuleDependencies"
+            android:enabled="false"
+            android:exported="false"
+            tools:ignore="MissingClass">
+            <intent-filter>
+                <action android:name="com.google.android.gms.metadata.MODULE_DEPENDENCIES" />
+            </intent-filter>
+            <meta-data
+                android:name="photopicker_activity:0:required"
+                android:value="" />
+        </service>
     </application>
 
 </manifest>

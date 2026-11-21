@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:housekeepr/models/medication.dart';
 import 'package:housekeepr/repositories/local_medication_repository.dart';
+import 'package:housekeepr/services/app_haptics.dart';
 import 'package:housekeepr/services/notification_service.dart';
 import 'package:housekeepr/services/widget_service.dart';
+import 'package:housekeepr/ui/common/app_theme.dart';
 import 'package:housekeepr/ui/common/widgets/empty_state.dart';
+import 'package:housekeepr/ui/common/widgets/keyboard_inset_padding.dart';
 import 'package:housekeepr/ui/features/profile/pages/widget_settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -107,6 +110,11 @@ class _MedicationRemindersPageState extends State<MedicationRemindersPage>
 
   Future<void> _onToggleSlot(TimeOfDaySlot slot, bool currentValue) async {
     final newStatus = currentValue ? DoseStatus.pending : DoseStatus.taken;
+    if (newStatus == DoseStatus.taken) {
+      AppHaptics.instance.confirm();
+    } else {
+      AppHaptics.instance.toggleOff();
+    }
     await _repository.setSlotDosesStatus(
       date: _selectedDate,
       slot: slot,
@@ -116,11 +124,21 @@ class _MedicationRemindersPageState extends State<MedicationRemindersPage>
   }
 
   Future<void> _onToggleDose(DoseInstance dose) async {
+    if (dose.isTaken) {
+      AppHaptics.instance.toggleOff();
+    } else {
+      AppHaptics.instance.confirm();
+    }
     await _repository.toggleDoseStatus(dose);
     await _loadData();
   }
 
   Future<void> _onSetDoseStatus(DoseInstance dose, DoseStatus status) async {
+    if (status == DoseStatus.taken) {
+      AppHaptics.instance.confirm();
+    } else {
+      AppHaptics.instance.toggleOff();
+    }
     await _repository.recordDoseStatus(
       doseId: dose.id,
       medicationId: dose.medicationId,
@@ -419,14 +437,20 @@ class _MedicationRemindersPageState extends State<MedicationRemindersPage>
       );
     }
 
+    final semantic = AppSemanticColors.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        88 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: [
         // Daytime Slot (Sun ☀️)
         _buildSlotCard(
           title: 'Daytime',
           icon: Icons.wb_sunny_rounded,
-          iconColor: Colors.amber.shade700,
+          iconColor: semantic.daytimeAccent,
           doses: summary.morningDoses,
           isTaken: summary.isMorningTaken,
           onToggleSlot: () =>
@@ -438,7 +462,7 @@ class _MedicationRemindersPageState extends State<MedicationRemindersPage>
         _buildSlotCard(
           title: 'Evening',
           icon: Icons.nightlight_round,
-          iconColor: Colors.indigo.shade400,
+          iconColor: semantic.eveningAccent,
           doses: summary.eveningDoses,
           isTaken: summary.isEveningTaken,
           onToggleSlot: () =>
@@ -608,7 +632,12 @@ class _MedicationRemindersPageState extends State<MedicationRemindersPage>
     final inactiveMeds = _medications.where((m) => !m.isActive).toList();
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        88 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: [
         if (activeMeds.isNotEmpty) ...[
           Text(
@@ -823,13 +852,8 @@ class _MedicationFormSheetState extends State<_MedicationFormSheet> {
     final theme = Theme.of(context);
     final isEditing = widget.medication != null;
 
-    return Padding(
-      padding: EdgeInsets.only(
-        top: 16,
-        left: 20,
-        right: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
+    return KeyboardInsetPadding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       child: Form(
         key: _formKey,
         child: SingleChildScrollView(

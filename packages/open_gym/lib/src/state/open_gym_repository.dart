@@ -1,6 +1,7 @@
 import 'package:health_keepr/health_keepr.dart';
 
 import '../data/exercise_catalog.dart';
+import '../models/active_workout_snapshot.dart';
 import '../models/body_measurement.dart';
 import '../models/exercise.dart';
 import '../models/health_connect_models.dart';
@@ -26,6 +27,7 @@ class OpenGymRepository {
   static const String _externalWorkoutsCollection = 'external_workouts';
   static const String _dailyHealthMetricsCollection = 'daily_health_metrics';
   static const String _settingsCollection = 'settings';
+  static const String _activeSessionCollection = 'active_session';
 
   final HealthDataStore _store;
 
@@ -247,5 +249,32 @@ class OpenGymRepository {
         moduleId,
         _dailyHealthMetricsCollection,
         metrics.toJson(),
+      );
+
+  Future<ActiveWorkoutSnapshot?> loadActiveSession() async {
+    final raw = await _store.readRecord(
+      moduleId,
+      _activeSessionCollection,
+      ActiveWorkoutSnapshot.recordId,
+    );
+    if (raw == null || raw['workout'] is! Map) return null;
+    try {
+      return ActiveWorkoutSnapshot.fromJson(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveActiveSession(ActiveWorkoutSnapshot snapshot) =>
+      _store.upsertRecord(
+        moduleId,
+        _activeSessionCollection,
+        snapshot.toJson(),
+      );
+
+  Future<void> clearActiveSession() => _store.deleteRecord(
+        moduleId,
+        _activeSessionCollection,
+        ActiveWorkoutSnapshot.recordId,
       );
 }

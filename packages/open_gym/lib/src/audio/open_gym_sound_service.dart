@@ -1,4 +1,5 @@
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'wav_synthesizer.dart';
@@ -114,6 +115,46 @@ class OpenGymSoundService {
 
   final Map<String, Uint8List> _cache = <String, Uint8List>{};
   AudioPlayer? _player;
+  bool _audioContextConfigured = false;
+  static const MethodChannel _hapticsChannel = MethodChannel(
+    'housekeepr/haptics',
+  );
+
+  Future<void> _performHaptic(
+    String type,
+    Future<void> Function() fallback,
+  ) async {
+    if (kIsWeb) return;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        await _hapticsChannel.invokeMethod<bool>(
+          'perform',
+          <String, String>{'type': type},
+        );
+        return;
+      } on MissingPluginException {
+        // Fall through to Flutter HapticFeedback when bridge is unavailable.
+      } catch (_) {}
+    }
+    try {
+      await fallback();
+    } catch (_) {}
+  }
+
+  /// Non-interrupting audio context so chimes duck/mix with background media
+  /// on Android and iOS instead of pausing Spotify, podcasts, or music apps.
+  static final AudioContext nonInterruptingAudioContext = AudioContext(
+    android: AudioContextAndroid(
+      isSpeakerphoneOn: false,
+      stayAwake: false,
+      contentType: AndroidContentType.sonification,
+      usageType: AndroidUsageType.assistanceSonification,
+      audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+    ),
+    iOS: AudioContextIOS(
+      category: AVAudioSessionCategory.ambient,
+    ),
+  );
 
   Uint8List _bytesFor(String key, List<ToneNote> Function() buildNotes,
       {double peak = 0.55, double hold = 0.0, String timbre = 'sine'}) {
@@ -130,9 +171,13 @@ class OpenGymSoundService {
 
   Future<void> _playBytes(Uint8List bytes) async {
     try {
-      _player ??= AudioPlayer();
-      await _player!.stop();
-      await _player!.play(BytesSource(bytes, mimeType: 'audio/wav'));
+      final player = _player ??= AudioPlayer();
+      if (!_audioContextConfigured) {
+        _audioContextConfigured = true;
+        await player.setAudioContext(nonInterruptingAudioContext);
+      }
+      await player.stop();
+      await player.play(BytesSource(bytes, mimeType: 'audio/wav'));
     } catch (_) {
       // Safe no-op in headless unit tests or restricted audio environments.
     }
@@ -144,9 +189,7 @@ class OpenGymSoundService {
     required bool hapticsEnabled,
   }) async {
     if (hapticsEnabled) {
-      try {
-        await HapticFeedback.lightImpact();
-      } catch (_) {}
+      await _performHaptic('confirm', HapticFeedback.lightImpact);
     }
     if (!soundEnabled) return;
     final bytes = _bytesFor(
@@ -190,9 +233,7 @@ class OpenGymSoundService {
     required bool hapticsEnabled,
   }) async {
     if (hapticsEnabled) {
-      try {
-        await HapticFeedback.heavyImpact();
-      } catch (_) {}
+      await _performHaptic('reject', HapticFeedback.heavyImpact);
     }
     if (!soundEnabled) return;
     final profile = profileFor(kind);
@@ -212,9 +253,7 @@ class OpenGymSoundService {
     required bool hapticsEnabled,
   }) async {
     if (hapticsEnabled) {
-      try {
-        await HapticFeedback.mediumImpact();
-      } catch (_) {}
+      await _performHaptic('confirm', HapticFeedback.mediumImpact);
     }
     if (!soundEnabled) return;
     final bytes = _bytesFor(

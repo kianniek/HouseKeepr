@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -211,6 +212,28 @@ class OpenGymSettingsScreen extends StatelessWidget {
                 ),
               ),
               const Divider(),
+              if (controller.liveUpdateStatus.isSupported) ...<Widget>[
+                ListTile(
+                  leading: Icon(
+                    controller.liveUpdateStatus.canPostPromotedNotifications
+                        ? Icons.notifications_active_rounded
+                        : Icons.notifications_active_outlined,
+                  ),
+                  title: const Text('Live Workout Status Chip'),
+                  subtitle: Text(
+                    controller.liveUpdateStatus.canPostPromotedNotifications
+                        ? 'Enabled — live workout & rest timers appear in the status bar'
+                        : 'Enable Live Updates in Android settings to show the status bar chip',
+                  ),
+                  trailing: Icon(
+                    controller.liveUpdateStatus.canPostPromotedNotifications
+                        ? Icons.chevron_right
+                        : Icons.open_in_new,
+                  ),
+                  onTap: () => controller.openLiveUpdateSettings(),
+                ),
+                const Divider(),
+              ],
               ListTile(
                 leading: Icon(
                   controller.healthConnectSettings.enabled &&
@@ -262,6 +285,7 @@ class OpenGymSettingsScreen extends StatelessWidget {
                 },
               ),
               const Divider(),
+              const _PinOpenGymTile(),
               ListTile(
                 leading: const Icon(Icons.upload_file_outlined),
                 title: const Text('Export Local Backup (JSON)'),
@@ -380,6 +404,59 @@ class OpenGymSettingsScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PinOpenGymTile extends StatefulWidget {
+  const _PinOpenGymTile();
+
+  @override
+  State<_PinOpenGymTile> createState() => _PinOpenGymTileState();
+}
+
+class _PinOpenGymTileState extends State<_PinOpenGymTile> {
+  static const MethodChannel _shortcutsChannel = MethodChannel(
+    'housekeepr/shortcuts',
+  );
+  bool _supported = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final supported =
+          await _shortcutsChannel.invokeMethod<bool>('canPinShortcuts') ??
+          false;
+      if (mounted && supported) {
+        setState(() => _supported = true);
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_supported) return const SizedBox.shrink();
+    return ListTile(
+      leading: const Icon(Icons.add_to_home_screen_outlined),
+      title: const Text('Pin OpenGym to Home Screen'),
+      subtitle: const Text('Add a direct OpenGym icon to your launcher'),
+      onTap: () async {
+        try {
+          await _shortcutsChannel.invokeMethod<bool>('pinShortcut', {
+            'id': 'open_gym',
+            'shortLabel': 'OpenGym',
+            'longLabel': 'Open OpenGym',
+            'uri': 'housekeepr://opengym',
+            'iconKey': 'open_gym',
+          });
+        } catch (_) {}
+      },
     );
   }
 }

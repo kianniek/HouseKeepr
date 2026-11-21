@@ -12,6 +12,7 @@ import '../../../../generated/app_localizations.dart';
 import '../../../../home_screen.dart';
 import '../../../../repositories/local_medication_repository.dart';
 import '../../../../repositories/task_repository.dart';
+import '../../../../services/app_haptics.dart';
 import '../../../../services/notification_service.dart';
 import '../../../../services/theme_controller.dart';
 import '../../../common/app_theme.dart';
@@ -38,6 +39,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _medications = true;
   bool _household = true;
   bool _useFloatingNav = true;
+  bool _hapticsEnabled = true;
   TimeOfDay _start = const TimeOfDay(hour: 7, minute: 0);
   TimeOfDay _end = const TimeOfDay(hour: 17, minute: 0);
   bool _loading = true;
@@ -61,6 +63,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _medications = s.medicationNotificationsEnabled(respectMaster: false);
       _household = s.householdNotificationsEnabled(respectMaster: false);
       _useFloatingNav = s.useFloatingNav();
+      _hapticsEnabled = s.hapticsEnabled();
       _start = s.notificationStart();
       _end = s.notificationEnd();
       _loading = false;
@@ -154,8 +157,15 @@ class _SettingsPageState extends State<SettingsPage> {
     HomeScreen.floatingNavNotifier.value = v;
   }
 
+  Future<void> _toggleHaptics(bool v) async {
+    setState(() => _hapticsEnabled = v);
+    await AppHaptics.instance.setEnabled(v, prefsOverride: _settings?.prefs);
+    if (v) {
+      AppHaptics.instance.toggleOn();
+    }
+  }
+
   Future<void> _onLocaleChanged(Locale? locale) async {
-    if (locale == null) return;
     await LocaleProvider.instance.setLocale(locale);
   }
 
@@ -210,7 +220,12 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          12,
+          16,
+          24 + MediaQuery.paddingOf(context).bottom,
+        ),
         children: [
           _SectionHeader(title: l10n.accountSection),
           _buildAccountSection(context, l10n),
@@ -293,18 +308,27 @@ class _SettingsPageState extends State<SettingsPage> {
           listenable: LocaleProvider.instance,
           builder: (context, _) {
             final currentLocale = LocaleProvider.instance.locale;
+            final selectedLocale =
+                (currentLocale != null &&
+                    LocaleProvider.supportedLocales.contains(currentLocale))
+                ? currentLocale
+                : null;
             return ListTile(
               leading: const Icon(Icons.language),
               title: Text(l10n.language),
-              trailing: DropdownButton<Locale>(
-                value: currentLocale,
+              trailing: DropdownButton<Locale?>(
+                value: selectedLocale,
                 underline: const SizedBox.shrink(),
                 items: [
-                  DropdownMenuItem(
+                  DropdownMenuItem<Locale?>(
+                    value: null,
+                    child: Text(l10n.languageSystemDefault),
+                  ),
+                  DropdownMenuItem<Locale?>(
                     value: const Locale('en'),
                     child: Text(l10n.languageEnglish),
                   ),
-                  DropdownMenuItem(
+                  DropdownMenuItem<Locale?>(
                     value: const Locale('nl'),
                     child: Text(l10n.languageDutch),
                   ),
@@ -318,14 +342,16 @@ class _SettingsPageState extends State<SettingsPage> {
           listenable: ThemeController.instance,
           builder: (context, _) {
             final controller = ThemeController.instance;
-            final palette = AppThemePalette.forType(controller.currentTheme);
             final scheme = Theme.of(context).brightness == Brightness.dark
-                ? palette.darkScheme()
-                : palette.lightScheme();
+                ? controller.darkScheme
+                : controller.lightScheme;
+            final subtitle = controller.currentTheme == AppThemeType.dynamic
+                ? l10n.themeDynamic
+                : controller.currentTheme.label;
             return ListTile(
               leading: const Icon(Icons.palette_outlined),
               title: Text(l10n.themeTitle),
-              subtitle: Text(controller.currentTheme.label),
+              subtitle: Text(subtitle),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -344,6 +370,13 @@ class _SettingsPageState extends State<SettingsPage> {
           subtitle: Text(l10n.floatingNavSubtitle),
           value: _useFloatingNav,
           onChanged: _toggleFloatingNav,
+        ),
+        SwitchListTile(
+          secondary: const Icon(Icons.vibration_outlined),
+          title: Text(l10n.hapticsTitle),
+          subtitle: Text(l10n.hapticsSubtitle),
+          value: _hapticsEnabled,
+          onChanged: _toggleHaptics,
         ),
         ListTile(
           leading: const Icon(Icons.widgets_outlined),

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/task.dart';
+import '../../../services/app_haptics.dart';
 import '../../features/tasks/utils/task_date_utils.dart';
 import '../app_theme.dart';
 import 'assignee_avatar.dart';
+import 'marquee_text.dart';
 
 class TaskCard extends StatelessWidget {
   final Task task;
@@ -121,10 +123,8 @@ class TaskCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
+                    MarqueeText(
                       displayTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w600,
                         decoration: isCompleted
@@ -162,6 +162,11 @@ class TaskCard extends StatelessWidget {
       direction: isRetrying
           ? DismissDirection.none
           : DismissDirection.endToStart,
+      onUpdate: (details) {
+        if (details.reached && !details.previousReached) {
+          AppHaptics.instance.gestureStart();
+        }
+      },
       confirmDismiss: (_) async {
         onSnooze?.call();
         return false;

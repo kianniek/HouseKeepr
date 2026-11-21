@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:housekeepr/core/settings_repository.dart';
 import 'package:housekeepr/core/sync_mode.dart';
 import 'package:housekeepr/cubits/task_cubit.dart';
+import 'package:housekeepr/home_screen.dart';
 import 'package:housekeepr/models/task.dart';
 import 'package:housekeepr/repositories/task_repository.dart';
 import 'package:housekeepr/ui/features/tasks/pages/tasks_page.dart';
@@ -164,6 +165,97 @@ void main() {
     expect(find.text('Replace Brita cartridge'), findsOneWidget);
     expect(find.text('Edit'), findsOneWidget);
     expect(find.text('Delete'), findsOneWidget);
+
+    await cubit.close();
+  });
+
+  testWidgets('AppBar Auto-Balance button opens preview sheet and reschedules',
+      (tester) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tasks = [
+      Task(
+        id: '1',
+        title: 'Vacuum living room',
+        deadline: today,
+      ),
+      Task(
+        id: '2',
+        title: 'Clean sink',
+        deadline: today.subtract(const Duration(days: 1)),
+      ),
+    ];
+
+    when(
+      () => mockRepo.loadTasksPage(
+        offset: any(named: 'offset'),
+        limit: any(named: 'limit'),
+      ),
+    ).thenReturn(tasks);
+    when(() => mockRepo.loadTasks()).thenReturn(tasks);
+
+    final cubit = TaskCubit(mockRepo, settings: mockSettings);
+    await cubit.initializationFuture;
+
+    await tester.pumpWidget(buildPage(cubit, user: mockUser));
+    await tester.pumpAndSettle();
+
+    final autoBalanceBtn = find.byTooltip('Auto-balance tasks');
+    expect(autoBalanceBtn, findsOneWidget);
+
+    await tester.tap(autoBalanceBtn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Auto-Balance Tasks'), findsOneWidget);
+    expect(find.text('Keep up to 4 tasks for today'), findsOneWidget);
+
+    // Toggle off "Keep up to 4 tasks for today" so both tasks move to upcoming days.
+    await tester.tap(find.text('Keep up to 4 tasks for today'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reschedule 2 tasks'), findsOneWidget);
+    await tester.tap(find.text('Reschedule 2 tasks'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Balanced 2 tasks'), findsOneWidget);
+    for (final t in cubit.state.tasks) {
+      expect(t.deadline!.toLocal().isAfter(today), isTrue);
+    }
+
+    await cubit.close();
+  });
+
+  testWidgets('pending openRebalanceSheetNotifier opens preview sheet on mount',
+      (tester) async {
+    final now = DateTime.now();
+    final yesterday = DateTime(now.year, now.month, now.day)
+        .subtract(const Duration(days: 1));
+    final tasks = [
+      Task(
+        id: '1',
+        title: 'Overdue chore',
+        deadline: yesterday,
+      ),
+    ];
+
+    when(
+      () => mockRepo.loadTasksPage(
+        offset: any(named: 'offset'),
+        limit: any(named: 'limit'),
+      ),
+    ).thenReturn(tasks);
+    when(() => mockRepo.loadTasks()).thenReturn(tasks);
+
+    HomeScreen.openRebalanceSheetNotifier.value = true;
+    final cubit = TaskCubit(mockRepo, settings: mockSettings);
+    await cubit.initializationFuture;
+
+    await tester.pumpWidget(buildPage(cubit, user: mockUser));
+    await tester.pumpAndSettle();
+
+    expect(HomeScreen.openRebalanceSheetNotifier.value, isFalse);
+    expect(find.text('Auto-Balance Tasks'), findsOneWidget);
+    expect(find.text('Overdue chore'), findsWidgets);
 
     await cubit.close();
   });

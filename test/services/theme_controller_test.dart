@@ -46,4 +46,35 @@ void main() {
     expect(controller.currentTheme, AppThemeType.strawberry);
     expect(controller.themeMode, ThemeMode.light);
   });
+
+  test('ThemeController supports dynamic wallpaper schemes with orange fallback', () async {
+    SharedPreferences.setMockInitialValues({});
+    final controller = ThemeController.instance;
+    await controller.load();
+
+    controller.updateDynamicSchemes(null, null);
+    expect(controller.isDynamicSupported, isFalse);
+
+    await controller.setTheme(AppThemeType.dynamic);
+    expect(controller.currentTheme, AppThemeType.dynamic);
+    // Without OS dynamic schemes, falls back gracefully to Orange palette primary.
+    expect(
+      controller.lightScheme.primary.toARGB32(),
+      isNot(equals(0)),
+    );
+
+    final lightDyn = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF006D77),
+      brightness: Brightness.light,
+    );
+    final darkDyn = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF006D77),
+      brightness: Brightness.dark,
+    );
+    controller.updateDynamicSchemes(lightDyn, darkDyn);
+
+    expect(controller.isDynamicSupported, isTrue);
+    expect(controller.lightScheme.primary, equals(lightDyn.primary));
+    expect(controller.darkScheme.primary, equals(darkDyn.primary));
+  });
 }

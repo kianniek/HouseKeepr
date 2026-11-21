@@ -24,14 +24,16 @@ object WidgetPreviewHelper {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
         updatePillPreview(context)
         updateShoppingListPreview(context)
+        updateCoffeePreview(context)
     }
 
     fun updatePillPreview(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
         val palette = WidgetThemeHelper.resolve(context)
         val views = RemoteViews(context.packageName, R.layout.pill_widget).apply {
-            setInt(R.id.pill_widget_root, "setBackgroundColor", palette.surface)
+            WidgetThemeHelper.applyRoundedBackground(this, R.id.pill_widget_root, palette.surface)
             setTextColor(R.id.pill_widget_title, palette.onSurface)
+            setTextViewText(R.id.pill_widget_title, context.getString(R.string.pills))
             setTextColor(R.id.pill_empty_text, palette.onSurfaceVariant)
         }
         AppWidgetManager.getInstance(context).setWidgetPreview(
@@ -46,8 +48,9 @@ object WidgetPreviewHelper {
         val palette = WidgetThemeHelper.resolve(context)
         val checkedColor = (palette.onSurfaceVariant and 0x00FFFFFF) or (0x80 shl 24)
         val views = RemoteViews(context.packageName, R.layout.shopping_list_widget_preview).apply {
-            setInt(R.id.preview_root, "setBackgroundColor", palette.surface)
+            WidgetThemeHelper.applyRoundedBackground(this, R.id.preview_root, palette.surface)
             setTextColor(R.id.preview_title, palette.onSurface)
+            setTextViewText(R.id.preview_title, context.getString(R.string.shopping_list))
             for (itemId in previewUncheckedItemIds) {
                 setTextColor(itemId, palette.onSurface)
             }
@@ -55,6 +58,27 @@ object WidgetPreviewHelper {
         }
         AppWidgetManager.getInstance(context).setWidgetPreview(
             ComponentName(context, ShoppingListWidget::class.java),
+            AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN,
+            views,
+        )
+    }
+
+    fun updateCoffeePreview(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return
+        val palette = WidgetThemeHelper.resolve(context)
+        val views = RemoteViews(context.packageName, R.layout.coffee_widget).apply {
+            WidgetThemeHelper.applyRoundedBackground(this, R.id.coffee_root, palette.surface)
+            setTextColor(R.id.coffee_title, palette.onSurfaceVariant)
+            setTextViewText(R.id.coffee_title, context.getString(R.string.coffee_what_to_brew))
+            setTextColor(R.id.coffee_arrow, palette.primary)
+            WidgetThemeHelper.applyRoundedBackground(this, R.id.coffee_spin_status, palette.primary)
+            setTextColor(R.id.coffee_spin_status, palette.onPrimary)
+            setTextViewText(R.id.coffee_spin_status, context.getString(R.string.coffee_tap_to_spin))
+            setViewVisibility(R.id.coffee_idle_state, android.view.View.VISIBLE)
+            setViewVisibility(R.id.coffee_recipe_state, android.view.View.GONE)
+        }
+        AppWidgetManager.getInstance(context).setWidgetPreview(
+            ComponentName(context, CoffeeWidget::class.java),
             AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN,
             views,
         )

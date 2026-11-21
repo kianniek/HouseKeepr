@@ -25,6 +25,7 @@ class TaskCubit extends Cubit<TaskState> {
   WriteQueue? writeQueue;
   HistoryRepository? historyRepo;
   StreamSubscription<QuerySnapshot>? _tasksSubscription;
+  Timer? _syncNotifDebounceTimer;
 
   // Track IDs of tasks that have been deleted locally but might still
   // exist on the server temporarily.
@@ -73,7 +74,27 @@ class TaskCubit extends Cubit<TaskState> {
     emit(state.copyWith(tasks: merged, hasMore: hasMore));
   }
 
-  Future<void> _syncNotifications(List<Task> tasks) async {
+  Future<void> _syncNotifications(
+    List<Task> tasks, {
+    bool debounce = false,
+  }) async {
+    if (settings == null) return;
+    if (debounce) {
+      _syncNotifDebounceTimer?.cancel();
+      _syncNotifDebounceTimer = Timer(
+        const Duration(milliseconds: 400),
+        () {
+          if (isClosed) return;
+          unawaited(_runSyncNotifications(tasks));
+        },
+      );
+      return;
+    }
+    _syncNotifDebounceTimer?.cancel();
+    await _runSyncNotifications(tasks);
+  }
+
+  Future<void> _runSyncNotifications(List<Task> tasks) async {
     if (settings == null) return;
     try {
       await NotificationService.instance.syncTaskNotifications(
@@ -190,7 +211,7 @@ class TaskCubit extends Cubit<TaskState> {
         'TaskCubit.replaceAll: Emitting state with ${filteredTasks.length} items',
       );
       emit(state.copyWith(tasks: filteredTasks));
-      await _syncNotifications(filteredTasks);
+      await _syncNotifications(filteredTasks, debounce: true);
     } catch (e, st) {
       debugPrint('TaskCubit.replaceAll ERROR: $e$st');
       // If save/filter fails, try to just emit what we have
@@ -411,26 +432,22 @@ class TaskCubit extends Cubit<TaskState> {
     List<Task> updatedTasks,
     Map<String, Task> previousById,
   ) {
+    if (updatedTasks.isEmpty) return;
     final mode = settings?.getSyncMode() ?? SyncMode.sync;
     if (mode == SyncMode.localOnly || remoteRepo == null) return;
 
     if (writeQueue != null) {
-      for (final updated in updatedTasks) {
-        final payload = updated.toMap();
-        final prev = previousById[updated.id];
-        if (prev != null) {
-          try {
-            payload['_previous'] = prev.toMap();
-          } catch (_) {}
-        }
-        writeQueue!.enqueueOp(
-          QueueOp(type: QueueOpType.saveTask, id: updated.id, payload: payload),
-        );
-      }
+      writeQueue!.enqueueOp(
+        QueueOp(
+          type: QueueOpType.saveTasksBatch,
+          id: 'batch_${DateTime.now().millisecondsSinceEpoch}',
+          payload: <String, dynamic>{
+            'tasks': updatedTasks.map((t) => t.toMap()).toList(),
+          },
+        ),
+      );
     } else {
-      for (final updated in updatedTasks) {
-        unawaited(remoteRepo!.saveTask(updated));
-      }
+      unawaited(remoteRepo!.saveTasksBatch(updatedTasks));
     }
   }
 
@@ -454,13 +471,14 @@ class TaskCubit extends Cubit<TaskState> {
 
         await repo.saveTasks(filtered);
         emit(state.copyWith(tasks: filtered));
-        await _syncNotifications(filtered);
+        await _syncNotifications(filtered, debounce: true);
       } catch (_) {}
     });
   }
 
   @override
   Future<void> close() {
+    _syncNotifDebounceTimer?.cancel();
     NotificationService.instance.taskUpdatesNotifier.removeListener(
       _onNotificationTaskUpdate,
     );
@@ -743,30 +761,12 @@ class TaskCubit extends Cubit<TaskState> {
       await repo.saveTasks(updatedTasks);
     } catch (_) {}
 
-    final mode = settings?.getSyncMode() ?? SyncMode.sync;
-    if (mode != SyncMode.localOnly) {
-      if (writeQueue != null) {
-        for (final p in prevs) {
-          final updated = updatedTasks.firstWhere((t) => t.id == p.id);
-          final payload = updated.toMap();
-          try {
-            payload['_previous'] = p.toMap();
-          } catch (_) {}
-          writeQueue!.enqueueOp(
-            QueueOp(
-              type: QueueOpType.saveTask,
-              id: updated.id,
-              payload: payload,
-            ),
-          );
-        }
-      } else if (remoteRepo != null) {
-        for (final p in prevs) {
-          final updated = updatedTasks.firstWhere((t) => t.id == p.id);
-          unawaited(remoteRepo!.saveTask(updated));
-        }
-      }
-    }
+    final prevIds = prevs.map((t) => t.id).toSet();
+    final modified = updatedTasks
+        .where((t) => prevIds.contains(t.id))
+        .toList();
+    final prevById = {for (final p in prevs) p.id: p};
+    _dispatchBatchSave(modified, prevById);
 
     emit(state.copyWith(tasks: updatedTasks));
     await _syncNotifications(updatedTasks);

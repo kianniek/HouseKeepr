@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -905,6 +906,257 @@ void main() {
       expect(find.text('Make your own ladder'), findsOneWidget);
     });
   });
+
+  group('Live Workout Notifications & Actions', () {
+    test('syncs lifting/rest/pause payloads, handles notification actions without auto-rest, and preserves across dispose', () async {
+      final memoryStore = _MemoryHealthDataStore();
+      final fakeLive = _FakeLiveNotificationService();
+      final controller = OpenGymController(
+        store: memoryStore,
+        liveNotificationService: fakeLive,
+      );
+      await controller.initialize();
+
+      expect(controller.liveUpdateStatus.isSupported, isTrue);
+      expect(controller.liveUpdateStatus.canPostPromotedNotifications, isFalse);
+
+      controller.startEmptyWorkout(title: 'Push Day');
+      final bench = controller.exercises.firstWhere((e) => e.id == '0025');
+      final second = controller.exercises.firstWhere((e) => e.id != '0025');
+      controller.addExerciseToActiveWorkout(bench);
+      controller.updateSet(0, 0, weight: 80, reps: 8);
+      controller.addSet(0);
+      controller.updateSet(0, 1, weight: 80, reps: 8);
+      controller.addExerciseToActiveWorkout(second);
+      controller.updateSet(1, 0, weight: 40, reps: 10);
+
+      final liftingPayload = fakeLive.updatedPayloads.last;
+      expect(liftingPayload.workoutTitle, 'Push Day');
+      expect(liftingPayload.completedSets, 0);
+      expect(liftingPayload.totalSets, 3);
+      expect(liftingPayload.exerciseName, bench.name);
+      expect(liftingPayload.setSummary, 'Set 1/2 • 80 kg × 8');
+      expect(liftingPayload.isPaused, isFalse);
+      expect(liftingPayload.restEndsAtMs, 0);
+      expect(liftingPayload.hasNextIncompleteSet, isTrue);
+      expect(liftingPayload.nextSetsQueue.length, 3);
+
+      // Completing a set in-app triggers rest timer & updates payload.
+      controller.toggleSetCompleted(0, 0);
+      expect(controller.isResting, isTrue);
+      final restingPayload = fakeLive.updatedPayloads.last;
+      expect(restingPayload.completedSets, 1);
+      expect(restingPayload.restEndsAtMs, greaterThan(0));
+      expect(restingPayload.restTotalSeconds, 90);
+      expect(restingPayload.isPaused, isFalse);
+
+      // +30s notification action extends rest.
+      fakeLive.actionController.add(
+        const OpenGymLiveAction(
+          type: OpenGymLiveActionType.addRest,
+          deltaSeconds: 30,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.restRemainingSeconds, greaterThanOrEqualTo(118));
+      expect(
+        fakeLive.updatedPayloads.last.restTotalSeconds,
+        greaterThanOrEqualTo(118),
+      );
+
+      // Skip Rest notification action clears rest.
+      fakeLive.actionController.add(
+        const OpenGymLiveAction(type: OpenGymLiveActionType.skipRest),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.isResting, isFalse);
+      expect(fakeLive.updatedPayloads.last.restEndsAtMs, 0);
+
+      // Pause/Resume notification action toggles pause state.
+      fakeLive.actionController.add(
+        const OpenGymLiveAction(type: OpenGymLiveActionType.togglePause),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.isPaused, isTrue);
+      expect(fakeLive.updatedPayloads.last.isPaused, isTrue);
+      expect(fakeLive.updatedPayloads.last.restEndsAtMs, 0);
+
+      fakeLive.actionController.add(
+        const OpenGymLiveAction(type: OpenGymLiveActionType.togglePause),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.isPaused, isFalse);
+
+      // Complete Next Set marks set done & advances exercise WITHOUT starting rest.
+      fakeLive.actionController.add(
+        const OpenGymLiveAction(type: OpenGymLiveActionType.completeNextSet),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.activeWorkout!.completedSetsCount, 2);
+      expect(controller.isResting, isFalse);
+      expect(controller.selectedEntryIndex, 1);
+      expect(fakeLive.updatedPayloads.last.exerciseName, second.name);
+      expect(fakeLive.updatedPayloads.last.hasNextIncompleteSet, isTrue);
+
+      // Completing final set leaves hasNextIncompleteSet = false.
+      fakeLive.actionController.add(
+        const OpenGymLiveAction(type: OpenGymLiveActionType.completeNextSet),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.activeWorkout!.completedSetsCount, 3);
+      expect(controller.isResting, isFalse);
+      expect(fakeLive.updatedPayloads.last.hasNextIncompleteSet, isFalse);
+      expect(fakeLive.updatedPayloads.last.setSummary, 'All sets complete');
+
+      // Disposing controller when leaving OpenGym must NOT stop live notification.
+      expect(fakeLive.stopCalls, 0);
+      controller.dispose();
+      expect(fakeLive.stopCalls, 0);
+
+      // Re-initialize and finish workout -> stops live notification.
+      final fakeLiveFinish = _FakeLiveNotificationService();
+      final controller2 = OpenGymController(
+        store: memoryStore,
+        liveNotificationService: fakeLiveFinish,
+      );
+      await controller2.initialize();
+      expect(controller2.hasActiveWorkout, isTrue);
+      await controller2.finishWorkout();
+      expect(fakeLiveFinish.stopCalls, 1);
+
+      controller2.dispose();
+      await fakeLive.actionController.close();
+      await fakeLiveFinish.actionController.close();
+    });
+
+    test('replays queued background notification actions on initialize and stops on discard', () async {
+      final memoryStore = _MemoryHealthDataStore();
+      final fakeLive1 = _FakeLiveNotificationService();
+      final controller1 = OpenGymController(
+        store: memoryStore,
+        liveNotificationService: fakeLive1,
+      );
+      await controller1.initialize();
+      controller1.startEmptyWorkout(title: 'Pull Day');
+      final exercise = controller1.exercises.first;
+      controller1.addExerciseToActiveWorkout(exercise);
+      controller1.addSet(0);
+      await Future<void>.delayed(Duration.zero);
+      controller1.dispose();
+
+      final fakeLive2 = _FakeLiveNotificationService()
+        ..pendingActionsToReturn.add(
+          const OpenGymLiveAction(
+            type: OpenGymLiveActionType.completeNextSet,
+          ),
+        );
+      final controller2 = OpenGymController(
+        store: memoryStore,
+        liveNotificationService: fakeLive2,
+      );
+      await controller2.initialize();
+
+      expect(controller2.hasActiveWorkout, isTrue);
+      expect(controller2.activeWorkout!.completedSetsCount, 1);
+      expect(controller2.isResting, isFalse);
+      expect(fakeLive2.updatedPayloads.last.completedSets, 1);
+
+      controller2.discardWorkout();
+      expect(fakeLive2.stopCalls, 1);
+
+      controller2.dispose();
+      await fakeLive1.actionController.close();
+      await fakeLive2.actionController.close();
+    });
+
+    testWidgets(
+      'OpenGymRoot disables NavigatorPopHandler at root and enables on nested push',
+      (tester) async {
+        final memoryStore = _MemoryHealthDataStore();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: OpenGymRoot(store: memoryStore),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        NavigatorPopHandler<dynamic> findHandler() =>
+            tester.widget<NavigatorPopHandler<dynamic>>(
+              find.byWidgetPredicate((w) => w is NavigatorPopHandler),
+            );
+
+        expect(findHandler().enabled, isFalse);
+
+        final nestedNav = tester.state<NavigatorState>(
+          find.descendant(
+            of: find.byType(OpenGymRoot),
+            matching: find.byType(Navigator),
+          ),
+        );
+        nestedNav.push<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('Nested Route')),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+
+        expect(findHandler().enabled, isTrue);
+
+        nestedNav.pop();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+
+        expect(findHandler().enabled, isFalse);
+      },
+    );
+  });
+}
+
+class _FakeLiveNotificationService extends OpenGymLiveNotificationService {
+  final StreamController<OpenGymLiveAction> actionController =
+      StreamController<OpenGymLiveAction>.broadcast();
+  final List<OpenGymLiveWorkoutPayload> updatedPayloads =
+      <OpenGymLiveWorkoutPayload>[];
+  final List<OpenGymLiveAction> pendingActionsToReturn =
+      <OpenGymLiveAction>[];
+  int stopCalls = 0;
+  int openSettingsCalls = 0;
+  OpenGymLiveUpdateStatus statusToReturn = const OpenGymLiveUpdateStatus(
+    isSupported: true,
+    canPostPromotedNotifications: false,
+    notificationsEnabled: true,
+  );
+
+  @override
+  Stream<OpenGymLiveAction> get actions => actionController.stream;
+
+  @override
+  Future<void> updateWorkout(OpenGymLiveWorkoutPayload payload) async {
+    updatedPayloads.add(payload);
+  }
+
+  @override
+  Future<void> stopWorkout() async {
+    stopCalls++;
+  }
+
+  @override
+  Future<List<OpenGymLiveAction>> consumePendingActions() async {
+    final copy = List<OpenGymLiveAction>.from(pendingActionsToReturn);
+    pendingActionsToReturn.clear();
+    return copy;
+  }
+
+  @override
+  Future<OpenGymLiveUpdateStatus> getLiveUpdateStatus() async =>
+      statusToReturn;
+
+  @override
+  Future<void> openLiveUpdateSettings() async {
+    openSettingsCalls++;
+  }
 }
 
 class _MemoryHealthDataStore implements HealthDataStore {

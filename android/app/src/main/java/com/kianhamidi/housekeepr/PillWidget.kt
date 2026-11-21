@@ -9,6 +9,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.SizeF
 import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONObject
@@ -25,6 +26,7 @@ class PillWidget : AppWidgetProvider() {
 
     companion object {
         const val ACTION_TOGGLE_SLOT = "com.kianhamidi.housekeepr.ACTION_TOGGLE_PILL_SLOT"
+        const val ACTION_MIDNIGHT_RESET = "com.kianhamidi.housekeepr.ACTION_MIDNIGHT_RESET"
         const val EXTRA_SLOT = "extra_slot"
         const val EXTRA_CURRENT_STATE = "extra_current_state"
 
@@ -50,36 +52,79 @@ class PillWidget : AppWidgetProvider() {
             appWidgetManager: AppWidgetManager,
             appWidgetId: Int
         ) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val v1x1 = buildPillRemoteViews(
+                    context = context,
+                    appWidgetId = appWidgetId,
+                    isCompactHeight = true,
+                    isCompactWidth = true,
+                )
+                val vNx1 = buildPillRemoteViews(
+                    context = context,
+                    appWidgetId = appWidgetId,
+                    isCompactHeight = true,
+                    isCompactWidth = false,
+                )
+                val v1xN = buildPillRemoteViews(
+                    context = context,
+                    appWidgetId = appWidgetId,
+                    isCompactHeight = false,
+                    isCompactWidth = true,
+                )
+                val vFull = buildPillRemoteViews(
+                    context = context,
+                    appWidgetId = appWidgetId,
+                    isCompactHeight = false,
+                    isCompactWidth = false,
+                )
+                val responsive = RemoteViews(
+                    mapOf(
+                        SizeF(50f, 50f) to v1x1,
+                        SizeF(180f, 50f) to vNx1,
+                        SizeF(50f, 110f) to v1xN,
+                        SizeF(180f, 110f) to vFull,
+                    )
+                )
+                appWidgetManager.updateAppWidget(appWidgetId, responsive)
+                return
+            }
+
+            val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+            val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
+            val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
+            val isCompactHeight = minHeight in 1 until 102
+            val isCompactWidth = minWidth in 1 until 102
+            val views = buildPillRemoteViews(
+                context = context,
+                appWidgetId = appWidgetId,
+                isCompactHeight = isCompactHeight,
+                isCompactWidth = isCompactWidth,
+            )
+            appWidgetManager.updateAppWidget(appWidgetId, views)
+        }
+
+        private fun buildPillRemoteViews(
+            context: Context,
+            appWidgetId: Int,
+            isCompactHeight: Boolean,
+            isCompactWidth: Boolean,
+        ): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.pill_widget)
             val palette = WidgetThemeHelper.resolve(context)
-            views.setInt(R.id.pill_widget_root, "setBackgroundColor", palette.surface)
+            WidgetThemeHelper.applyRoundedBackground(views, R.id.pill_widget_root, palette.surface)
             views.setTextColor(R.id.pill_widget_title, palette.onSurface)
             views.setTextColor(R.id.pill_empty_text, palette.onSurfaceVariant)
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val rawJson = prefs.getString(DATA_KEY, null)
+            val widgetData = PillWidgetScheduler.resolveTodayData(context)
 
-            var title = "Pillen"
-            var hasMorning = false
-            var morningTaken = false
-            var hasEvening = false
-            var eveningTaken = false
-            var morningCount = 0
-            var eveningCount = 0
-
-            if (!rawJson.isNullOrBlank()) {
-                try {
-                    val data = JSONObject(rawJson)
-                    title = data.optString("title", "Pillen")
-                    hasMorning = data.optBoolean("hasMorning", false)
-                    morningTaken = data.optBoolean("morningTaken", false)
-                    hasEvening = data.optBoolean("hasEvening", false)
-                    eveningTaken = data.optBoolean("eveningTaken", false)
-                    morningCount = data.optInt("morningCount", 0)
-                    eveningCount = data.optInt("eveningCount", 0)
-                } catch (_: Exception) {
-                    // Fall back to defaults
-                }
-            }
+            val defaultTitle = context.getString(R.string.pills)
+            val title = widgetData.optString("title", defaultTitle)
+            val hasMorning = widgetData.optBoolean("hasMorning", false)
+            val morningTaken = widgetData.optBoolean("morningTaken", false)
+            val hasEvening = widgetData.optBoolean("hasEvening", false)
+            val eveningTaken = widgetData.optBoolean("eveningTaken", false)
+            val morningCount = widgetData.optInt("morningCount", 0)
+            val eveningCount = widgetData.optInt("eveningCount", 0)
 
             val hideUnused = prefs.getBoolean(HIDE_UNUSED_KEY, false)
             val customTitle = prefs.getString(TITLE_KEY, null)
@@ -87,17 +132,12 @@ class PillWidget : AppWidgetProvider() {
             val showDoseCount = prefs.getBoolean(SHOW_DOSE_COUNT_KEY, false)
 
             // Set Header
-            if (resolvedTitle.isBlank()) {
+            if (resolvedTitle.isBlank() || (isCompactHeight && isCompactWidth)) {
                 views.setViewVisibility(R.id.pill_widget_title, View.GONE)
             } else {
                 views.setViewVisibility(R.id.pill_widget_title, View.VISIBLE)
                 views.setTextViewText(R.id.pill_widget_title, resolvedTitle)
             }
-
-            val minHeight = appWidgetManager
-                .getAppWidgetOptions(appWidgetId)
-                .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
-            val isCompactHeight = minHeight in 1 until 102
 
             val effectiveHideUnused = hideUnused || isCompactHeight
             val canShowMorning = !effectiveHideUnused || hasMorning
@@ -142,7 +182,7 @@ class PillWidget : AppWidgetProvider() {
             views.setBoolean(R.id.switch_morning, "setEnabled", hasMorning)
             views.setTextViewText(
                 R.id.switch_morning,
-                if (showDoseCount && hasMorning) "$morningCount" else ""
+                if (showDoseCount && hasMorning && !isCompactWidth) "$morningCount" else ""
             )
 
             val morningToggleIntent = Intent(context, PillWidget::class.java).apply {
@@ -174,7 +214,7 @@ class PillWidget : AppWidgetProvider() {
             views.setBoolean(R.id.switch_evening, "setEnabled", hasEvening)
             views.setTextViewText(
                 R.id.switch_evening,
-                if (showDoseCount && hasEvening) "$eveningCount" else ""
+                if (showDoseCount && hasEvening && !isCompactWidth) "$eveningCount" else ""
             )
 
             val eveningToggleIntent = Intent(context, PillWidget::class.java).apply {
@@ -213,8 +253,7 @@ class PillWidget : AppWidgetProvider() {
 
             views.setOnClickPendingIntent(R.id.pill_widget_title, openAppPendingIntent)
             views.setOnClickPendingIntent(R.id.pill_widget_root, openAppPendingIntent)
-
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+            return views
         }
     }
 
@@ -227,6 +266,17 @@ class PillWidget : AppWidgetProvider() {
             updateAppWidget(context, appWidgetManager, id)
         }
         WidgetPreviewHelper.updatePillPreview(context)
+        PillWidgetScheduler.scheduleNextMidnightReset(context)
+    }
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        PillWidgetScheduler.scheduleNextMidnightReset(context)
+    }
+
+    override fun onDisabled(context: Context) {
+        super.onDisabled(context)
+        PillWidgetScheduler.cancelMidnightReset(context)
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -242,39 +292,47 @@ class PillWidget : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
 
-        if (intent.action == ACTION_TOGGLE_SLOT) {
-            val slot = intent.getStringExtra(EXTRA_SLOT) ?: return
-            val wasTaken = intent.getBooleanExtra(EXTRA_CURRENT_STATE, false)
-            // On Android 12+, RemoteViews sends the new checked state via RemoteViews.EXTRA_CHECKED
-            val newTaken = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && intent.hasExtra(RemoteViews.EXTRA_CHECKED)) {
-                intent.getBooleanExtra(RemoteViews.EXTRA_CHECKED, !wasTaken)
-            } else {
-                !wasTaken
+        when (intent.action) {
+            ACTION_MIDNIGHT_RESET,
+            Intent.ACTION_DATE_CHANGED,
+            Intent.ACTION_TIME_CHANGED,
+            Intent.ACTION_TIMEZONE_CHANGED,
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                refresh(context)
+                PillWidgetScheduler.scheduleNextMidnightReset(context)
             }
 
-            // 1. Instantly update SharedPreferences for local responsiveness
-            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val rawJson = prefs.getString(DATA_KEY, null)
-            if (!rawJson.isNullOrBlank()) {
-                try {
-                    val data = JSONObject(rawJson)
-                    if (slot == "morning") {
-                        data.put("morningTaken", newTaken)
-                    } else if (slot == "evening") {
-                        data.put("eveningTaken", newTaken)
-                    }
-                    prefs.edit().putString(DATA_KEY, data.toString()).apply()
-                } catch (_: Exception) {}
+            ACTION_TOGGLE_SLOT -> {
+                val slot = intent.getStringExtra(EXTRA_SLOT) ?: return
+                val wasTaken = intent.getBooleanExtra(EXTRA_CURRENT_STATE, false)
+                // On Android 12+, RemoteViews sends the new checked state via RemoteViews.EXTRA_CHECKED
+                val newTaken = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && intent.hasExtra(RemoteViews.EXTRA_CHECKED)) {
+                    intent.getBooleanExtra(RemoteViews.EXTRA_CHECKED, !wasTaken)
+                } else {
+                    !wasTaken
+                }
+
+                // 1. Ensure data is resolved for today, then update SharedPreferences for local responsiveness
+                val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                val todayKey = PillWidgetScheduler.todayDateKey()
+                val data = PillWidgetScheduler.resolveTodayData(context)
+                if (slot == "morning") {
+                    data.put("morningTaken", newTaken)
+                } else if (slot == "evening") {
+                    data.put("eveningTaken", newTaken)
+                }
+                prefs.edit().putString(DATA_KEY, data.toString()).apply()
+
+                // 2. Queue date-stamped pending toggle action for Flutter to reconcile
+                val existingQueue = prefs.getString(PENDING_TOGGLES_KEY, "") ?: ""
+                val entry = "$slot:$newTaken:$todayKey"
+                val newQueue = if (existingQueue.isEmpty()) entry else "$existingQueue,$entry"
+                prefs.edit().putString(PENDING_TOGGLES_KEY, newQueue).apply()
+
+                // 3. Immediately refresh widget views
+                refresh(context)
             }
-
-            // 2. Queue pending toggle action for Flutter to reconcile
-            val existingQueue = prefs.getString(PENDING_TOGGLES_KEY, "") ?: ""
-            val entry = "$slot:$newTaken"
-            val newQueue = if (existingQueue.isEmpty()) entry else "$existingQueue,$entry"
-            prefs.edit().putString(PENDING_TOGGLES_KEY, newQueue).apply()
-
-            // 3. Immediately refresh widget views
-            refresh(context)
         }
     }
 }

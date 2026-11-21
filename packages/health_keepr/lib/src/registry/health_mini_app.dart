@@ -8,10 +8,15 @@ class HealthMiniApp {
     required this.id,
     required this.title,
     required this.subtitle,
-    required this.icon,
+    this.icon,
+    this.iconAsset,
+    this.iconAssetPackage,
     required this.isInstalled,
     required this.onLaunch,
-  });
+  }) : assert(
+         icon != null || iconAsset != null,
+         'Either icon or iconAsset must be provided',
+       );
 
   /// Unique module identifier used to namespace local storage.
   final String id;
@@ -23,7 +28,13 @@ class HealthMiniApp {
   final String subtitle;
 
   /// Leading icon representing the module.
-  final IconData icon;
+  final IconData? icon;
+
+  /// Optional asset path for a custom icon image (rendered via [ImageIcon]).
+  final String? iconAsset;
+
+  /// Optional package name owning [iconAsset].
+  final String? iconAssetPackage;
 
   /// Whether the deferred module library is currently loaded/installed.
   final bool isInstalled;

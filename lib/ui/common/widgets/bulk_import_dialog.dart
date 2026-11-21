@@ -2,22 +2,32 @@ import 'package:flutter/material.dart';
 import '../../../core/grocery_parser.dart';
 import '../../../generated/app_localizations.dart';
 
-Future<List<ParsedGroceryItem>?> showBulkImportDialog(BuildContext context) {
+Future<List<ParsedGroceryItem>?> showBulkImportDialog(
+  BuildContext context, {
+  String? initialText,
+}) {
   return showDialog<List<ParsedGroceryItem>>(
     context: context,
-    builder: (context) => const _BulkImportDialog(),
+    builder: (context) => _BulkImportDialog(initialText: initialText),
   );
 }
 
 class _BulkImportDialog extends StatefulWidget {
-  const _BulkImportDialog();
+  final String? initialText;
+  const _BulkImportDialog({this.initialText});
 
   @override
   State<_BulkImportDialog> createState() => _BulkImportDialogState();
 }
 
 class _BulkImportDialogState extends State<_BulkImportDialog> {
-  final _textController = TextEditingController();
+  late final TextEditingController _textController;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(text: widget.initialText ?? '');
+  }
 
   @override
   void dispose() {

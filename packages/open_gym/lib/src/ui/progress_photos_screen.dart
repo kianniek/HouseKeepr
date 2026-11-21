@@ -141,7 +141,12 @@ class _ProgressPhotosScreenState extends State<ProgressPhotosScreen> {
                         ),
                       )
                     : GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          4,
+                          16,
+                          88 + MediaQuery.paddingOf(context).bottom,
+                        ),
                         itemCount: photos.length,
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(

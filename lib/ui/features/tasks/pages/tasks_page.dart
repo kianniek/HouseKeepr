@@ -4,31 +4,35 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:housekeepr/core/extensions.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../cubits/task_cubit.dart';
 import '../../../../home_screen.dart';
 import '../../../../models/task.dart';
+import '../../../../services/app_haptics.dart';
 import '../../../../services/task_rescheduler.dart';
 import '../../../common/app_theme.dart';
-import '../../../common/widgets/assignee_avatar.dart';
+import '../../../common/widgets/keyboard_inset_padding.dart';
 import '../../../common/widgets/task_card.dart';
 import '../../../common/widgets/undo_toast.dart';
 import '../utils/task_date_utils.dart';
+import '../widgets/rebalance_tasks_sheet.dart';
 import '../widgets/task_add_dialog.dart';
-
-class _TaskIconKeyword {
-  final IconData icon;
-  final List<String> keywords;
-  const _TaskIconKeyword(this.icon, this.keywords);
-}
+import '../widgets/task_detail_sheet.dart';
+import '../widgets/workload_calendar_card.dart';
 
 class TasksPage extends StatefulWidget {
   final String? householdId;
   final fb.User? currentUser;
-  const TasksPage({super.key, this.householdId, this.currentUser});
+  final DateTime? initialSelectedDate;
+  const TasksPage({
+    super.key,
+    this.householdId,
+    this.currentUser,
+    this.initialSelectedDate,
+  });
 
   @override
   State<TasksPage> createState() => _TasksPageState();
@@ -51,7 +55,12 @@ class _TasksPageState extends State<TasksPage> {
   bool _upcomingExpanded = true;
   bool _wheneverExpanded = true;
   bool _doneExpanded = false;
+  bool _overdueExpanded = true;
+  bool _dayScheduledExpanded = true;
   bool _highlightAutoBalance = false;
+  DateTime? _selectedCalendarDate;
+  DateTime _focusedCalendarDate = DateTime.now();
+  bool _isCalendarMonthView = false;
   final List<String> _rooms = [
     'Everything',
     'Bathroom',
@@ -64,10 +73,24 @@ class _TasksPageState extends State<TasksPage> {
   @override
   void initState() {
     super.initState();
+    _selectedCalendarDate = widget.initialSelectedDate;
+    if (widget.initialSelectedDate != null) {
+      _focusedCalendarDate = widget.initialSelectedDate!;
+    }
     _loadFilters();
     HomeScreen.highlightAutoBalanceNotifier.addListener(
       _onHighlightAutoBalance,
     );
+    HomeScreen.openRebalanceSheetNotifier.addListener(
+      _onOpenRebalanceSheetSignal,
+    );
+    HomeScreen.openNewTaskSheetNotifier.addListener(_onOpenNewTaskSheet);
+    HomeScreen.selectTasksDateNotifier.addListener(_onSelectTasksDate);
+    if (HomeScreen.openRebalanceSheetNotifier.value) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _consumePendingRebalanceSheet();
+      });
+    }
   }
 
   @override
@@ -75,8 +98,36 @@ class _TasksPageState extends State<TasksPage> {
     HomeScreen.highlightAutoBalanceNotifier.removeListener(
       _onHighlightAutoBalance,
     );
+    HomeScreen.openRebalanceSheetNotifier.removeListener(
+      _onOpenRebalanceSheetSignal,
+    );
+    HomeScreen.openNewTaskSheetNotifier.removeListener(_onOpenNewTaskSheet);
+    HomeScreen.selectTasksDateNotifier.removeListener(_onSelectTasksDate);
     _bulkImportController.dispose();
     super.dispose();
+  }
+
+  void _onSelectTasksDate() {
+    final target = HomeScreen.selectTasksDateNotifier.value;
+    if (!mounted || target == null) return;
+    HomeScreen.selectTasksDateNotifier.value = null;
+    setState(() {
+      _selectedCalendarDate = target;
+      _focusedCalendarDate = target;
+    });
+  }
+
+  void _onOpenNewTaskSheet() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showTaskAddEditDialog(
+        context,
+        householdId: widget.householdId,
+        currentUser: widget.currentUser,
+        onBulkImportTap: _showBulkImportSheet,
+        initialDeadline: _selectedCalendarDate,
+      );
+    });
   }
 
   void _onHighlightAutoBalance() {
@@ -87,6 +138,63 @@ class _TasksPageState extends State<TasksPage> {
         setState(() => _highlightAutoBalance = false);
       }
     });
+  }
+
+  void _onOpenRebalanceSheetSignal() {
+    if (!HomeScreen.openRebalanceSheetNotifier.value) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _consumePendingRebalanceSheet();
+    });
+  }
+
+  Future<void> _consumePendingRebalanceSheet() async {
+    if (!mounted || !HomeScreen.openRebalanceSheetNotifier.value) return;
+    HomeScreen.openRebalanceSheetNotifier.value = false;
+    final cubit = context.read<TaskCubit>();
+    await cubit.initializationFuture;
+    if (!mounted) return;
+    await _openRebalanceSheet(fromNotification: true);
+  }
+
+  Future<void> _openRebalanceSheet({
+    Set<String>? targetTaskIds,
+    bool fromNotification = false,
+  }) async {
+    final cubit = context.read<TaskCubit>();
+    final allTasks = cubit.state.tasks;
+    final eligible = TaskRescheduler.getEligibleRebalanceTasks(
+      targetTaskIds == null
+          ? allTasks
+          : allTasks.where((t) => targetTaskIds.contains(t.id)).toList(),
+    );
+    if (eligible.isEmpty) {
+      if (fromNotification && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No overdue or due-today tasks to auto-balance.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    final updates = await showRebalanceTasksSheet(
+      context,
+      allTasks: allTasks,
+      targetTaskIds: targetTaskIds,
+    );
+    if (!mounted || updates == null || updates.isEmpty) return;
+
+    final previous = await cubit.batchRescheduleTasks(updates);
+    AppHaptics.instance.confirm();
+    if (!mounted || previous.isEmpty) return;
+    showUndoToast(
+      context,
+      message:
+          'Balanced ${previous.length} ${previous.length == 1 ? 'task' : 'tasks'}',
+      icon: Icons.auto_awesome,
+      onUndo: () => cubit.restoreTasks(previous),
+    );
   }
 
   Future<void> _loadFilters() async {
@@ -228,13 +336,8 @@ class _TasksPageState extends State<TasksPage> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 12,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-          ),
+        return KeyboardInsetPadding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -278,19 +381,77 @@ class _TasksPageState extends State<TasksPage> {
     );
   }
 
+  List<Task> _filterTasks(List<Task> tasks) {
+    var filtered = tasks.where((t) => !t.archived).toList();
+    if (_selectedRoom != 'Everything') {
+      filtered = filtered.where((t) => t.room == _selectedRoom).toList();
+    }
+    if (_myTasksOnly) {
+      final uid = widget.currentUser?.uid;
+      if (uid != null) {
+        filtered = filtered.where((t) => t.assignedToId == uid).toList();
+      } else {
+        filtered = [];
+      }
+    }
+    return filtered;
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<TaskCubit, TaskState>(
       builder: (context, state) {
+        final filtered = _filterTasks(state.tasks);
+        final eligibleForRebalance = TaskRescheduler.getEligibleRebalanceTasks(
+          filtered,
+        );
         return Scaffold(
-          appBar: AppBar(title: const Text('Tasks')),
+          appBar: AppBar(
+            title: const Text('Tasks'),
+            actions: [
+              if (eligibleForRebalance.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.auto_awesome),
+                  tooltip: 'Auto-balance tasks',
+                  onPressed: () => _openRebalanceSheet(
+                    targetTaskIds: eligibleForRebalance
+                        .map((t) => t.id)
+                        .toSet(),
+                  ),
+                ),
+            ],
+          ),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 12),
               _buildRoomFilters(),
-              const SizedBox(height: 8),
-              Expanded(child: _buildTaskList(context, state.tasks)),
+              WorkloadCalendarCard(
+                tasks: filtered,
+                focusedDate: _focusedCalendarDate,
+                selectedDate: _selectedCalendarDate,
+                isMonthView: _isCalendarMonthView,
+                onDateSelected: (date) {
+                  setState(() {
+                    _selectedCalendarDate = date;
+                    if (date != null && _isCalendarMonthView) {
+                      _focusedCalendarDate = date;
+                    }
+                  });
+                },
+                onFocusedDateChanged: (date) {
+                  setState(() => _focusedCalendarDate = date);
+                },
+                onViewModeChanged: (isMonth) {
+                  setState(() {
+                    _isCalendarMonthView = isMonth;
+                    if (!isMonth) {
+                      _focusedCalendarDate = DateTime.now();
+                    }
+                  });
+                },
+              ),
+              Expanded(child: _buildTaskList(context, filtered)),
             ],
           ),
           floatingActionButton: FloatingActionButton(
@@ -300,6 +461,7 @@ class _TasksPageState extends State<TasksPage> {
                 householdId: widget.householdId,
                 currentUser: widget.currentUser,
                 onBulkImportTap: _showBulkImportSheet,
+                initialDeadline: _selectedCalendarDate,
               );
             },
             tooltip: 'Add Task',
@@ -403,35 +565,10 @@ class _TasksPageState extends State<TasksPage> {
     }
   }
 
-  String _repeatLabel(Task t) {
-    final cfg = _parseRepeatRule(t.repeatRule);
-    if (cfg.unit == 'week' && (t.repeatDays?.isNotEmpty ?? false)) {
-      final repeatDaysStr = t.repeatDays!
-          .map((d) {
-            const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-            if (d >= 1 && d <= 7) return names[d - 1];
-            return d.toString();
-          })
-          .join(', ');
-      return 'Repeats weekly on: $repeatDaysStr';
-    }
-    final unitLabel = cfg.interval == 1 ? cfg.unit : '${cfg.unit}s';
-    return 'Repeats every ${cfg.interval} $unitLabel';
-  }
-
-  Widget _buildTaskList(BuildContext context, List<Task> tasks) {
-    // Filter tasks by selected room and optional My Tasks toggle (#7)
-    var filtered = tasks.where((t) => !t.archived).toList();
-    if (_selectedRoom != 'Everything') {
-      filtered = filtered.where((t) => t.room == _selectedRoom).toList();
-    }
-    if (_myTasksOnly) {
-      final uid = widget.currentUser?.uid;
-      if (uid != null) {
-        filtered = filtered.where((t) => t.assignedToId == uid).toList();
-      } else {
-        filtered = [];
-      }
+  Widget _buildTaskList(BuildContext context, List<Task> filtered) {
+    final selectedDay = _selectedCalendarDate;
+    if (selectedDay != null) {
+      return _buildDayFilteredTaskList(context, filtered, selectedDay);
     }
 
     bool isDoneForToday(Task t, String todayStr) {
@@ -532,25 +669,12 @@ class _TasksPageState extends State<TasksPage> {
                   ),
                   const SizedBox(width: 8),
                   FilledButton.tonal(
-                    onPressed: () async {
-                      final cubit = context.read<TaskCubit>();
-                      final targetIds = overdueTasks.map((t) => t.id).toSet();
-                      final updates = TaskRescheduler.rebalanceOverduePileup(
-                        cubit.state.tasks,
-                        targetTaskIds: targetIds,
-                      );
-                      if (updates.isEmpty) return;
-                      final previous = await cubit.batchRescheduleTasks(
-                        updates,
-                      );
-                      if (!context.mounted || previous.isEmpty) return;
-                      showUndoToast(
-                        context,
-                        message:
-                            'Balanced ${previous.length} overdue ${previous.length == 1 ? 'task' : 'tasks'}',
-                        icon: Icons.auto_awesome,
-                        onUndo: () => cubit.restoreTasks(previous),
-                      );
+                    onPressed: () {
+                      final eligibleIds =
+                          TaskRescheduler.getEligibleRebalanceTasks(
+                            filtered,
+                          ).map((t) => t.id).toSet();
+                      _openRebalanceSheet(targetTaskIds: eligibleIds);
                     },
                     style: FilledButton.styleFrom(
                       visualDensity: VisualDensity.compact,
@@ -670,7 +794,195 @@ class _TasksPageState extends State<TasksPage> {
     );
 
     return ListView(
-      padding: const EdgeInsets.only(bottom: 88),
+      padding: EdgeInsets.only(
+        bottom: 88 + MediaQuery.paddingOf(context).bottom,
+      ),
+      children: listChildren,
+    );
+  }
+
+  Widget _buildDayFilteredTaskList(
+    BuildContext context,
+    List<Task> filtered,
+    DateTime selectedDay,
+  ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final targetDay = DateTime(
+      selectedDay.year,
+      selectedDay.month,
+      selectedDay.day,
+    );
+    final isToday = targetDay == today;
+
+    final overdueTasks = <Task>[];
+    final scheduledTasks = <Task>[];
+    final doneTasks = <Task>[];
+
+    for (final t in filtered) {
+      final completedOnDay = isTaskCompletedOnDate(t, targetDay);
+      if (doesTaskOccurOnDate(t, targetDay, now: now)) {
+        if (completedOnDay) {
+          doneTasks.add(t);
+        } else {
+          scheduledTasks.add(t);
+        }
+        continue;
+      }
+
+      if (isToday && !completedOnDay) {
+        final due = effectiveDueDate(t, now: now);
+        if (due != null && isOverdue(due, now: now)) {
+          overdueTasks.add(t);
+        }
+      }
+    }
+
+    overdueTasks.sort((a, b) => b.priority.index.compareTo(a.priority.index));
+    scheduledTasks.sort((a, b) => b.priority.index.compareTo(a.priority.index));
+
+    if (overdueTasks.isEmpty && scheduledTasks.isEmpty && doneTasks.isEmpty) {
+      final theme = Theme.of(context);
+      final scheme = theme.colorScheme;
+      final dateLabel = isToday
+          ? 'Today'
+          : DateFormat('EEE, MMM d').format(targetDay);
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.event_available_outlined,
+                size: 36,
+                color: scheme.outline,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'No tasks scheduled for $dateLabel',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => setState(() => _selectedCalendarDate = null),
+                child: const Text('Show all tasks'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final listChildren = <Widget>[];
+
+    void addDaySection({
+      required String title,
+      required List<Task> items,
+      required bool expanded,
+      required VoidCallback onToggle,
+      bool isDoneSection = false,
+    }) {
+      if (items.isEmpty) return;
+      final theme = Theme.of(context);
+      final scheme = theme.colorScheme;
+      listChildren.add(
+        InkWell(
+          onTap: onToggle,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                Icon(
+                  expanded ? Icons.expand_more : Icons.chevron_right,
+                  size: 20,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${items.length}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (expanded) {
+        listChildren.addAll(
+          items.map(
+            (t) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _buildTaskCard(
+                context,
+                t,
+                isRepeating: t.isRepeating,
+                isInactive: isDoneSection,
+                taskSection: isDoneSection
+                    ? _TaskSection.done
+                    : _TaskSection.active,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    if (isToday) {
+      addDaySection(
+        title: 'Overdue',
+        items: overdueTasks,
+        expanded: _overdueExpanded,
+        onToggle: () => setState(() => _overdueExpanded = !_overdueExpanded),
+      );
+    }
+
+    addDaySection(
+      title: isToday
+          ? 'Due Today'
+          : 'Due ${DateFormat('EEE, MMM d').format(targetDay)}',
+      items: scheduledTasks,
+      expanded: _dayScheduledExpanded,
+      onToggle: () =>
+          setState(() => _dayScheduledExpanded = !_dayScheduledExpanded),
+    );
+
+    addDaySection(
+      title: 'Done',
+      items: doneTasks,
+      expanded: _doneExpanded,
+      onToggle: () => setState(() => _doneExpanded = !_doneExpanded),
+      isDoneSection: true,
+    );
+
+    return ListView(
+      padding: EdgeInsets.only(
+        bottom: 88 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: listChildren,
     );
   }
@@ -691,6 +1003,11 @@ class _TasksPageState extends State<TasksPage> {
 
     Future<void> toggleCompletion() async {
       final nextCompleted = !isCompleted;
+      if (nextCompleted) {
+        AppHaptics.instance.confirm();
+      } else {
+        AppHaptics.instance.toggleOff();
+      }
       if (t.isRepeating) {
         if (nextCompleted) {
           await cubit.completeOccurrence(t.id, todayStr);
@@ -812,11 +1129,16 @@ class _TasksPageState extends State<TasksPage> {
 
     Widget card = TaskCard(
       task: t,
-      icon: _getTaskIcon(t),
+      icon: getTaskIcon(t),
       isCompleted: isCompleted,
       subtitle: buildSubtitle(),
       onToggleComplete: toggleCompletion,
-      onTap: () => _showTaskDetailSheet(context, t, isCompleted: isCompleted),
+      onTap: () => showTaskDetailSheet(
+        context,
+        t,
+        householdId: widget.householdId,
+        currentUser: widget.currentUser,
+      ),
       onSnooze: () => _showSnoozeSheet(context, t),
       onLongPress: () => showTaskAddEditDialog(
         context,
@@ -886,6 +1208,7 @@ class _TasksPageState extends State<TasksPage> {
         putOffCount: t.putOffCount + 1,
       );
       await cubit.updateTask(updated);
+      AppHaptics.instance.confirm();
       if (!context.mounted) return;
       showUndoToast(
         context,
@@ -961,292 +1284,6 @@ class _TasksPageState extends State<TasksPage> {
       },
     );
   }
-
-  Future<void> _showTaskDetailSheet(
-    BuildContext context,
-    Task t, {
-    required bool isCompleted,
-  }) async {
-    final cubit = context.read<TaskCubit>();
-    final displayTitle = sanitizeTaskTitle(t.title);
-    final lastCompleted =
-        (t.completedDates != null && t.completedDates!.isNotEmpty)
-        ? t.completedDates!.last
-        : null;
-    final due = effectiveDueDate(t);
-
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetCtx) {
-        final theme = Theme.of(sheetCtx);
-        final scheme = theme.colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: scheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        _getTaskIcon(t),
-                        color: scheme.onSecondaryContainer,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            displayTitle,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          if (t.room != null && t.room!.isNotEmpty)
-                            Text(
-                              t.room!,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (!t.isHouseholdTask &&
-                        (t.assignedToId != null || t.assignedToName != null))
-                      AssigneeAvatar(
-                        userId: t.assignedToId,
-                        displayName: t.assignedToName,
-                        radius: 16,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                if (t.description != null && t.description!.trim().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      t.description!,
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ),
-                if (due != null)
-                  _detailRow(
-                    sheetCtx,
-                    Icons.event_outlined,
-                    'Due: ${formatRelativeDueDate(due)} (${due.toLocalIsoDate()})',
-                  ),
-                if (t.isRepeating)
-                  _detailRow(sheetCtx, Icons.repeat, _repeatLabel(t)),
-                _detailRow(
-                  sheetCtx,
-                  Icons.person_outline,
-                  t.isHouseholdTask
-                      ? 'Assigned to: Household'
-                      : 'Assigned to: ${t.assignedToName ?? 'Member'}',
-                ),
-                if (lastCompleted != null)
-                  _detailRow(
-                    sheetCtx,
-                    Icons.history,
-                    'Last completed: $lastCompleted',
-                  ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    OutlinedButton.icon(
-                      icon: Icon(Icons.delete_outline, color: scheme.error),
-                      label: Text(
-                        'Delete',
-                        style: TextStyle(color: scheme.error),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(sheetCtx);
-                        cubit.deleteTask(t.id);
-                        showUndoToast(
-                          context,
-                          message: 'Deleted "$displayTitle"',
-                          icon: Icons.delete_outline,
-                          onUndo: () => cubit.addTask(t),
-                        );
-                      },
-                    ),
-                    const Spacer(),
-                    FilledButton.icon(
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Edit'),
-                      onPressed: () {
-                        Navigator.pop(sheetCtx);
-                        showTaskAddEditDialog(
-                          context,
-                          taskToEdit: t,
-                          currentUser: widget.currentUser,
-                          householdId: widget.householdId,
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _detailRow(BuildContext context, IconData icon, String text) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
-        ],
-      ),
-    );
-  }
-
-  IconData _getTaskIcon(Task task) {
-    switch ((task.room ?? '').toLowerCase().trim()) {
-      case 'bathroom':
-        return Icons.bathroom;
-      case 'kitchen':
-        return Icons.kitchen;
-      case 'bedroom':
-        return Icons.bed;
-      case 'living room':
-        return Icons.weekend;
-    }
-    final title = task.title.toLowerCase();
-    final description = (task.description ?? '').toLowerCase();
-    final match1 = _matchIcon(title);
-    if (match1 != null) return match1;
-    final match2 = _matchIcon(description);
-    return match2 ?? Icons.home;
-  }
-
-  IconData? _matchIcon(String text) {
-    if (text.isEmpty) return null;
-    for (final entry in _taskIconKeywords) {
-      for (final keyword in entry.keywords) {
-        if (text.contains(keyword)) return entry.icon;
-      }
-    }
-    return null;
-  }
-
-  static final List<_TaskIconKeyword> _taskIconKeywords = [
-    _TaskIconKeyword(Icons.bathroom, [
-      'bath',
-      'badkamer',
-      'shower',
-      'douche',
-      'toilet',
-      'wc',
-      'sink',
-      'wasbak',
-    ]),
-    _TaskIconKeyword(Icons.kitchen, [
-      'kitchen',
-      'keuken',
-      'cook',
-      'koken',
-      'dish',
-      'afwas',
-      'vaat',
-      'fridge',
-      'koelkast',
-    ]),
-    _TaskIconKeyword(Icons.bed, ['bed', 'slaapkamer', 'sleep', 'sleeping']),
-    _TaskIconKeyword(Icons.weekend, [
-      'living',
-      'woonkamer',
-      'lounge',
-      'sofa',
-      'couch',
-    ]),
-    _TaskIconKeyword(Icons.local_laundry_service, [
-      'laundry',
-      'wash',
-      'was',
-      'wassen',
-      'clothes',
-      'kleding',
-    ]),
-    _TaskIconKeyword(Icons.cleaning_services, [
-      'clean',
-      'schoon',
-      'stof',
-      'dweil',
-      'mop',
-      'vacuum',
-      'stofzuig',
-    ]),
-    _TaskIconKeyword(Icons.shopping_cart, [
-      'shop',
-      'shopping',
-      'boodschap',
-      'boodschappen',
-      'grocery',
-    ]),
-    _TaskIconKeyword(Icons.delete, [
-      'trash',
-      'garbage',
-      'vuilnis',
-      'prullenbak',
-      'afval',
-    ]),
-    _TaskIconKeyword(Icons.grass, [
-      'garden',
-      'tuin',
-      'plant',
-      'plants',
-      'lawn',
-      'gras',
-    ]),
-    _TaskIconKeyword(Icons.pets, [
-      'pet',
-      'huisdier',
-      'hond',
-      'kat',
-      'dog',
-      'cat',
-    ]),
-    _TaskIconKeyword(Icons.directions_car, [
-      'car',
-      'auto',
-      'vehicle',
-      'garage',
-    ]),
-    _TaskIconKeyword(Icons.receipt_long, [
-      'bill',
-      'bills',
-      'invoice',
-      'rekening',
-      'factuur',
-    ]),
-    _TaskIconKeyword(Icons.build, [
-      'fix',
-      'repair',
-      'reparatie',
-      'maintenance',
-      'onderhoud',
-    ]),
-  ];
 }
 
 enum _TaskSection { active, done }

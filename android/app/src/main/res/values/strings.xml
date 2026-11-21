@@ -27,9 +27,19 @@
     <color name="coffee_foam_bg">#ECEFF1</color>
     <color name="coffee_milk_bg">#FFF3E0</color>
     <color name="coffee_espresso_bg">#3E2723</color>
-    <string name="pill_widget_name">Pillen</string>
+    <string name="shopping_widget_name">HouseKeepr Shopping List</string>
+    <string name="coffee_widget_name">HouseKeepr Coffee Picker</string>
+    <string name="shopping_all_done">All done!</string>
+    <string name="shopping_one_item_left">1 item to go</string>
+    <string name="shopping_items_left">%1$d items to go</string>
+    <string name="coffee_what_to_brew">What to brew?</string>
+    <string name="coffee_tap_to_spin">TAP TO SPIN</string>
+    <string name="coffee_spinning">SPINNING…</string>
+    <string name="coffee_spin_short">SPIN</string>
+    <string name="coffee_tap_for_recipe_short">Tap for recipe</string>
+    <string name="pill_widget_name">Pills</string>
     <string name="pill_widget_description">Personal medication reminders and daily check-off widget</string>
-    <string name="pills">Pillen</string>
+    <string name="pills">Pills</string>
     <string name="toggle_daytime_doses">Toggle daytime doses</string>
     <string name="evening_doses">Evening doses</string>
     <string name="toggle_evening_doses">Toggle evening doses</string>
@@ -43,4 +53,15 @@
     <string name="preview_tiramisu_eggs">Eggs</string>
     <string name="title_open_gym">OpenGym</string>
     <string name="openGymName">openGym</string>
+    <string name="shortcut_open_gym_short">OpenGym</string>
+    <string name="shortcut_open_gym_long">Open OpenGym</string>
+    <string name="shortcut_shopping_short">Add Item</string>
+    <string name="shortcut_shopping_long">Quick-add to Shopping List</string>
+    <string name="shortcut_task_short">New Task</string>
+    <string name="shortcut_task_long">Create a new Task</string>
+    <string name="shortcut_medications_short">Medications</string>
+    <string name="shortcut_medications_long">Open Medication Reminders</string>
+    <string name="shortcut_coffee_short">Coffee Picker</string>
+    <string name="shortcut_coffee_long">Open Coffee Picker</string>
+    <string name="shortcut_next_workout_short">Next Workout</string>
 </resources>

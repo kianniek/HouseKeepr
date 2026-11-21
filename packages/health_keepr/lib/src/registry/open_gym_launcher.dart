@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:open_gym/open_gym.dart' deferred as openGym;
 
 import '../contracts/health_data_store.dart';
+import '../contracts/workout_notification_scheduler.dart';
 import 'health_mini_app.dart';
 
 /// Progress payload emitted by the Android deferred-component manager.
@@ -110,9 +111,35 @@ class OpenGymLauncher {
   );
 
   static bool _isLoaded = false;
+  static void Function({
+    required bool autoStartNextWorkout,
+    bool openActiveWorkout,
+  })? _activeDeepLinkHandler;
+  static WorkoutNotificationScheduler? _defaultNotificationScheduler;
 
   /// Whether the `open_gym` deferred library has been loaded in this session.
   static bool get isLoaded => _isLoaded;
+
+  /// Whether an `OpenGymRoot` instance is currently mounted.
+  static bool get isOpen => _activeDeepLinkHandler != null;
+
+  /// Registers the active `OpenGymRoot` deep-link handler while mounted.
+  static void registerActiveSession(
+    void Function({
+      required bool autoStartNextWorkout,
+      bool openActiveWorkout,
+    })? handler,
+  ) {
+    _activeDeepLinkHandler = handler;
+  }
+
+  /// Registers a host-provided [WorkoutNotificationScheduler] used whenever
+  /// `OpenGymLauncher.launch` is called without an explicit scheduler.
+  static void registerDefaultNotificationScheduler(
+    WorkoutNotificationScheduler? scheduler,
+  ) {
+    _defaultNotificationScheduler = scheduler;
+  }
 
   /// Builds the [HealthMiniApp] descriptor for OpenGym.
   static HealthMiniApp descriptor() {
@@ -120,7 +147,8 @@ class OpenGymLauncher {
       id: moduleId,
       title: 'OpenGym',
       subtitle: 'Workouts, sets, timers & PR tracking',
-      icon: Icons.fitness_center_rounded,
+      iconAsset: 'assets/icons/open_gym.svg',
+      iconAssetPackage: 'health_keepr',
       isInstalled: _isLoaded,
       onLaunch: launch,
     );
@@ -151,13 +179,27 @@ class OpenGymLauncher {
   }
 
   /// Loads the deferred `open_gym` library if needed and pushes `OpenGymRoot`.
+  ///
+  /// If an `OpenGymRoot` is already mounted, routes the request to the active
+  /// session instead of pushing a duplicate instance.
   static Future<void> launch(
     BuildContext context,
     HealthDataStore store, {
+    bool autoStartNextWorkout = false,
+    bool openActiveWorkout = false,
+    WorkoutNotificationScheduler? notificationScheduler,
     @visibleForTesting Future<void> Function()? libraryLoader,
     @visibleForTesting Stream<DeferredInstallProgress>? progressStream,
     @visibleForTesting Future<void> Function()? onCancelInstall,
   }) async {
+    final activeHandler = _activeDeepLinkHandler;
+    if (activeHandler != null) {
+      activeHandler(
+        autoStartNextWorkout: autoStartNextWorkout,
+        openActiveWorkout: openActiveWorkout,
+      );
+      return;
+    }
     if (!_isLoaded) {
       var cancelled = false;
       var dialogOpen = true;
@@ -183,11 +225,15 @@ class OpenGymLauncher {
       try {
         debugPrint('OpenGymLauncher: calling openGym.loadLibrary()');
         await (libraryLoader ?? () => openGym.loadLibrary())();
-        debugPrint('OpenGymLauncher: openGym.loadLibrary() completed (cancelled=$cancelled)');
+        debugPrint(
+          'OpenGymLauncher: openGym.loadLibrary() completed (cancelled=$cancelled)',
+        );
         if (cancelled) return;
         _isLoaded = true;
       } catch (error, stackTrace) {
-        debugPrint('OpenGymLauncher: openGym.loadLibrary() failed: $error\n$stackTrace');
+        debugPrint(
+          'OpenGymLauncher: openGym.loadLibrary() failed: $error\n$stackTrace',
+        );
         if (cancelled) return;
         if (context.mounted) {
           if (dialogOpen) {
@@ -200,7 +246,12 @@ class OpenGymLauncher {
               action: SnackBarAction(
                 label: 'Retry',
                 onPressed: () {
-                  launch(context, store);
+                  launch(
+                    context,
+                    store,
+                    autoStartNextWorkout: autoStartNextWorkout,
+                    openActiveWorkout: openActiveWorkout,
+                  );
                 },
               ),
             ),
@@ -215,11 +266,19 @@ class OpenGymLauncher {
       }
     }
 
-    debugPrint('OpenGymLauncher: mounted=${context.mounted}, pushing OpenGymRoot');
+    debugPrint(
+      'OpenGymLauncher: mounted=${context.mounted}, pushing OpenGymRoot',
+    );
     if (!context.mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => openGym.OpenGymRoot(store: store),
+        builder: (_) => openGym.OpenGymRoot(
+          store: store,
+          autoStartNextWorkout: autoStartNextWorkout,
+          openActiveWorkout: openActiveWorkout,
+          notificationScheduler:
+              notificationScheduler ?? _defaultNotificationScheduler,
+        ),
       ),
     );
   }
@@ -315,10 +374,7 @@ class _OpenGymInstallDialogState extends State<OpenGymInstallDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            _progress.statusLabel,
-            style: theme.textTheme.bodyMedium,
-          ),
+          Text(_progress.statusLabel, style: theme.textTheme.bodyMedium),
           const SizedBox(height: 12),
           LinearProgressIndicator(value: fraction),
           const SizedBox(height: 8),
@@ -360,10 +416,7 @@ class _OpenGymInstallDialogState extends State<OpenGymInstallDialog> {
         ],
       ),
       actions: <Widget>[
-        TextButton(
-          onPressed: widget.onCancel,
-          child: const Text('Cancel'),
-        ),
+        TextButton(onPressed: widget.onCancel, child: const Text('Cancel')),
       ],
     );
   }

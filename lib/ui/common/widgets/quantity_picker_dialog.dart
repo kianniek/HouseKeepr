@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:housekeepr/core/extensions.dart';
 import 'package:housekeepr/core/quantity_unit_formatter.dart';
 import 'package:housekeepr/generated/app_localizations.dart';
+import 'package:housekeepr/services/app_haptics.dart';
 
 /// Shows a dialog for picking a quantity with +/- buttons and a unit selection.
 /// Returns a record with the selected quantity and unit, or null if cancelled.
@@ -78,15 +78,19 @@ class _QuantityPickerDialogState extends State<_QuantityPickerDialog> {
 
   void _increment() {
     if (_quantity < widget.max) {
-      HapticFeedback.lightImpact();
+      AppHaptics.instance.tick();
       setState(() => _quantity += 1);
+    } else {
+      AppHaptics.instance.reject();
     }
   }
 
   void _decrement() {
     if (_quantity > widget.min) {
-      HapticFeedback.lightImpact();
+      AppHaptics.instance.tick();
       setState(() => _quantity = (_quantity - 1).clamp(widget.min, widget.max));
+    } else {
+      AppHaptics.instance.reject();
     }
   }
 

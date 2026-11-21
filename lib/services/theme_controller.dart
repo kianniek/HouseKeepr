@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../ui/common/app_theme.dart';
 import 'widget_service.dart';
@@ -12,6 +14,9 @@ import 'widget_service.dart';
 class ThemeController extends ChangeNotifier {
   static const String _prefsKey = 'app_theme_type';
   static const String _modePrefsKey = 'app_theme_mode';
+  static const MethodChannel _shortcutsChannel = MethodChannel(
+    'housekeepr/shortcuts',
+  );
   static final ThemeController instance = ThemeController._();
 
   ThemeController._();
@@ -20,10 +25,18 @@ class ThemeController extends ChangeNotifier {
   String? _userId;
   AppThemeType _current = AppThemeType.orange;
   ThemeMode _themeMode = ThemeMode.system;
+  ColorScheme? _rawDynamicLight;
+  ColorScheme? _rawDynamicDark;
+  ColorScheme? _dynamicLightScheme;
+  ColorScheme? _dynamicDarkScheme;
 
   AppThemeType get currentTheme => _current;
   ThemeMode get themeMode => _themeMode;
   String? get userId => _userId;
+  bool get isDynamicSupported =>
+      _dynamicLightScheme != null && _dynamicDarkScheme != null;
+  ColorScheme? get dynamicLightScheme => _dynamicLightScheme;
+  ColorScheme? get dynamicDarkScheme => _dynamicDarkScheme;
 
   String get _scopedThemeKey =>
       _userId == null ? _prefsKey : '${_prefsKey}_$_userId';
@@ -87,9 +100,62 @@ class ThemeController extends ChangeNotifier {
         appMode: _themeMode,
       ),
     );
+    _syncToShortcuts();
   }
 
-  ColorScheme get lightScheme =>
-      AppThemePalette.forType(_current).lightScheme();
-  ColorScheme get darkScheme => AppThemePalette.forType(_current).darkScheme();
+  void _syncToShortcuts() {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    unawaited(
+      _invokeUpdateShortcutTheme(),
+    );
+  }
+
+  Future<void> _invokeUpdateShortcutTheme() async {
+    try {
+      await _shortcutsChannel.invokeMethod<bool>('updateShortcutTheme', {
+        'themeMode': _themeMode.name,
+        'lightPrimary': lightScheme.primary.toARGB32(),
+        'lightBackground': lightScheme.surface.toARGB32(),
+        'darkPrimary': darkScheme.primary.toARGB32(),
+        'darkBackground': darkScheme.surface.toARGB32(),
+      });
+    } on MissingPluginException {
+      // Ignored on platforms/tests without the Android shortcut bridge.
+    } on PlatformException catch (e) {
+      debugPrint('ThemeController: failed to sync shortcut theme: $e');
+    }
+  }
+
+  /// Caches wallpaper ColorSchemes supplied by [DynamicColorBuilder].
+  void updateDynamicSchemes(ColorScheme? light, ColorScheme? dark) {
+    if (_rawDynamicLight == light && _rawDynamicDark == dark) return;
+    _rawDynamicLight = light;
+    _rawDynamicDark = dark;
+    _dynamicLightScheme = light?.harmonizedWithPrimary();
+    _dynamicDarkScheme = dark?.harmonizedWithPrimary();
+    if (_current == AppThemeType.dynamic) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        notifyListeners();
+        _syncToWidgets();
+      });
+    }
+  }
+
+  ColorScheme get lightScheme {
+    if (_current == AppThemeType.dynamic && _dynamicLightScheme != null) {
+      return _dynamicLightScheme!;
+    }
+    return AppThemePalette.forType(_current)
+        .lightScheme()
+        .harmonizedWithPrimary();
+  }
+
+  ColorScheme get darkScheme {
+    if (_current == AppThemeType.dynamic && _dynamicDarkScheme != null) {
+      return _dynamicDarkScheme!;
+    }
+    return AppThemePalette.forType(_current)
+        .darkScheme()
+        .harmonizedWithPrimary();
+  }
 }

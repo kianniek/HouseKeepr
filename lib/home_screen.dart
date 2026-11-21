@@ -17,6 +17,7 @@ import '../core/settings_repository.dart';
 import '../cubits/shopping_cubit.dart';
 import '../cubits/task_cubit.dart';
 import '../services/app_action_handler.dart';
+import '../services/app_haptics.dart';
 import '../services/household_service.dart';
 
 enum HomeTab {
@@ -44,6 +45,22 @@ class HomeScreen extends StatefulWidget {
   /// Notifier toggled when a notification asks to open & highlight the
   /// Auto-Balance banner on [TasksPage].
   static final highlightAutoBalanceNotifier = ValueNotifier<int>(0);
+
+  /// Sticky flag set when a notification asks to open the Auto-Balance
+  /// preview sheet on [TasksPage] (survives cold-start initialization).
+  static final openRebalanceSheetNotifier = ValueNotifier<bool>(false);
+
+  /// Notifier toggled when a shortcut or Share action asks to focus the
+  /// quick-add input on [SmartShoppingListPage].
+  static final focusShoppingQuickAddNotifier = ValueNotifier<int>(0);
+
+  /// Notifier toggled when a shortcut asks to open the New Task sheet on
+  /// [TasksPage].
+  static final openNewTaskSheetNotifier = ValueNotifier<int>(0);
+
+  /// Notifier set when another tab (e.g. Dashboard) asks [TasksPage] to
+  /// select a specific calendar date.
+  static final selectTasksDateNotifier = ValueNotifier<DateTime?>(null);
 
   @override
   State<HomeScreen> createState() => HomeScreenState();
@@ -174,6 +191,7 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   void _onNavTap(int index) {
+    AppHaptics.instance.segmentTick();
     if (_currentIndex == index) {
       // Already on this tab — scroll its primary scroll view to top
       final controller = PrimaryScrollController.maybeOf(context);
@@ -395,16 +413,18 @@ class HomeScreenState extends State<HomeScreen> {
     if (_useFloatingNav) {
       // Use Stack so BackdropFilter can blur the body content beneath it,
       // and add bottom padding so inner FABs aren't hidden behind the pill.
-      const floatingNavTotalHeight = 64.0 + 24.0; // nav height + bottom padding
+      // Slide away while the IME is visible so inputs reclaim vertical space.
       final mediaData = MediaQuery.of(context);
+      final isImeVisible = mediaData.viewInsets.bottom > 0;
+      final floatingNavTotalHeight = isImeVisible ? 0.0 : (64.0 + 24.0);
       final bodyWithPadding = MediaQuery(
         data: mediaData.copyWith(
           viewPadding:
               mediaData.viewPadding +
-              const EdgeInsets.only(bottom: floatingNavTotalHeight),
+              EdgeInsets.only(bottom: floatingNavTotalHeight),
           padding:
               mediaData.padding +
-              const EdgeInsets.only(bottom: floatingNavTotalHeight),
+              EdgeInsets.only(bottom: floatingNavTotalHeight),
         ),
         child: IndexedStack(index: _currentIndex, children: _pages),
       );
@@ -418,7 +438,19 @@ class HomeScreenState extends State<HomeScreen> {
               left: 0,
               right: 0,
               bottom: 0,
-              child: _buildFloatingNav(context),
+              child: IgnorePointer(
+                ignoring: isImeVisible,
+                child: AnimatedSlide(
+                  offset: isImeVisible ? const Offset(0, 1.5) : Offset.zero,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedOpacity(
+                    opacity: isImeVisible ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 160),
+                    child: _buildFloatingNav(context),
+                  ),
+                ),
+              ),
             ),
           ],
         ),

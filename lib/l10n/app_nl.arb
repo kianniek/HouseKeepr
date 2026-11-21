@@ -17,7 +17,11 @@
 
   "selectTheme": "Thema kiezen",
 
+  "themeDynamic": "Achtergrond",
+
   "language": "Taal",
+
+  "languageSystemDefault": "Systeemstandaard",
 
   "languageEnglish": "Engels",
 
@@ -26,6 +30,10 @@
   "floatingNavTitle": "Zwevende navigatiebalk",
 
   "floatingNavSubtitle": "Gebruik een zwevende navigatiebalkstijl",
+
+  "hapticsTitle": "Voelbare feedback",
+
+  "hapticsSubtitle": "Subtiele trillingen bij tikken, vegen en timers",
 
   "dailyNotificationsTitle": "Dagelijkse meldingen",
 
@@ -195,5 +203,13 @@
   "notifMedicationsTitle": "Medicatie",
   "notifMedicationsSubtitle": "Geplande herinneringen voor overdag en 's avonds",
   "notifHouseholdTitle": "Huishoudupdates",
-  "notifHouseholdSubtitle": "Gedeelde lijst- en taakupdates van huisgenoten"
+  "notifHouseholdSubtitle": "Gedeelde lijst- en taakupdates van huisgenoten",
+
+  "pinShoppingList": "Vastmaken op startscherm",
+  "pinToHomeScreen": "Vastmaken op startscherm",
+  "shortcutPinRequested": "Snelkoppeling vastmaken geopend",
+  "shareActionTitle": "Gedeelde inhoud toevoegen aan HouseKeepr",
+  "shareToShoppingList": "Toevoegen aan boodschappenlijst",
+  "shareImportRecipe": "Recept importeren",
+  "shareCreateTask": "Taak aanmaken"
 }

@@ -24,10 +24,14 @@ class OpenGymDashboardScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onExitModule,
+    this.autoStartNextWorkout = false,
+    this.openActiveWorkout = false,
   });
 
   final OpenGymController controller;
   final VoidCallback onExitModule;
+  final bool autoStartNextWorkout;
+  final bool openActiveWorkout;
 
   @override
   State<OpenGymDashboardScreen> createState() => _OpenGymDashboardScreenState();
@@ -36,10 +40,53 @@ class OpenGymDashboardScreen extends StatefulWidget {
 class _OpenGymDashboardScreenState extends State<OpenGymDashboardScreen> {
   // 0: Home, 1: Plan, 2: Stats, 3: Exercises
   int _tabIndex = 0;
+  bool _hasTriggeredAutoStart = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onControllerUpdated);
+    _maybeAutoStartNextWorkout();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onControllerUpdated);
+    super.dispose();
+  }
+
+  void _onControllerUpdated() {
+    _maybeAutoStartNextWorkout();
+  }
+
+  void _maybeAutoStartNextWorkout() {
+    if (_hasTriggeredAutoStart || widget.controller.isLoading) {
+      return;
+    }
+    _hasTriggeredAutoStart = true;
+    if (widget.controller.hasActiveWorkout &&
+        (widget.controller.isInActiveWorkoutScreen ||
+            widget.autoStartNextWorkout ||
+            widget.openActiveWorkout)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _openActiveWorkout();
+      });
+      return;
+    }
+    if (!widget.autoStartNextWorkout) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _onStartTap();
+    });
+  }
 
   void _openActiveWorkout() {
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
+        settings: const RouteSettings(name: ActiveWorkoutScreen.routeName),
         builder: (_) => ActiveWorkoutScreen(controller: widget.controller),
       ),
     );
@@ -113,6 +160,7 @@ class _OpenGymDashboardScreenState extends State<OpenGymDashboardScreen> {
         final loading = widget.controller.isLoading;
         return Scaffold(
           body: SafeArea(
+            bottom: false,
             child: loading
                 ? const Center(child: CircularProgressIndicator())
                 : IndexedStack(
@@ -302,11 +350,16 @@ class _CenterStartButton extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            isActive ? 'Active' : 'Start',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: colorScheme.primary,
-              fontWeight: FontWeight.w700,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            onLongPress: onLongPress,
+            child: Text(
+              isActive ? 'Active' : 'Start',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -474,7 +527,12 @@ class _HomeTab extends StatelessWidget {
     }).fold<int>(0, (a, b) => a + b);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        12,
+        16,
+        24 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: <Widget>[
         Row(
           children: <Widget>[
@@ -1063,7 +1121,12 @@ class _PlanTabState extends State<_PlanTab> {
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        12,
+        16,
+        32 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: <Widget>[
         Row(
           children: <Widget>[

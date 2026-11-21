@@ -6,10 +6,13 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.SizeF
 import android.widget.RemoteViews
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -216,7 +219,8 @@ internal fun updateAppWidget(
     val showItemCount = prefs.getBoolean("shopping_show_item_count_v1", true)
 
     var itemsCount = 0
-    var nextUncheckedItemName = "All done!"
+    val allDoneLabel = context.getString(R.string.shopping_all_done)
+    var nextUncheckedItemName = allDoneLabel
 
     try {
         if (json != null) {
@@ -231,7 +235,7 @@ internal fun updateAppWidget(
             // Match the sorting logic (unchecked first, then matching name)
             nextUncheckedItemName = rawList?.firstOrNull {
                 (it["checked"] as? Boolean) == false
-            }?.get("name") as? String ?: "All done!"
+            }?.get("name") as? String ?: allDoneLabel
         }
     } catch (e: Exception) {
         // Fallback safely retains defaults
@@ -241,7 +245,7 @@ internal fun updateAppWidget(
 
     // Build sub-views configurations explicitly to support runtime transitions flawlessly
     val views1x1 = RemoteViews(context.packageName, R.layout.widget_1x1).apply {
-        setInt(R.id.widget_container, "setBackgroundColor", palette.surface)
+        WidgetThemeHelper.applyRoundedBackground(this, R.id.widget_container, palette.surface)
         setTextColor(R.id.item_count, palette.primary)
         setTextViewText(R.id.item_count, itemsCount.toString())
         setViewVisibility(
@@ -251,7 +255,7 @@ internal fun updateAppWidget(
     }
 
     val views1xn = RemoteViews(context.packageName, R.layout.widget_1xn).apply {
-        setInt(R.id.widget_container, "setBackgroundColor", palette.surface)
+        WidgetThemeHelper.applyRoundedBackground(this, R.id.widget_container, palette.surface)
         setTextColor(R.id.item_count, palette.primary)
         setTextViewText(R.id.item_count, itemsCount.toString())
         setViewVisibility(
@@ -261,17 +265,20 @@ internal fun updateAppWidget(
     }
 
     val viewsNx1 = RemoteViews(context.packageName, R.layout.widget_nx1).apply {
-        setInt(R.id.widget_container_1, "setBackgroundColor", palette.surface)
-        setInt(R.id.widget_container_2, "setBackgroundColor", palette.surface)
+        WidgetThemeHelper.applyRoundedBackground(this, R.id.widget_container_1, palette.surface)
+        setInt(R.id.widget_container_2, "setBackgroundColor", Color.TRANSPARENT)
         setTextColor(R.id.next_item_text, palette.onSurface)
         setTextColor(R.id.amount_items_left, palette.primary)
         setTextColor(R.id.widget_empty_text, palette.onSurfaceVariant)
-        // 1. Fix the syntax error by closing the parenthesis properly
+        setTextViewText(R.id.widget_empty_text, context.getString(R.string.no_items))
         setTextViewText(R.id.next_item_text, nextUncheckedItemName)
 
-        // 2. Properly handle visibility and text updates based on items count
         if (itemsCount > 0) {
-            val itemsLeftText = if (itemsCount == 1) "1 item to go" else "$itemsCount items to go"
+            val itemsLeftText = if (itemsCount == 1) {
+                context.getString(R.string.shopping_one_item_left)
+            } else {
+                context.getString(R.string.shopping_items_left, itemsCount)
+            }
             setTextViewText(R.id.amount_items_left, itemsLeftText)
 
             setViewVisibility(
@@ -321,9 +328,11 @@ internal fun updateAppWidget(
     }
 
     val viewsNormal = RemoteViews(context.packageName, R.layout.shopping_list_widget).apply {
-        setInt(R.id.widget_container, "setBackgroundColor", palette.surface)
+        WidgetThemeHelper.applyRoundedBackground(this, R.id.widget_container, palette.surface)
         setTextColor(R.id.widget_title, palette.onSurface)
+        setTextViewText(R.id.widget_title, context.getString(R.string.shopping_list))
         setTextColor(R.id.widget_empty_text, palette.onSurfaceVariant)
+        setTextViewText(R.id.widget_empty_text, context.getString(R.string.empty_widget_text))
         val serviceIntent = Intent(context, ShoppingListRemoteViewsService::class.java).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
             data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
@@ -369,13 +378,25 @@ internal fun updateAppWidget(
     viewsNormal.setOnClickPendingIntent(R.id.widget_title, pendingIntent)
     viewsNormal.setOnClickPendingIntent(R.id.widget_empty_text, pendingIntent)
 
-    // Select target view configuration safely based on calculated grid cells 
-    val chosenViews = when {
-        isWidth1 && isHeight1 -> views1x1
-        isWidth1 && !isHeight1 -> views1xn
-        !isWidth1 && isHeight1 -> viewsNx1
-        else -> viewsNormal
-    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val responsive = RemoteViews(
+            mapOf(
+                SizeF(50f, 50f) to views1x1,
+                SizeF(50f, 102f) to views1xn,
+                SizeF(102f, 50f) to viewsNx1,
+                SizeF(102f, 102f) to viewsNormal,
+            )
+        )
+        appWidgetManager.updateAppWidget(appWidgetId, responsive)
+    } else {
+        // Select target view configuration safely based on calculated grid cells
+        val chosenViews = when {
+            isWidth1 && isHeight1 -> views1x1
+            isWidth1 && !isHeight1 -> views1xn
+            !isWidth1 && isHeight1 -> viewsNx1
+            else -> viewsNormal
+        }
 
-    appWidgetManager.updateAppWidget(appWidgetId, chosenViews)
+        appWidgetManager.updateAppWidget(appWidgetId, chosenViews)
+    }
 }

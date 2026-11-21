@@ -277,7 +277,7 @@ Future<void> showWorkoutSettingsSheet(
       builder: (context, _) {
         final theme = Theme.of(context);
         final prefs = controller.preferences;
-        final segmentedLayout = <String>{'cards', 'list', 'compact'}
+        final segmentedLayout = <String>{'cards', 'list', 'compact', 'focus'}
                 .contains(prefs.workoutLayout)
             ? prefs.workoutLayout
             : 'cards';
@@ -412,6 +412,10 @@ Future<void> showWorkoutSettingsSheet(
                               ButtonSegment<String>(
                                 value: 'compact',
                                 label: Text('Compact'),
+                              ),
+                              ButtonSegment<String>(
+                                value: 'focus',
+                                label: Text('Focus'),
                               ),
                             ],
                             selected: <String>{segmentedLayout},

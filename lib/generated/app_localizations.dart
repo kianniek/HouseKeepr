@@ -146,11 +146,23 @@ abstract class AppLocalizations {
   /// **'Select theme'**
   String get selectTheme;
 
+  /// Material You dynamic wallpaper color palette label
+  ///
+  /// In en, this message translates to:
+  /// **'Wallpaper'**
+  String get themeDynamic;
+
   /// Language setting label
   ///
   /// In en, this message translates to:
   /// **'Language'**
   String get language;
+
+  /// Follow system language setting label
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get languageSystemDefault;
 
   /// English language label
   ///
@@ -175,6 +187,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use a floating navigation bar style'**
   String get floatingNavSubtitle;
+
+  /// Haptic feedback toggle label
+  ///
+  /// In en, this message translates to:
+  /// **'Haptic feedback'**
+  String get hapticsTitle;
+
+  /// Haptic feedback toggle subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Subtle touch vibrations for taps, swipes and timers'**
+  String get hapticsSubtitle;
 
   /// Daily notifications toggle label
   ///
@@ -991,6 +1015,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Shared list and chore updates from household members'**
   String get notifHouseholdSubtitle;
+
+  /// Overflow action to pin Shopping List launcher shortcut
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to home screen'**
+  String get pinShoppingList;
+
+  /// Action label to pin a shortcut onto the device home screen
+  ///
+  /// In en, this message translates to:
+  /// **'Pin to home screen'**
+  String get pinToHomeScreen;
+
+  /// Confirmation snackbar after requesting a pinned shortcut
+  ///
+  /// In en, this message translates to:
+  /// **'Shortcut pin prompt opened'**
+  String get shortcutPinRequested;
+
+  /// Bottom sheet title for inbound ACTION_SEND share intent
+  ///
+  /// In en, this message translates to:
+  /// **'Add shared content to HouseKeepr'**
+  String get shareActionTitle;
+
+  /// Share chooser option for adding item(s) to Shopping List
+  ///
+  /// In en, this message translates to:
+  /// **'Add to Shopping List'**
+  String get shareToShoppingList;
+
+  /// Share chooser option for importing recipe URL
+  ///
+  /// In en, this message translates to:
+  /// **'Import Recipe'**
+  String get shareImportRecipe;
+
+  /// Share chooser option for creating a Task
+  ///
+  /// In en, this message translates to:
+  /// **'Create Task'**
+  String get shareCreateTask;
 }
 
 class _AppLocalizationsDelegate

@@ -24,6 +24,7 @@ class SettingsRepository {
   static const _kMedications = 'notif_medications_enabled';
   static const _kHousehold = 'notif_household_activity';
   static const _kFloatingNav = 'floating_nav_v1';
+  static const _kHapticsEnabled = 'haptics_enabled_v1';
   final SharedPreferences prefs;
 
   SettingsRepository(this.prefs);
@@ -120,14 +121,37 @@ class SettingsRepository {
     await prefs.setBool(_kFloatingNav, v);
   }
 
-  static const _kLocale = 'app_locale_v1';
-
-  /// Returns the stored locale language code, defaulting to 'en'.
-  String getLocaleCode() {
-    return prefs.getString(_kLocale) ?? 'en';
+  bool hapticsEnabled() {
+    return prefs.getBool(_kHapticsEnabled) ?? true;
   }
 
-  Future<void> setLocaleCode(String code) async {
-    await prefs.setString(_kLocale, code);
+  Future<void> setHapticsEnabled(bool v) async {
+    await prefs.setBool(_kHapticsEnabled, v);
+  }
+
+  static const _kLocale = 'app_locale_v1';
+  static const _kLocaleMigrated = 'app_locale_migrated_v1';
+
+  /// Returns the stored locale language code, or `null` for System default.
+  String? getLocaleCode() {
+    final raw = prefs.getString(_kLocale);
+    if (raw == null || raw.isEmpty) return null;
+    return raw;
+  }
+
+  Future<void> setLocaleCode(String? code) async {
+    if (code == null || code.isEmpty) {
+      await prefs.remove(_kLocale);
+    } else {
+      await prefs.setString(_kLocale, code);
+    }
+  }
+
+  bool isLocaleMigrated() {
+    return prefs.getBool(_kLocaleMigrated) ?? false;
+  }
+
+  Future<void> setLocaleMigrated(bool v) async {
+    await prefs.setBool(_kLocaleMigrated, v);
   }
 }

@@ -10,9 +10,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:health_keepr/health_keepr.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:housekeepr/home_screen.dart';
+import 'package:image_picker_android/image_picker_android.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'core/locale_provider.dart';
 import 'core/settings_repository.dart';
 import 'cubits/shopping_cubit.dart';
@@ -32,15 +36,16 @@ import 'repositories/history_repository.dart';
 import 'repositories/local_medication_repository.dart';
 import 'repositories/task_repository.dart';
 import 'services/app_action_handler.dart';
+import 'services/app_haptics.dart';
 import 'services/firebase_messaging_service.dart';
 import 'services/firestore_sync_service.dart';
 import 'services/household_service.dart';
 import 'services/notification_service.dart';
 import 'services/shopping_products_service.dart';
 import 'services/theme_controller.dart';
-import 'ui/common/app_theme.dart';
 import 'services/widget_service.dart';
 import 'services/write_queue.dart';
+import 'ui/common/app_theme.dart';
 import 'ui/features/auth/login_page.dart';
 import 'ui/features/households/pages/household_create_page.dart';
 
@@ -52,6 +57,14 @@ const bool _isWasm = bool.fromEnvironment('dart.tool.dart2wasm');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    final imagePickerImplementation = ImagePickerPlatform.instance;
+    if (imagePickerImplementation is ImagePickerAndroid) {
+      imagePickerImplementation.useAndroidPhotoPicker = true;
+    }
+  }
 
   try {
     if (Firebase.apps.isEmpty) {
@@ -82,6 +95,7 @@ Future<void> main() async {
       ? FirebaseAuth.instance.currentUser?.uid
       : null;
   await ThemeController.instance.load(userId: initialUid);
+  await AppHaptics.instance.load();
 
   await LocaleProvider.instance.load();
 
@@ -101,13 +115,27 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
+        final resolvedLightDynamic = colorSchemeFromDynamic(lightDynamic);
+        final resolvedDarkDynamic = colorSchemeFromDynamic(darkDynamic);
         final controller = ThemeController.instance;
+        controller.updateDynamicSchemes(
+          resolvedLightDynamic,
+          resolvedDarkDynamic,
+        );
 
         return AnimatedBuilder(
           animation: Listenable.merge([controller, LocaleProvider.instance]),
           builder: (BuildContext context, Widget? child) {
-            final ColorScheme lightScheme = controller.lightScheme;
-            final ColorScheme darkScheme = controller.darkScheme;
+            final ColorScheme lightScheme =
+                (controller.currentTheme == AppThemeType.dynamic &&
+                    resolvedLightDynamic != null)
+                ? resolvedLightDynamic
+                : controller.lightScheme;
+            final ColorScheme darkScheme =
+                (controller.currentTheme == AppThemeType.dynamic &&
+                    resolvedDarkDynamic != null)
+                ? resolvedDarkDynamic
+                : controller.darkScheme;
             final locale = LocaleProvider.instance.locale;
 
             return MaterialApp(
@@ -122,15 +150,56 @@ class _MyAppState extends State<MyApp> {
                 GlobalWidgetsLocalizations.delegate,
                 GlobalCupertinoLocalizations.delegate,
               ],
+              builder: (context, child) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final overlayStyle = SystemUiOverlayStyle(
+                  statusBarColor: Colors.transparent,
+                  statusBarIconBrightness:
+                      isDark ? Brightness.light : Brightness.dark,
+                  statusBarBrightness:
+                      isDark ? Brightness.dark : Brightness.light,
+                  systemNavigationBarColor: Colors.transparent,
+                  systemNavigationBarDividerColor: Colors.transparent,
+                  systemNavigationBarIconBrightness:
+                      isDark ? Brightness.light : Brightness.dark,
+                  systemNavigationBarContrastEnforced: false,
+                );
+                return AnnotatedRegion<SystemUiOverlayStyle>(
+                  value: overlayStyle,
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
               theme: ThemeData(
                 colorScheme: lightScheme,
                 useMaterial3: true,
-                extensions: const [AppSemanticColors.light],
+                pageTransitionsTheme: const PageTransitionsTheme(
+                  builders: <TargetPlatform, PageTransitionsBuilder>{
+                    TargetPlatform.android:
+                        PredictiveBackPageTransitionsBuilder(),
+                  },
+                ),
+                extensions: [
+                  AppSemanticColors.harmonized(
+                    lightScheme.primary,
+                    Brightness.light,
+                  ),
+                ],
               ),
               darkTheme: ThemeData(
                 colorScheme: darkScheme,
                 useMaterial3: true,
-                extensions: const [AppSemanticColors.dark],
+                pageTransitionsTheme: const PageTransitionsTheme(
+                  builders: <TargetPlatform, PageTransitionsBuilder>{
+                    TargetPlatform.android:
+                        PredictiveBackPageTransitionsBuilder(),
+                  },
+                ),
+                extensions: [
+                  AppSemanticColors.harmonized(
+                    darkScheme.primary,
+                    Brightness.dark,
+                  ),
+                ],
               ),
               themeMode: controller.themeMode,
               home: AppRoot(initializationError: widget.initializationError),
@@ -626,15 +695,26 @@ class _HouseholdAppState extends State<HouseholdApp> {
     final settingsRepo = SettingsRepository(prefs);
 
     _setInitStageLabel('Initializing notifications...');
+    OpenGymLauncher.registerDefaultNotificationScheduler(
+      NotificationService.instance,
+    );
     await NotificationService.instance.init(
       prefs,
       scaffoldKey: scaffoldMessengerKey,
       onOpenTasks: () => _openTab(HomeTab.tasks),
       onOpenTasksRebalance: () {
         _openTab(HomeTab.tasks);
-        HomeScreen.highlightAutoBalanceNotifier.value++;
+        HomeScreen.openRebalanceSheetNotifier.value = true;
       },
       onOpenMedications: () => _openTab(HomeTab.tools),
+      onOpenOpenGym: () {
+        final ctx = navigatorKey.currentContext;
+        if (ctx != null) {
+          unawaited(
+            AppActionHandler().launchOpenGym(ctx, openActiveWorkout: true),
+          );
+        }
+      },
       userId: widget.user.uid,
     );
     await maybeRequestNotificationPermissions(settingsRepo);
@@ -691,6 +771,25 @@ class _HouseholdAppState extends State<HouseholdApp> {
             task.householdId != null
                 ? await remoteHouseholdTask.saveTask(task)
                 : await remoteTask.saveTask(task);
+            break;
+          case QueueOpType.saveTasksBatch:
+            final rawList = (op.payload?['tasks'] as List?) ?? const [];
+            final batchTasks = rawList
+                .whereType<Map>()
+                .map((m) => Task.fromMap(Map<String, dynamic>.from(m)))
+                .toList();
+            final hhTasks = batchTasks
+                .where((t) => t.householdId != null)
+                .toList();
+            final personalTasks = batchTasks
+                .where((t) => t.householdId == null)
+                .toList();
+            if (hhTasks.isNotEmpty) {
+              await remoteHouseholdTask.saveTasksBatch(hhTasks);
+            }
+            if (personalTasks.isNotEmpty) {
+              await remoteTask.saveTasksBatch(personalTasks);
+            }
             break;
           case QueueOpType.deleteTask:
             final prev = op.payload?['_previous'];

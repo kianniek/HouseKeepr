@@ -4,6 +4,7 @@ import 'package:marquee/marquee.dart';
 import '../../../../core/extensions.dart';
 import '../../../../core/quantity_unit_formatter.dart';
 import '../../../../models/grocery_item.dart';
+import '../../../../services/app_haptics.dart';
 
 class ShoppingListItemTile extends StatelessWidget {
   final GroceryItem item;
@@ -46,13 +47,21 @@ class ShoppingListItemTile extends StatelessWidget {
     return Dismissible(
       key: ValueKey(item.id),
       direction: DismissDirection.endToStart,
+      onUpdate: (details) {
+        if (details.reached && !details.previousReached) {
+          AppHaptics.instance.gestureStart();
+        }
+      },
       background: Container(
         alignment: Alignment.centerRight,
         color: scheme.error,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Icon(Icons.delete, color: scheme.onError),
       ),
-      onDismissed: (_) => onDelete(),
+      onDismissed: (_) {
+        AppHaptics.instance.confirm();
+        onDelete();
+      },
       child: Material(
         color: item.checked
             ? scheme.surfaceContainerHighest.withValues(alpha: 0.2)
@@ -63,7 +72,14 @@ class ShoppingListItemTile extends StatelessWidget {
             vertical: aisleMode ? 12 : 8,
           ),
           leading: InkResponse(
-            onTap: onCheck,
+            onTap: () {
+              if (item.checked) {
+                AppHaptics.instance.toggleOff();
+              } else {
+                AppHaptics.instance.toggleOn();
+              }
+              onCheck();
+            },
             radius: (aisleMode ? 56 : 48) / 2,
             child: Container(
               width: aisleMode ? 56 : 48,

@@ -14,6 +14,7 @@ enum QueueOpType {
   deleteHistory,
   saveGrocery,
   deleteGrocery,
+  saveTasksBatch,
 }
 
 class QueueOp {

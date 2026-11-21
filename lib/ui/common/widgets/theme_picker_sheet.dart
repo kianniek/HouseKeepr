@@ -67,23 +67,40 @@ class ThemePickerSheet extends StatelessWidget {
                   ),
                 ),
                 const Divider(height: 16),
-                ...AppThemeType.values.map((t) {
-                  final selected = controller.currentTheme == t;
-                  final palette = AppThemePalette.forType(t);
-                  final scheme = Theme.of(context).brightness == Brightness.dark
-                      ? palette.darkScheme()
-                      : palette.lightScheme();
-                  return ListTile(
-                    leading: ThemePreviewRow(scheme: scheme),
-                    title: Text(t.label),
-                    trailing: selected ? const Icon(Icons.check) : null,
-                    onTap: () async {
-                      final navigator = Navigator.of(context);
-                      await controller.setTheme(t);
-                      navigator.maybePop();
-                    },
-                  );
-                }),
+                ...AppThemeType.values
+                    .where(
+                      (t) =>
+                          t != AppThemeType.dynamic ||
+                          controller.isDynamicSupported,
+                    )
+                    .map((t) {
+                      final selected = controller.currentTheme == t;
+                      final ColorScheme scheme;
+                      if (t == AppThemeType.dynamic &&
+                          controller.isDynamicSupported) {
+                        scheme = Theme.of(context).brightness == Brightness.dark
+                            ? controller.dynamicDarkScheme!
+                            : controller.dynamicLightScheme!;
+                      } else {
+                        final palette = AppThemePalette.forType(t);
+                        scheme = Theme.of(context).brightness == Brightness.dark
+                            ? palette.darkScheme()
+                            : palette.lightScheme();
+                      }
+                      final label = t == AppThemeType.dynamic
+                          ? AppLocalizations.of(context).themeDynamic
+                          : t.label;
+                      return ListTile(
+                        leading: ThemePreviewRow(scheme: scheme),
+                        title: Text(label),
+                        trailing: selected ? const Icon(Icons.check) : null,
+                        onTap: () async {
+                          final navigator = Navigator.of(context);
+                          await controller.setTheme(t);
+                          navigator.maybePop();
+                        },
+                      );
+                    }),
                 const SizedBox(height: 8),
               ],
             ),

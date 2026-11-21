@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../generated/app_localizations.dart';
 import '../../../../models/grocery_item.dart';
+import '../../../../services/app_haptics.dart';
 import 'shopping_list_item_tile.dart';
 
 /// An expandable parent container tile representing an imported recipe and all
@@ -90,6 +91,11 @@ class _RecipeShoppingListTileState extends State<RecipeShoppingListTile> {
     return Dismissible(
       key: ValueKey('recipe_${widget.recipe.id}'),
       direction: DismissDirection.endToStart,
+      onUpdate: (details) {
+        if (details.reached && !details.previousReached) {
+          AppHaptics.instance.gestureStart();
+        }
+      },
       background: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
@@ -100,7 +106,10 @@ class _RecipeShoppingListTileState extends State<RecipeShoppingListTile> {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Icon(Icons.delete, color: scheme.onError),
       ),
-      onDismissed: (_) => widget.onDeleteRecipe(),
+      onDismissed: (_) {
+        AppHaptics.instance.confirm();
+        widget.onDeleteRecipe();
+      },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
@@ -131,7 +140,14 @@ class _RecipeShoppingListTileState extends State<RecipeShoppingListTile> {
                   children: [
                     InkResponse(
                       key: ValueKey('recipe_toggle_${widget.recipe.id}'),
-                      onTap: widget.onToggleRecipe,
+                      onTap: () {
+                        if (allChecked) {
+                          AppHaptics.instance.toggleOff();
+                        } else {
+                          AppHaptics.instance.toggleOn();
+                        }
+                        widget.onToggleRecipe();
+                      },
                       radius: circleSize / 2,
                       child: Container(
                         width: circleSize,

@@ -34,7 +34,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectTheme => 'Select theme';
 
   @override
+  String get themeDynamic => 'Wallpaper';
+
+  @override
   String get language => 'Language';
+
+  @override
+  String get languageSystemDefault => 'System default';
 
   @override
   String get languageEnglish => 'English';
@@ -47,6 +53,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get floatingNavSubtitle => 'Use a floating navigation bar style';
+
+  @override
+  String get hapticsTitle => 'Haptic feedback';
+
+  @override
+  String get hapticsSubtitle =>
+      'Subtle touch vibrations for taps, swipes and timers';
 
   @override
   String get dailyNotificationsTitle => 'Daily notifications';
@@ -511,4 +524,25 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notifHouseholdSubtitle =>
       'Shared list and chore updates from household members';
+
+  @override
+  String get pinShoppingList => 'Pin to home screen';
+
+  @override
+  String get pinToHomeScreen => 'Pin to home screen';
+
+  @override
+  String get shortcutPinRequested => 'Shortcut pin prompt opened';
+
+  @override
+  String get shareActionTitle => 'Add shared content to HouseKeepr';
+
+  @override
+  String get shareToShoppingList => 'Add to Shopping List';
+
+  @override
+  String get shareImportRecipe => 'Import Recipe';
+
+  @override
+  String get shareCreateTask => 'Create Task';
 }

@@ -169,7 +169,10 @@ class _ExerciseAnimationViewState extends State<ExerciseAnimationView> {
       widget.exerciseId,
       serverUrl: serverUrl,
     );
-    final vc = VideoPlayerController.networkUrl(Uri.parse(clipUrl));
+    final vc = VideoPlayerController.networkUrl(
+      Uri.parse(clipUrl),
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
     _videoController = vc;
 
     stillFuture.then((bytes) {

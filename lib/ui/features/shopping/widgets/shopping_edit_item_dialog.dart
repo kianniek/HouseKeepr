@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../../core/extensions.dart';
 import '../../../../core/quantity_unit_formatter.dart';
 import '../../../../generated/app_localizations.dart';
 import '../../../../models/grocery_category.dart';
 import '../../../../models/grocery_item.dart';
+import '../../../../services/app_haptics.dart';
 import '../../../common/widgets/quantity_picker_dialog.dart';
 
 class ShoppingEditResult {
@@ -73,16 +73,18 @@ class _ShoppingEditItemDialogState extends State<_ShoppingEditItemDialog> {
   }
 
   void _increment() {
-    HapticFeedback.lightImpact();
+    AppHaptics.instance.tick();
     setState(() => _quantity += 1);
   }
 
   void _decrement() {
     if (_quantity > _minQty) {
-      HapticFeedback.lightImpact();
+      AppHaptics.instance.tick();
       setState(
         () => _quantity = (_quantity - 1).clamp(_minQty, double.maxFinite),
       );
+    } else {
+      AppHaptics.instance.reject();
     }
   }
 

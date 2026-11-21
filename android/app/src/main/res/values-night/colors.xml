@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="shortcut_primary">#FFFFAB40</color>
+    <color name="shortcut_background">#FF121212</color>
+    <color name="splash_background">#FF121212</color>
+</resources>

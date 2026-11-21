@@ -25,8 +25,14 @@
   "selectTheme": "Select theme",
   "@selectTheme": { "description": "Theme picker sheet title" },
 
+  "themeDynamic": "Wallpaper",
+  "@themeDynamic": { "description": "Material You dynamic wallpaper color palette label" },
+
   "language": "Language",
   "@language": { "description": "Language setting label" },
+
+  "languageSystemDefault": "System default",
+  "@languageSystemDefault": { "description": "Follow system language setting label" },
 
   "languageEnglish": "English",
   "@languageEnglish": { "description": "English language label" },
@@ -39,6 +45,12 @@
 
   "floatingNavSubtitle": "Use a floating navigation bar style",
   "@floatingNavSubtitle": { "description": "Floating nav toggle subtitle" },
+
+  "hapticsTitle": "Haptic feedback",
+  "@hapticsTitle": { "description": "Haptic feedback toggle label" },
+
+  "hapticsSubtitle": "Subtle touch vibrations for taps, swipes and timers",
+  "@hapticsSubtitle": { "description": "Haptic feedback toggle subtitle" },
 
   "dailyNotificationsTitle": "Daily notifications",
   "@dailyNotificationsTitle": { "description": "Daily notifications toggle label" },
@@ -516,5 +528,26 @@
   "@notifHouseholdTitle": { "description": "Toggle title for household activity notifications" },
 
   "notifHouseholdSubtitle": "Shared list and chore updates from household members",
-  "@notifHouseholdSubtitle": { "description": "Toggle subtitle for household activity notifications" }
+  "@notifHouseholdSubtitle": { "description": "Toggle subtitle for household activity notifications" },
+
+  "pinShoppingList": "Pin to home screen",
+  "@pinShoppingList": { "description": "Overflow action to pin Shopping List launcher shortcut" },
+
+  "pinToHomeScreen": "Pin to home screen",
+  "@pinToHomeScreen": { "description": "Action label to pin a shortcut onto the device home screen" },
+
+  "shortcutPinRequested": "Shortcut pin prompt opened",
+  "@shortcutPinRequested": { "description": "Confirmation snackbar after requesting a pinned shortcut" },
+
+  "shareActionTitle": "Add shared content to HouseKeepr",
+  "@shareActionTitle": { "description": "Bottom sheet title for inbound ACTION_SEND share intent" },
+
+  "shareToShoppingList": "Add to Shopping List",
+  "@shareToShoppingList": { "description": "Share chooser option for adding item(s) to Shopping List" },
+
+  "shareImportRecipe": "Import Recipe",
+  "@shareImportRecipe": { "description": "Share chooser option for importing recipe URL" },
+
+  "shareCreateTask": "Create Task",
+  "@shareCreateTask": { "description": "Share chooser option for creating a Task" }
 }

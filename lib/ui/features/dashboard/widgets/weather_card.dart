@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../core/extensions.dart';
 import '../../../../../services/weather_service.dart';
+import '../../../common/widgets/keyboard_inset_padding.dart';
 
 class ScheduledForecast {
   final TimeOfDay time;
@@ -556,10 +557,9 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.viewInsetsOf(context).bottom;
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 12, 20, bottomPadding + 20),
+      child: KeyboardInsetPadding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 650),
           child: SingleChildScrollView(

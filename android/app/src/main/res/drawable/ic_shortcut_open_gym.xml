@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="@color/shortcut_background"
+        android:pathData="M24,24m-24,0a24,24 0,1 1,48 0a24,24 0,1 1,-48 0" />
+    <group
+        android:translateX="12"
+        android:translateY="36"
+        android:scaleX="0.025"
+        android:scaleY="0.025">
+        <path
+            android:fillColor="@color/shortcut_primary"
+            android:pathData="m826,-585l-56,-56l30,-31l-128,-128l-31,30l-57,-57l30,-31q23,-23 57,-22.5t57,23.5l129,129q23,23 23,56.5T857,-615l-31,30ZM346,-104q-23,23 -56.5,23T233,-104L104,-233q-23,-23 -23,-56.5t23,-56.5l30,-30l57,57l-31,30l129,129l30,-31l57,57l-30,30ZM743,-440l57,-57l-303,-303l-57,57l303,303ZM463,-160l57,-58l-302,-302l-58,57l303,303ZM457,-394l110,-109l-64,-64l-109,110l63,63ZM520,-104q-23,23 -57,23t-57,-23L104,-406q-23,-23 -23,-57t23,-57l57,-57q23,-23 56.5,-23t56.5,23l63,63l110,-110l-63,-62q-23,-23 -23,-57t23,-57l57,-57q23,-23 56.5,-23t56.5,23l303,303q23,23 23,56.5T857,-441l-57,57q-23,23 -57,23t-57,-23l-62,-63l-110,110l63,63q23,23 23,56.5T577,-161l-57,57Z" />
+    </group>
+</vector>

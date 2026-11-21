@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../contracts/health_data_store.dart';
 import '../registry/health_mini_app.dart';
@@ -226,7 +227,7 @@ class _ModuleCard extends StatelessWidget {
                   CircleAvatar(
                     backgroundColor: colorScheme.primaryContainer,
                     foregroundColor: colorScheme.onPrimaryContainer,
-                    child: Icon(module.icon),
+                    child: _buildModuleIcon(module, colorScheme.onPrimaryContainer),
                   ),
                   Chip(
                     label: Text(
@@ -260,6 +261,26 @@ class _ModuleCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildModuleIcon(HealthMiniApp module, Color iconColor) {
+    final asset = module.iconAsset;
+    if (asset == null) {
+      return Icon(module.icon);
+    }
+    if (asset.toLowerCase().endsWith('.svg')) {
+      return SvgPicture.asset(
+        asset,
+        package: module.iconAssetPackage,
+        width: 24,
+        height: 24,
+        colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+      );
+    }
+    return ImageIcon(
+      AssetImage(asset, package: module.iconAssetPackage),
+      size: 24,
     );
   }
 }

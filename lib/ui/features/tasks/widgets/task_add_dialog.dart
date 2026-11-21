@@ -12,7 +12,9 @@ import 'package:uuid/uuid.dart';
 
 import '../../../../cubits/task_cubit.dart';
 import '../../../../models/task.dart';
+import '../../../../services/app_haptics.dart';
 import '../../../../services/household_service.dart';
+import '../../../common/widgets/keyboard_inset_padding.dart';
 import '../utils/task_date_utils.dart';
 
 class _TaskReminderPreset {
@@ -46,34 +48,116 @@ Future<void> showTaskAddEditDialog(
   String? householdId,
   fb.User? currentUser,
   Future<void> Function()? onBulkImportTap,
+  String? initialTitle,
+  String? initialDescription,
+  DateTime? initialDeadline,
 }) async {
   final cubit = context.read<TaskCubit>();
-  final titleCtl = TextEditingController(
-    text: taskToEdit != null ? sanitizeTaskTitle(taskToEdit.title) : '',
+
+  // Try to default to provided currentUser, otherwise try FirebaseAuth (guarded).
+  fb.User? cu = currentUser;
+  if (cu == null) {
+    try {
+      cu = fb.FirebaseAuth.instance.currentUser;
+    } catch (_) {
+      cu = null;
+    }
+  }
+  // If caller didn't provide householdId, try to discover it from the
+  // households collection (members array). This makes the dialog resilient
+  // when callers forget to pass household context or when users have a
+  // households.members entry but no users/{uid}.householdId set.
+  if (householdId == null && cu != null) {
+    try {
+      final svc = HouseholdService(FirebaseFirestore.instance);
+      householdId = await svc.findHouseholdForUser(cu.uid);
+      debugPrint('Dialog fallback detected household: $householdId');
+    } catch (e) {
+      debugPrint('Dialog household discovery failed: $e');
+    }
+  }
+
+  // Calling showModalBottomSheet after awaiting potential async work above can
+  // trigger `use_build_context_synchronously` analyzer warnings. The builder
+  // receives the provided context intentionally; it's safe in this flow.
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (_) => _TaskAddEditSheet(
+      cubit: cubit,
+      taskToEdit: taskToEdit,
+      householdId: householdId,
+      currentUser: cu,
+      onBulkImportTap: onBulkImportTap,
+      initialTitle: initialTitle,
+      initialDescription: initialDescription,
+      initialDeadline: initialDeadline,
+    ),
   );
-  final descCtl = TextEditingController(text: taskToEdit?.description ?? '');
-  TaskPriority selectedPriority = taskToEdit?.priority ?? TaskPriority.medium;
-  String? selectedRoom = taskToEdit?.room;
-  String? selectedMemberId = taskToEdit?.assignedToId;
-  String? selectedMemberName = taskToEdit?.assignedToName;
-  bool isHouseholdTask = taskToEdit?.isHouseholdTask ?? false;
-  String? selectedAssigneeValue = taskToEdit?.isHouseholdTask == true
-      ? 'household'
-      : taskToEdit?.assignedToId;
-  DateTime? deadline = taskToEdit?.deadline;
-  bool isRepeating = taskToEdit?.isRepeating ?? true;
+}
+
+class _TaskAddEditSheet extends StatefulWidget {
+  final TaskCubit cubit;
+  final Task? taskToEdit;
+  final String? householdId;
+  final fb.User? currentUser;
+  final Future<void> Function()? onBulkImportTap;
+  final String? initialTitle;
+  final String? initialDescription;
+  final DateTime? initialDeadline;
+
+  const _TaskAddEditSheet({
+    required this.cubit,
+    this.taskToEdit,
+    this.householdId,
+    this.currentUser,
+    this.onBulkImportTap,
+    this.initialTitle,
+    this.initialDescription,
+    this.initialDeadline,
+  });
+
+  @override
+  State<_TaskAddEditSheet> createState() => _TaskAddEditSheetState();
+}
+
+class _TaskAddEditSheetState extends State<_TaskAddEditSheet> {
+  late final TextEditingController titleCtl;
+  late final TextEditingController descCtl;
+  late final TextEditingController repeatIntervalCtl;
+  late final TextEditingController deadlineCtl;
+  final List<Map<String, String?>> cachedMembers = <Map<String, String?>>[];
+
+  late TaskPriority selectedPriority;
+  String? selectedRoom;
+  String? selectedMemberId;
+  String? selectedMemberName;
+  late bool isHouseholdTask;
+  String? selectedAssigneeValue;
+  DateTime? deadline;
+  late bool isRepeating;
   int repeatInterval = 1;
   String repeatUnit = 'day';
-  final Set<int> selectedRepeatDays = {
-    ...(taskToEdit?.repeatDays?.where((d) => d >= 1 && d <= 7).toSet() ??
-        const <int>{}),
-  };
-  bool reminderEnabled = taskToEdit?.reminderEnabled ?? false;
-  int? reminderOffset = taskToEdit?.reminderOffsetMinutes; // minutes
+  late final Set<int> selectedRepeatDays;
+  late bool reminderEnabled;
+  int? reminderOffset;
 
-  // Local helpers moved to `package:housekeepr/core/extensions.dart`.
+  TaskCubit get cubit => widget.cubit;
+  Task? get taskToEdit => widget.taskToEdit;
+  String? get householdId => widget.householdId;
+  fb.User? get currentUser => widget.currentUser;
+  fb.User? get cu => widget.currentUser;
+  String? get defaultName => cu?.displayName ?? cu?.email ?? cu?.uid;
+  Future<void> Function()? get onBulkImportTap => widget.onBulkImportTap;
+  BuildContext get contextSB => context;
 
-  void parseRepeatRule(String? rule) {
+  void setStateSB(VoidCallback fn) => setState(fn);
+
+  void _onTitleChanged() => setState(() {});
+
+  void _parseRepeatRule(String? rule) {
     final raw = (rule ?? '').toLowerCase().trim();
     if (raw.startsWith('every:')) {
       final parts = raw.split(':');
@@ -107,94 +191,93 @@ Future<void> showTaskAddEditDialog(
     }
   }
 
-  parseRepeatRule(taskToEdit?.repeatRule);
-  final repeatIntervalCtl = TextEditingController(
-    text: repeatInterval.toString(),
-  );
-  final deadlineCtl = TextEditingController(
-    text: deadline != null ? deadline.toLocalIsoDate() : '',
-  );
+  @override
+  void initState() {
+    super.initState();
+    titleCtl = TextEditingController(
+      text: taskToEdit != null
+          ? sanitizeTaskTitle(taskToEdit!.title)
+          : (widget.initialTitle ?? ''),
+    );
+    descCtl = TextEditingController(
+      text: taskToEdit?.description ?? widget.initialDescription ?? '',
+    );
+    selectedPriority = taskToEdit?.priority ?? TaskPriority.medium;
+    selectedRoom = taskToEdit?.room;
+    selectedMemberId = taskToEdit?.assignedToId;
+    selectedMemberName = taskToEdit?.assignedToName;
+    isHouseholdTask = taskToEdit?.isHouseholdTask ?? false;
+    selectedAssigneeValue = taskToEdit?.isHouseholdTask == true
+        ? 'household'
+        : taskToEdit?.assignedToId;
+    deadline = taskToEdit?.deadline ?? widget.initialDeadline;
+    isRepeating = taskToEdit?.isRepeating ?? true;
+    selectedRepeatDays = {
+      ...(taskToEdit?.repeatDays?.where((d) => d >= 1 && d <= 7).toSet() ??
+          const <int>{}),
+    };
+    reminderEnabled = taskToEdit?.reminderEnabled ?? false;
+    reminderOffset = taskToEdit?.reminderOffsetMinutes;
 
-  // Try to default to provided currentUser, otherwise try FirebaseAuth (guarded).
-  fb.User? cu = currentUser;
-  if (cu == null) {
-    try {
-      cu = fb.FirebaseAuth.instance.currentUser;
-    } catch (_) {
-      cu = null;
-    }
-  }
-  // If caller didn't provide householdId, try to discover it from the
-  // households collection (members array). This makes the dialog resilient
-  // when callers forget to pass household context or when users have a
-  // households.members entry but no users/{uid}.householdId set.
-  if (householdId == null && cu != null) {
-    try {
-      final svc = HouseholdService(FirebaseFirestore.instance);
-      householdId = await svc.findHouseholdForUser(cu.uid);
-      debugPrint('Dialog fallback detected household: $householdId');
-    } catch (e) {
-      debugPrint('Dialog household discovery failed: $e');
-    }
-  }
-  final defaultName = cu?.displayName ?? cu?.email ?? cu?.uid;
-  if (householdId != null) {
-    selectedMemberId ??= cu?.uid;
-    selectedMemberName ??= defaultName;
-  } else {
-    if (selectedMemberName == null && defaultName != null) {
+    _parseRepeatRule(taskToEdit?.repeatRule);
+    repeatIntervalCtl = TextEditingController(
+      text: repeatInterval.toString(),
+    );
+    deadlineCtl = TextEditingController(
+      text: deadline != null ? deadline!.toLocalIsoDate() : '',
+    );
+
+    final defaultName =
+        currentUser?.displayName ?? currentUser?.email ?? currentUser?.uid;
+    if (householdId != null) {
+      selectedMemberId ??= currentUser?.uid;
+      selectedMemberName ??= defaultName;
+    } else if (selectedMemberName == null && defaultName != null) {
       selectedMemberName = defaultName;
-      selectedMemberId ??= cu?.uid;
+      selectedMemberId ??= currentUser?.uid;
     }
+
+    titleCtl.addListener(_onTitleChanged);
   }
 
-  // Calling showModalBottomSheet after awaiting potential async work above can
-  // trigger `use_build_context_synchronously` analyzer warnings. The builder
-  // receives the provided context intentionally; it's safe in this flow.
-  // The file may be audited later for a full refactor; for now treat this as
-  // an intentional, documented use of the caller's `context`.
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    useSafeArea: true,
-    builder: (dialogContext) {
-      bool canAdd() {
-        final titleOk = titleCtl.text.trim().isNotEmpty;
-        if (householdId != null) {
-          final assignee = selectedAssigneeValue ?? 'household';
-          return titleOk && assignee.isNotEmpty;
-        }
-        return titleOk;
-      }
+  @override
+  void dispose() {
+    titleCtl.removeListener(_onTitleChanged);
+    titleCtl.dispose();
+    descCtl.dispose();
+    repeatIntervalCtl.dispose();
+    deadlineCtl.dispose();
+    super.dispose();
+  }
 
-      List<int>? buildRepeatDaysForSave() {
-        if (!isRepeating) return null;
-        if (repeatUnit != 'week') return null;
-        if (selectedRepeatDays.isEmpty) return null;
-        final days = selectedRepeatDays.where((d) => d >= 1 && d <= 7).toList()
-          ..sort();
-        return days;
-      }
+  bool canAdd() {
+    final titleOk = titleCtl.text.trim().isNotEmpty;
+    if (householdId != null) {
+      final assignee = selectedAssigneeValue ?? 'household';
+      return titleOk && assignee.isNotEmpty;
+    }
+    return titleOk;
+  }
 
-      return StatefulBuilder(
-        builder: (contextSB, setStateSB) {
-          final theme = Theme.of(contextSB);
-          titleCtl.addListener(() => setStateSB(() {}));
-          // Cache members to avoid flashing empty chips while streams reload.
-          final cachedMembers = <Map<String, String?>>[];
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 8,
-              bottom: MediaQuery.of(contextSB).viewInsets.bottom + 16,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+  List<int>? buildRepeatDaysForSave() {
+    if (!isRepeating) return null;
+    if (repeatUnit != 'week') return null;
+    if (selectedRepeatDays.isEmpty) return null;
+    final days = selectedRepeatDays.where((d) => d >= 1 && d <= 7).toList()
+      ..sort();
+    return days;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return KeyboardInsetPadding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
                   Row(
                     children: [
                       if (taskToEdit == null && onBulkImportTap != null)
@@ -203,11 +286,14 @@ Future<void> showTaskAddEditDialog(
                         taskToEdit == null ? 'New Task' : 'Edit Task',
                         style: Theme.of(contextSB).textTheme.titleLarge,
                       ),
-                      if (taskToEdit == null && onBulkImportTap != null)
+                      if (taskToEdit == null && widget.onBulkImportTap != null)
                         TextButton.icon(
                           onPressed: () async {
+                            final bulkTap = widget.onBulkImportTap;
                             Navigator.pop(contextSB);
-                            await onBulkImportTap();
+                            if (bulkTap != null) {
+                              await bulkTap();
+                            }
                           },
                           icon: const Icon(Icons.playlist_add_check),
                           label: const Text('Bulk Import'),
@@ -534,40 +620,46 @@ Future<void> showTaskAddEditDialog(
                       spacing: 8,
                       runSpacing: 6,
                       children: [
-                        if (cu != null)
-                          ChoiceChip(
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                CircleAvatar(
-                                  radius: 10,
-                                  backgroundImage:
-                                      (cu.photoURL == null ||
-                                          cu.photoURL!.isEmpty)
-                                      ? null
-                                      : NetworkImage(cu.photoURL!),
-                                  child:
-                                      (cu.photoURL == null ||
-                                          cu.photoURL!.isEmpty)
-                                      ? Text(
-                                          (defaultName?.isNotEmpty ?? false)
-                                              ? defaultName![0].toUpperCase()
-                                              : '?',
-                                          style: theme.textTheme.labelSmall
-                                              ?.copyWith(fontSize: 12),
-                                        )
-                                      : null,
+                        if (cu != null) ...[
+                          Builder(
+                            builder: (context) {
+                              final activeUser = cu!;
+                              return ChoiceChip(
+                                label: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 10,
+                                      backgroundImage:
+                                          (activeUser.photoURL == null ||
+                                              activeUser.photoURL!.isEmpty)
+                                          ? null
+                                          : NetworkImage(activeUser.photoURL!),
+                                      child:
+                                          (activeUser.photoURL == null ||
+                                              activeUser.photoURL!.isEmpty)
+                                          ? Text(
+                                              (defaultName?.isNotEmpty ?? false)
+                                                  ? defaultName![0].toUpperCase()
+                                                  : '?',
+                                              style: theme.textTheme.labelSmall
+                                                  ?.copyWith(fontSize: 12),
+                                            )
+                                          : null,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(defaultName ?? 'Me'),
+                                  ],
                                 ),
-                                const SizedBox(width: 6),
-                                Text(defaultName ?? 'Me'),
-                              ],
-                            ),
-                            selected: selectedMemberId == cu.uid,
-                            onSelected: (_) => setStateSB(() {
-                              selectedMemberId = cu?.uid;
-                              selectedMemberName = defaultName;
-                            }),
+                                selected: selectedMemberId == activeUser.uid,
+                                onSelected: (_) => setStateSB(() {
+                                  selectedMemberId = activeUser.uid;
+                                  selectedMemberName = defaultName;
+                                }),
+                              );
+                            },
                           ),
+                        ],
                         ChoiceChip(
                           label: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -777,11 +869,12 @@ Future<void> showTaskAddEditDialog(
                       ElevatedButton(
                         onPressed: canAdd()
                             ? () {
-                                if (taskToEdit != null) {
+                                final editingTask = widget.taskToEdit;
+                                if (editingTask != null) {
                                   final sanitizedTitle = sanitizeTaskTitle(
                                     titleCtl.text,
                                   ).capitalizeFirst();
-                                  final updated = taskToEdit.copyWith(
+                                  final updated = editingTask.copyWith(
                                     title: sanitizedTitle,
                                     description: descCtl.text.isEmpty
                                         ? null
@@ -841,6 +934,7 @@ Future<void> showTaskAddEditDialog(
                                   );
                                   cubit.addTask(task);
                                 }
+                                AppHaptics.instance.confirm();
                                 Navigator.pop(context);
                               }
                             : null,
@@ -852,8 +946,5 @@ Future<void> showTaskAddEditDialog(
               ),
             ),
           );
-        },
-      );
-    },
-  );
+  }
 }
