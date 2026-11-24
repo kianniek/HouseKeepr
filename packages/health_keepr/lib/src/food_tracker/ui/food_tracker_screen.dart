@@ -823,6 +823,39 @@ class _FoodTrackerScreenState extends State<FoodTrackerScreen> {
     );
   }
 
+  Future<void> _openSettingsDialog() {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final theme = Theme.of(context);
+          final colorScheme = theme.colorScheme;
+          return AlertDialog(
+            title: const Text('Settings'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: _buildHealthConnectContent(
+                theme,
+                colorScheme,
+                onAfterToggle: () {
+                  if (dialogContext.mounted) {
+                    setDialogState(() {});
+                  }
+                },
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -838,6 +871,11 @@ class _FoodTrackerScreenState extends State<FoodTrackerScreen> {
             tooltip: 'On-Device AI Model',
             onPressed: _openLlmModelDialog,
             icon: const Icon(Icons.auto_awesome_rounded),
+          ),
+          IconButton(
+            tooltip: 'Settings',
+            onPressed: _openSettingsDialog,
+            icon: const Icon(Icons.settings_outlined),
           ),
           if (_selectedDate != today)
             TextButton(onPressed: _jumpToToday, child: const Text('Today')),
@@ -874,8 +912,6 @@ class _FoodTrackerScreenState extends State<FoodTrackerScreen> {
                 const SizedBox(height: 12),
                 if (summary != null)
                   _buildSummaryCard(theme, colorScheme, summary),
-                const SizedBox(height: 12),
-                _buildHealthConnectCard(theme, colorScheme),
                 const SizedBox(height: 12),
                 _buildQuickActionsRow(),
                 const SizedBox(height: 16),
@@ -1009,7 +1045,11 @@ class _FoodTrackerScreenState extends State<FoodTrackerScreen> {
     );
   }
 
-  Widget _buildHealthConnectCard(ThemeData theme, ColorScheme colorScheme) {
+  Widget _buildHealthConnectContent(
+    ThemeData theme,
+    ColorScheme colorScheme, {
+    VoidCallback? onAfterToggle,
+  }) {
     final canEnable =
         _isAndroid && _hcStatus == NutritionHealthConnectStatus.available;
     final switchValue = canEnable && _hcSyncEnabled && _hcHasPermission;
@@ -1043,41 +1083,42 @@ class _FoodTrackerScreenState extends State<FoodTrackerScreen> {
       showSettingsAction = false;
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              secondary: Icon(
-                Icons.sync_rounded,
-                color: switchValue
-                    ? colorScheme.primary
-                    : colorScheme.onSurfaceVariant,
-              ),
-              title: const Text('Health Connect sync'),
-              subtitle: Text(subtitle),
-              value: switchValue,
-              onChanged: canEnable ? _onToggleHealthConnect : null,
-            ),
-            if (showSettingsAction)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () {
-                    unawaited(
-                      _healthConnectGateway.openHealthConnectSettings(),
-                    );
-                  },
-                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                  label: const Text('Open Health Connect'),
-                ),
-              ),
-          ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: Icon(
+            Icons.sync_rounded,
+            color: switchValue
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
+          ),
+          title: const Text('Health Connect sync'),
+          subtitle: Text(subtitle),
+          value: switchValue,
+          onChanged: canEnable
+              ? (value) async {
+                  await _onToggleHealthConnect(value);
+                  onAfterToggle?.call();
+                }
+              : null,
         ),
-      ),
+        if (showSettingsAction)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () {
+                unawaited(
+                  _healthConnectGateway.openHealthConnectSettings(),
+                );
+              },
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: const Text('Open Health Connect'),
+            ),
+          ),
+      ],
     );
   }
 

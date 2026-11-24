@@ -491,6 +491,10 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        expect(find.byType(SwitchListTile), findsNothing);
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.pumpAndSettle();
+
         final disabledSwitch = tester.widget<SwitchListTile>(
           find.byType(SwitchListTile),
         );
@@ -520,6 +524,8 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.pumpAndSettle();
         await tester.tap(find.byType(Switch));
         await tester.pumpAndSettle();
 
@@ -552,12 +558,17 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.pumpAndSettle();
         await tester.tap(find.byType(Switch));
         await tester.pumpAndSettle();
         expect(
           tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
           isTrue,
         );
+
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
 
         await tester.tap(find.text('Manual Add'));
         await tester.pumpAndSettle();

@@ -58,31 +58,43 @@ class PillWidget : AppWidgetProvider() {
                     appWidgetId = appWidgetId,
                     isCompactHeight = true,
                     isCompactWidth = true,
+                    isHeightTooShortForTitle = true,
+                )
+                val vNx1Short = buildPillRemoteViews(
+                    context = context,
+                    appWidgetId = appWidgetId,
+                    isCompactHeight = true,
+                    isCompactWidth = false,
+                    isHeightTooShortForTitle = true,
                 )
                 val vNx1 = buildPillRemoteViews(
                     context = context,
                     appWidgetId = appWidgetId,
                     isCompactHeight = true,
                     isCompactWidth = false,
+                    isHeightTooShortForTitle = false,
                 )
                 val v1xN = buildPillRemoteViews(
                     context = context,
                     appWidgetId = appWidgetId,
                     isCompactHeight = false,
                     isCompactWidth = true,
+                    isHeightTooShortForTitle = false,
                 )
                 val vFull = buildPillRemoteViews(
                     context = context,
                     appWidgetId = appWidgetId,
                     isCompactHeight = false,
                     isCompactWidth = false,
+                    isHeightTooShortForTitle = false,
                 )
                 val responsive = RemoteViews(
                     mapOf(
                         SizeF(50f, 50f) to v1x1,
-                        SizeF(180f, 50f) to vNx1,
+                        SizeF(102f, 50f) to vNx1Short,
+                        SizeF(102f, 80f) to vNx1,
                         SizeF(50f, 110f) to v1xN,
-                        SizeF(180f, 110f) to vFull,
+                        SizeF(102f, 110f) to vFull,
                     )
                 )
                 appWidgetManager.updateAppWidget(appWidgetId, responsive)
@@ -94,11 +106,13 @@ class PillWidget : AppWidgetProvider() {
             val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
             val isCompactHeight = minHeight in 1 until 102
             val isCompactWidth = minWidth in 1 until 102
+            val isHeightTooShortForTitle = minHeight in 1 until 80
             val views = buildPillRemoteViews(
                 context = context,
                 appWidgetId = appWidgetId,
                 isCompactHeight = isCompactHeight,
                 isCompactWidth = isCompactWidth,
+                isHeightTooShortForTitle = isHeightTooShortForTitle,
             )
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
@@ -108,6 +122,7 @@ class PillWidget : AppWidgetProvider() {
             appWidgetId: Int,
             isCompactHeight: Boolean,
             isCompactWidth: Boolean,
+            isHeightTooShortForTitle: Boolean,
         ): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.pill_widget)
             val palette = WidgetThemeHelper.resolve(context)
@@ -131,8 +146,8 @@ class PillWidget : AppWidgetProvider() {
             val resolvedTitle = customTitle ?: title
             val showDoseCount = prefs.getBoolean(SHOW_DOSE_COUNT_KEY, false)
 
-            // Set Header
-            if (resolvedTitle.isBlank() || (isCompactHeight && isCompactWidth)) {
+            // Set Header: hide only when blank, 1-cell wide, or height isn't enough for title + 1 row
+            if (resolvedTitle.isBlank() || isCompactWidth || isHeightTooShortForTitle) {
                 views.setViewVisibility(R.id.pill_widget_title, View.GONE)
             } else {
                 views.setViewVisibility(R.id.pill_widget_title, View.VISIBLE)
