@@ -4,6 +4,8 @@ import 'package:hive/hive.dart';
 
 import '../contracts/health_data_store.dart';
 import '../contracts/health_record_metadata.dart';
+import '../food_tracker/models/meal_log.dart';
+import '../food_tracker/storage/food_tracker_repository.dart';
 import 'storage_backend_stub.dart';
 import 'storage_backend_stub.dart'
     if (dart.library.io) 'storage_backend_io.dart'
@@ -33,6 +35,8 @@ class LocalHealthDataStore implements HealthDataStore {
   final Map<String, Box<String>> _openBoxes = <String, Box<String>>{};
   Box<String>? _manifestBox;
   Future<void>? _initFuture;
+  late final FoodTrackerRepository _foodTrackerRepository =
+      FoodTrackerRepository(this);
 
   /// Whether the underlying `health_keepr.db` store has been initialized.
   bool get isInitialized => _initialized;
@@ -79,12 +83,23 @@ class LocalHealthDataStore implements HealthDataStore {
     final manifest = _manifestBox;
     if (manifest == null) return;
     final raw = manifest.get(moduleId);
-    final collections = raw == null
-        ? <String>{}
-        : (jsonDecode(raw) as List<dynamic>).cast<String>().toSet();
-    if (collections.add(boxName)) {
+    final collections = _decodeManifestSet(raw);
+    if (collections.add(boxName) || (raw != null && collections.length == 1)) {
       await manifest.put(moduleId, jsonEncode(collections.toList()));
     }
+  }
+
+  Set<String> _decodeManifestSet(String? raw) {
+    if (raw == null || raw.isEmpty) return <String>{};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.whereType<String>().toSet();
+      }
+    } catch (_) {
+      // Recover gracefully from corrupt manifest JSON.
+    }
+    return <String>{};
   }
 
   @override
@@ -94,13 +109,24 @@ class LocalHealthDataStore implements HealthDataStore {
   ) async {
     final box = await _getCollectionBox(moduleId, collection);
     final records = <Map<String, dynamic>>[];
-    for (final raw in box.values) {
-      final decoded = jsonDecode(raw);
-      if (decoded is Map<String, dynamic>) {
-        records.add(decoded);
-      } else if (decoded is Map) {
-        records.add(Map<String, dynamic>.from(decoded));
+    for (final entry in box.toMap().entries) {
+      Map<String, dynamic>? record;
+      try {
+        final decoded = jsonDecode(entry.value);
+        if (decoded is Map<String, dynamic>) {
+          record = Map<String, dynamic>.from(decoded);
+        } else if (decoded is Map) {
+          record = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {
+        // Skip corrupt non-JSON entries so valid records still load.
       }
+      if (record == null) continue;
+      final existingId = record['id'];
+      if (existingId is! String || existingId.isEmpty) {
+        record['id'] = entry.key.toString();
+      }
+      records.add(record);
     }
     return records;
   }
@@ -114,10 +140,23 @@ class LocalHealthDataStore implements HealthDataStore {
     final box = await _getCollectionBox(moduleId, collection);
     final raw = box.get(id);
     if (raw == null) return null;
-    final decoded = jsonDecode(raw);
-    if (decoded is Map<String, dynamic>) return decoded;
-    if (decoded is Map) return Map<String, dynamic>.from(decoded);
-    return null;
+    try {
+      final decoded = jsonDecode(raw);
+      Map<String, dynamic>? record;
+      if (decoded is Map<String, dynamic>) {
+        record = Map<String, dynamic>.from(decoded);
+      } else if (decoded is Map) {
+        record = Map<String, dynamic>.from(decoded);
+      }
+      if (record == null) return null;
+      final existingId = record['id'];
+      if (existingId is! String || existingId.isEmpty) {
+        record['id'] = id;
+      }
+      return record;
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
@@ -165,7 +204,7 @@ class LocalHealthDataStore implements HealthDataStore {
 
     final raw = manifest.get(moduleId);
     if (raw != null) {
-      final boxNames = (jsonDecode(raw) as List<dynamic>).cast<String>();
+      final boxNames = _decodeManifestSet(raw).toList();
       for (final name in boxNames) {
         final openBox = _openBoxes.remove(name);
         if (openBox != null && openBox.isOpen) {
@@ -207,4 +246,36 @@ class LocalHealthDataStore implements HealthDataStore {
     _dbPath = null;
     _initialized = false;
   }
+
+  /// Inserts or updates a Food Tracker [MealLog].
+  Future<void> saveMealLog(MealLog log) =>
+      _foodTrackerRepository.saveMealLog(log);
+
+  /// Loads all persisted Food Tracker [MealLog]s sorted newest-first.
+  Future<List<MealLog>> loadMealLogs() =>
+      _foodTrackerRepository.loadMealLogs();
+
+  /// Loads Food Tracker [MealLog]s matching [date]'s local calendar day.
+  Future<List<MealLog>> loadMealLogsForDate(DateTime date) =>
+      _foodTrackerRepository.loadMealLogsForDate(date);
+
+  /// Deletes the Food Tracker [MealLog] with [id].
+  Future<void> deleteMealLog(String id) =>
+      _foodTrackerRepository.deleteMealLog(id);
+
+  /// Persists the daily calorie goal for Food Tracker.
+  Future<void> saveDailyKcalGoal(double goal) =>
+      _foodTrackerRepository.saveDailyKcalGoal(goal);
+
+  /// Loads the daily calorie goal for Food Tracker (defaults to `2000.0`).
+  Future<double> loadDailyKcalGoal() =>
+      _foodTrackerRepository.loadDailyKcalGoal();
+
+  /// Persists whether Health Connect nutrition sync is enabled.
+  Future<void> saveHealthConnectSyncEnabled(bool enabled) =>
+      _foodTrackerRepository.saveHealthConnectSyncEnabled(enabled);
+
+  /// Loads whether Health Connect nutrition sync is enabled.
+  Future<bool> loadHealthConnectSyncEnabled() =>
+      _foodTrackerRepository.loadHealthConnectSyncEnabled();
 }

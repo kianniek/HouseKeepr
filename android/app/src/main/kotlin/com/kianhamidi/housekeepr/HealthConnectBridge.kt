@@ -11,6 +11,8 @@ import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.MealType
+import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.WeightRecord
@@ -18,6 +20,7 @@ import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import androidx.health.connect.client.units.Energy
 import androidx.health.connect.client.units.Mass
 import androidx.health.connect.client.units.Percentage
 import androidx.lifecycle.lifecycleScope
@@ -27,6 +30,7 @@ import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneOffset
+import java.time.format.DateTimeParseException
 import kotlin.reflect.KClass
 
 class HealthConnectBridge(private val activity: FlutterFragmentActivity) {
@@ -76,6 +80,7 @@ class HealthConnectBridge(private val activity: FlutterFragmentActivity) {
             "writeExerciseSession" -> handleWriteExerciseSession(call, result)
             "writeWeight" -> handleWriteWeight(call, result)
             "writeBodyFat" -> handleWriteBodyFat(call, result)
+            "writeNutrition" -> handleWriteNutrition(call, result)
             "readRecords" -> handleReadRecords(call, result)
             else -> result.notImplemented()
         }
@@ -130,6 +135,7 @@ class HealthConnectBridge(private val activity: FlutterFragmentActivity) {
                 "read_active_calories" -> out.add(HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class))
                 "read_total_calories" -> out.add(HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class))
                 "read_heart_rate" -> out.add(HealthPermission.getReadPermission(HeartRateRecord::class))
+                "write_nutrition" -> out.add(HealthPermission.getWritePermission(NutritionRecord::class))
             }
         }
         return out
@@ -271,6 +277,67 @@ class HealthConnectBridge(private val activity: FlutterFragmentActivity) {
                 result.success(response.recordIdsList.firstOrNull() ?: id)
             } catch (e: Exception) {
                 result.error("WRITE_BODY_FAT_FAILED", e.message, null)
+            }
+        }
+    }
+
+    private fun handleWriteNutrition(call: MethodCall, result: MethodChannel.Result) {
+        val client = getClientOrNull() ?: return result.error("HC_UNAVAILABLE", "Health Connect unavailable.", null)
+        val id = call.argument<String>("id")?.takeIf { it.isNotBlank() }
+            ?: return result.error("INVALID_ARGS", "Missing or blank id", null)
+        val name = call.argument<String>("name")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: return result.error("INVALID_ARGS", "Missing or blank name", null)
+        val mealTypeRaw = call.argument<String>("mealType")
+            ?: return result.error("INVALID_ARGS", "Missing mealType", null)
+        val timeIso = call.argument<String>("timeIso")
+            ?: return result.error("INVALID_ARGS", "Missing timeIso", null)
+        val kcal = call.argument<Number>("kcal")?.toDouble()?.takeIf { it.isFinite() }
+            ?: return result.error("INVALID_ARGS", "Missing or invalid kcal", null)
+        val proteinGrams = call.argument<Number>("proteinGrams")?.toDouble()?.takeIf { it.isFinite() }
+            ?: return result.error("INVALID_ARGS", "Missing or invalid proteinGrams", null)
+        val carbsGrams = call.argument<Number>("carbsGrams")?.toDouble()?.takeIf { it.isFinite() }
+            ?: return result.error("INVALID_ARGS", "Missing or invalid carbsGrams", null)
+        val fatGrams = call.argument<Number>("fatGrams")?.toDouble()?.takeIf { it.isFinite() }
+            ?: return result.error("INVALID_ARGS", "Missing or invalid fatGrams", null)
+
+        val startTime = try {
+            Instant.parse(timeIso)
+        } catch (e: DateTimeParseException) {
+            return result.error("INVALID_ARGS", "Invalid timeIso: ${e.message}", null)
+        }
+        val endTime = startTime.plusSeconds(60)
+        val mealType = when (mealTypeRaw.trim().lowercase()) {
+            "breakfast" -> MealType.MEAL_TYPE_BREAKFAST
+            "lunch" -> MealType.MEAL_TYPE_LUNCH
+            "dinner" -> MealType.MEAL_TYPE_DINNER
+            "snack" -> MealType.MEAL_TYPE_SNACK
+            else -> MealType.MEAL_TYPE_UNKNOWN
+        }
+
+        activity.lifecycleScope.launch {
+            try {
+                val record = NutritionRecord(
+                    startTime = startTime,
+                    startZoneOffset = null,
+                    endTime = endTime,
+                    endZoneOffset = null,
+                    energy = Energy.kilocalories(kcal.coerceAtLeast(0.0)),
+                    protein = Mass.grams(proteinGrams.coerceAtLeast(0.0)),
+                    totalCarbohydrate = Mass.grams(carbsGrams.coerceAtLeast(0.0)),
+                    totalFat = Mass.grams(fatGrams.coerceAtLeast(0.0)),
+                    name = name,
+                    mealType = mealType,
+                    metadata = Metadata.manualEntry(
+                        clientRecordId = "housekeepr_nutrition_$id",
+                        device = Device(type = Device.TYPE_PHONE),
+                    ),
+                )
+                val response = client.insertRecords(listOf(record))
+                result.success(response.recordIdsList.firstOrNull() ?: id)
+            } catch (e: SecurityException) {
+                result.error("SECURITY_EXCEPTION", e.message, null)
+            } catch (e: Exception) {
+                result.error("WRITE_NUTRITION_FAILED", e.message, null)
             }
         }
     }

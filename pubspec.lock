@@ -574,6 +574,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.0"
+  flutter_litert:
+    dependency: transitive
+    description:
+      name: flutter_litert
+      sha256: c4ab50e84dc1b465c8ebe3d82299046d5643706b43c9c825f6ee8ff09d80be55
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.2.0"
   flutter_local_notifications:
     dependency: "direct main"
     description:
@@ -1331,6 +1339,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.2"
+  quiver:
+    dependency: transitive
+    description:
+      name: quiver
+      sha256: ea0b925899e64ecdfbf9c7becb60d5b50e706ade44a85b2363be2a22d88117d2
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.2"
   record_use:
     dependency: transitive
     description:

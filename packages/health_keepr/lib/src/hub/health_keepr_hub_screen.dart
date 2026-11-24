@@ -1,7 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../contracts/health_data_store.dart';
+import '../food_tracker/food_tracker_launcher.dart';
+import '../food_tracker/ml/food_classifier.dart';
+import '../food_tracker/sync/nutrition_health_connect_gateway.dart';
 import '../registry/health_mini_app.dart';
 import '../registry/open_gym_launcher.dart';
 import '../storage/local_health_data_store.dart';
@@ -14,6 +18,10 @@ class HealthKeeprHubScreen extends StatefulWidget {
     super.key,
     this.store,
     this.modules,
+    this.foodPlateCropper,
+    this.foodClassifier,
+    this.foodImagePicker,
+    this.nutritionHealthConnectGateway,
   });
 
   /// Optional custom [HealthDataStore]. Defaults to a lazily initialized
@@ -22,6 +30,18 @@ class HealthKeeprHubScreen extends StatefulWidget {
 
   /// Optional override of registered mini-apps (useful for testing).
   final List<HealthMiniApp>? modules;
+
+  /// Optional plate cropper callback forwarded to Food Snap & Tracker.
+  final FoodPlateCropper? foodPlateCropper;
+
+  /// Optional food classifier override forwarded to Food Snap & Tracker.
+  final FoodClassifier? foodClassifier;
+
+  /// Optional image picker callback forwarded to Food Snap & Tracker.
+  final FoodImageSourcePicker? foodImagePicker;
+
+  /// Optional Health Connect nutrition gateway forwarded to Food Snap & Tracker.
+  final NutritionHealthConnectGateway? nutritionHealthConnectGateway;
 
   @override
   State<HealthKeeprHubScreen> createState() => _HealthKeeprHubScreenState();
@@ -47,7 +67,19 @@ class _HealthKeeprHubScreenState extends State<HealthKeeprHubScreen> {
   }
 
   List<HealthMiniApp> _buildModules() {
-    return widget.modules ?? <HealthMiniApp>[OpenGymLauncher.descriptor()];
+    if (widget.modules != null) {
+      return widget.modules!;
+    }
+    return <HealthMiniApp>[
+      OpenGymLauncher.descriptor(),
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+        FoodTrackerLauncher.descriptor(
+          cropper: widget.foodPlateCropper,
+          classifier: widget.foodClassifier,
+          imagePicker: widget.foodImagePicker,
+          healthConnectGateway: widget.nutritionHealthConnectGateway,
+        ),
+    ];
   }
 
   Future<void> _launchModule(HealthMiniApp module) async {

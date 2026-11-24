@@ -46,6 +46,7 @@ import 'services/theme_controller.dart';
 import 'services/widget_service.dart';
 import 'services/write_queue.dart';
 import 'ui/common/app_theme.dart';
+import 'ui/common/widgets/simple_cropper.dart';
 import 'ui/features/auth/login_page.dart';
 import 'ui/features/households/pages/household_create_page.dart';
 
@@ -64,6 +65,13 @@ Future<void> main() async {
     if (imagePickerImplementation is ImagePickerAndroid) {
       imagePickerImplementation.useAndroidPhotoPicker = true;
     }
+    FoodTrackerLauncher.registerDefaultCropper(
+      (context, imagePath) => Navigator.of(context).push<Uint8List?>(
+        MaterialPageRoute<Uint8List?>(
+          builder: (_) => SimpleCropper(imagePath: imagePath),
+        ),
+      ),
+    );
   }
 
   try {

@@ -65,6 +65,10 @@ android {
         viewBinding = true
     }
 
+    androidResources {
+        noCompress += listOf("tflite", "lite")
+    }
+
     dynamicFeatures += setOf(":openGym")
 }
 

@@ -169,6 +169,14 @@ class _ToolsLibraryPageState extends State<ToolsLibraryPage> {
       shortcutUri: 'housekeepr://opengym',
       shortcutIconKey: 'open_gym',
     ),
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+      const ToolItem(
+        title: 'Food Snap',
+        subtitle: 'Food scanner & daily macro log',
+        category: ToolCategory.healthUtilities,
+        icon: Icons.restaurant_rounded,
+        destination: FoodTrackerScreen(),
+      ),
     ToolItem(
       title: 'Personal Budget Contribution',
       subtitle: 'Calculate your left-over budget',

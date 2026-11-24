@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:housekeepr/ui/features/tools/pages/tools_library_page.dart';
@@ -21,7 +22,7 @@ void main() {
       await tester.pumpWidget(buildTestableWidget());
       await tester.pump();
 
-      expect(find.byType(ListTile), findsNWidgets(4));
+      expect(find.byType(ListTile), findsNWidgets(5));
       expect(find.text('HealthKeepr'), findsOneWidget);
       expect(find.byType(GridView), findsNothing);
 
@@ -57,7 +58,7 @@ void main() {
       await tester.pumpWidget(buildTestableWidget());
       await tester.pump();
 
-      expect(find.byType(ListTile), findsNWidgets(4));
+      expect(find.byType(ListTile), findsNWidgets(5));
       expect(find.text('HealthKeepr'), findsOneWidget);
       expect(find.byType(GridView), findsNothing);
     });
@@ -68,7 +69,7 @@ void main() {
       await tester.pumpWidget(buildTestableWidget());
       await tester.pump();
 
-      expect(find.byType(ListTile), findsNWidgets(4));
+      expect(find.byType(ListTile), findsNWidgets(5));
 
       await tester.tap(find.text('Kitchen'));
       await tester.pump();
@@ -94,8 +95,34 @@ void main() {
       await tester.tap(find.text('All'));
       await tester.pump();
 
-      expect(find.byType(ListTile), findsNWidgets(4));
+      expect(find.byType(ListTile), findsNWidgets(5));
       expect(prefs.getString('tools_library_selected_category_v1'), isNull);
+    });
+  });
+
+  group('ToolsLibraryPage Food Snap platform gating', () {
+    testWidgets('shows Food Snap shortcut on Android', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      await tester.pumpWidget(buildTestableWidget());
+      await tester.pump();
+
+      expect(find.text('Food Snap'), findsOneWidget);
+      expect(find.byType(ListTile), findsNWidgets(5));
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('hides Food Snap shortcut on Desktop/Windows', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      await tester.pumpWidget(buildTestableWidget());
+      await tester.pump();
+
+      expect(find.text('Food Snap'), findsNothing);
+      expect(find.byType(ListTile), findsNWidgets(4));
+      debugDefaultTargetPlatformOverride = null;
     });
   });
 }
