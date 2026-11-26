@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/exercise_set.dart';
 import '../models/workout_log.dart';
@@ -967,16 +968,27 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                 displayText: set.weight % 1 == 0
                     ? set.weight.toInt().toString()
                     : set.weight.toStringAsFixed(1),
+                allowDecimal: true,
                 onMinus: () => controller.updateSet(
                   entryIndex,
                   activeSetIdx,
-                  weight: (set.weight - 2.5).clamp(0, 999),
+                  weight: (set.weight - 1).clamp(0, 9999).toDouble(),
                 ),
                 onPlus: () => controller.updateSet(
                   entryIndex,
                   activeSetIdx,
-                  weight: set.weight + 2.5,
+                  weight: (set.weight + 1).clamp(0, 9999).toDouble(),
                 ),
+                onSubmitted: (raw) {
+                  final parsed = double.tryParse(raw.replaceAll(',', '.'));
+                  if (parsed != null && parsed >= 0) {
+                    controller.updateSet(
+                      entryIndex,
+                      activeSetIdx,
+                      weight: parsed.clamp(0, 9999).toDouble(),
+                    );
+                  }
+                },
               ),
               const SizedBox(height: 14),
               Text('Reps', style: theme.textTheme.labelMedium),
@@ -993,6 +1005,16 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                   activeSetIdx,
                   reps: set.reps + 1,
                 ),
+                onSubmitted: (raw) {
+                  final parsed = int.tryParse(raw);
+                  if (parsed != null && parsed >= 0) {
+                    controller.updateSet(
+                      entryIndex,
+                      activeSetIdx,
+                      reps: parsed.clamp(0, 999),
+                    );
+                  }
+                },
               ),
               const SizedBox(height: 20),
               FilledButton.icon(
@@ -1205,9 +1227,19 @@ class _StepperSetRow extends StatelessWidget {
               displayText: set.weight % 1 == 0
                   ? set.weight.toInt().toString()
                   : set.weight.toStringAsFixed(1),
-              onMinus: () =>
-                  onWeightChanged((set.weight - 2.5).clamp(0, 999)),
-              onPlus: () => onWeightChanged(set.weight + 2.5),
+              allowDecimal: true,
+              onMinus: () => onWeightChanged(
+                (set.weight - 1).clamp(0, 9999).toDouble(),
+              ),
+              onPlus: () => onWeightChanged(
+                (set.weight + 1).clamp(0, 9999).toDouble(),
+              ),
+              onSubmitted: (raw) {
+                final parsed = double.tryParse(raw.replaceAll(',', '.'));
+                if (parsed != null && parsed >= 0) {
+                  onWeightChanged(parsed.clamp(0, 9999).toDouble());
+                }
+              },
             ),
           ),
           const SizedBox(width: 8),
@@ -1216,6 +1248,12 @@ class _StepperSetRow extends StatelessWidget {
               displayText: '${set.reps}',
               onMinus: () => onRepsChanged((set.reps - 1).clamp(0, 999)),
               onPlus: () => onRepsChanged(set.reps + 1),
+              onSubmitted: (raw) {
+                final parsed = int.tryParse(raw);
+                if (parsed != null && parsed >= 0) {
+                  onRepsChanged(parsed.clamp(0, 999));
+                }
+              },
             ),
           ),
           if (effortMode != 'off') ...<Widget>[
@@ -1306,21 +1344,82 @@ class _StepperSetRow extends StatelessWidget {
   }
 }
 
-class _NumericStepperPill extends StatelessWidget {
+class _NumericStepperPill extends StatefulWidget {
   const _NumericStepperPill({
     required this.displayText,
     required this.onMinus,
     required this.onPlus,
+    this.onSubmitted,
+    this.allowDecimal = false,
   });
 
   final String displayText;
   final VoidCallback onMinus;
   final VoidCallback onPlus;
+  final ValueChanged<String>? onSubmitted;
+  final bool allowDecimal;
+
+  @override
+  State<_NumericStepperPill> createState() => _NumericStepperPillState();
+}
+
+class _NumericStepperPillState extends State<_NumericStepperPill> {
+  bool _isEditing = false;
+  late final TextEditingController _textController = TextEditingController();
+  late final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_handleFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_handleFocusChange);
+    _focusNode.dispose();
+    _textController.dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChange() {
+    if (!_focusNode.hasFocus && _isEditing) {
+      _commitEdit();
+    }
+  }
+
+  void _startEditing() {
+    setState(() {
+      _isEditing = true;
+      _textController.text = widget.displayText;
+      _textController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: widget.displayText.length,
+      );
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
+  void _commitEdit() {
+    if (!_isEditing) return;
+    final text = _textController.text.trim();
+    setState(() => _isEditing = false);
+    if (text.isNotEmpty) {
+      widget.onSubmitted?.call(text);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final numberStyle = theme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
 
     return Container(
       height: 38,
@@ -1334,23 +1433,54 @@ class _NumericStepperPill extends StatelessWidget {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 38),
             icon: const Icon(Icons.remove, size: 16),
-            onPressed: onMinus,
+            onPressed: widget.onMinus,
           ),
           Expanded(
-            child: Center(
-              child: Text(
-                displayText,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+            child: _isEditing
+                ? TextField(
+                    controller: _textController,
+                    focusNode: _focusNode,
+                    textAlign: TextAlign.center,
+                    style: numberStyle,
+                    keyboardType: TextInputType.numberWithOptions(
+                      decimal: widget.allowDecimal,
+                    ),
+                    textInputAction: TextInputAction.done,
+                    inputFormatters: <TextInputFormatter>[
+                      if (widget.allowDecimal)
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d*[.,]?\d*'),
+                        )
+                      else
+                        FilteringTextInputFormatter.digitsOnly,
+                    ],
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    onSubmitted: (_) => _commitEdit(),
+                    onTapOutside: (_) => _focusNode.unfocus(),
+                  )
+                : InkWell(
+                    onTap: widget.onSubmitted != null ? _startEditing : null,
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      height: 38,
+                      child: Center(
+                        child: Text(
+                          widget.displayText,
+                          style: numberStyle,
+                        ),
+                      ),
+                    ),
+                  ),
           ),
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 38),
             icon: const Icon(Icons.add, size: 16),
-            onPressed: onPlus,
+            onPressed: widget.onPlus,
           ),
         ],
       ),

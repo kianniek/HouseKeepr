@@ -33,25 +33,28 @@ void main() {
       );
     });
 
-    test('channelConfigs defines distinct Android priority/importance rules', () {
-      final digest =
-          NotificationService.channelConfigs[NotificationChannelType.taskDigest]!;
-      final reminders =
-          NotificationService.channelConfigs[NotificationChannelType.taskReminders]!;
-      final meds =
-          NotificationService.channelConfigs[NotificationChannelType.medications]!;
+    test(
+      'channelConfigs defines distinct Android priority/importance rules',
+      () {
+        final digest = NotificationService
+            .channelConfigs[NotificationChannelType.taskDigest]!;
+        final reminders = NotificationService
+            .channelConfigs[NotificationChannelType.taskReminders]!;
+        final meds = NotificationService
+            .channelConfigs[NotificationChannelType.medications]!;
 
-      expect(digest.id, equals('housekeepr_task_digest'));
-      expect(digest.androidImportance, equals(Importance.defaultImportance));
-      expect(digest.enableVibration, isFalse);
+        expect(digest.id, equals('housekeepr_task_digest'));
+        expect(digest.androidImportance, equals(Importance.defaultImportance));
+        expect(digest.enableVibration, isFalse);
 
-      expect(reminders.id, equals('housekeepr_task_reminders'));
-      expect(reminders.androidImportance, equals(Importance.high));
-      expect(reminders.androidPriority, equals(Priority.high));
+        expect(reminders.id, equals('housekeepr_task_reminders'));
+        expect(reminders.androidImportance, equals(Importance.high));
+        expect(reminders.androidPriority, equals(Priority.high));
 
-      expect(meds.id, equals('housekeepr_medications'));
-      expect(meds.androidImportance, equals(Importance.high));
-    });
+        expect(meds.id, equals('housekeepr_medications'));
+        expect(meds.androidImportance, equals(Importance.max));
+      },
+    );
 
     test('buildMorningDigestContent returns null when 0 due and 0 overdue', () {
       final now = DateTime(2026, 11, 16, 8, 0);
@@ -61,10 +64,9 @@ void main() {
         deadline: DateTime(2026, 11, 18, 12, 0),
       );
 
-      final content = NotificationService.buildMorningDigestContent(
-        [futureTask],
-        now: now,
-      );
+      final content = NotificationService.buildMorningDigestContent([
+        futureTask,
+      ], now: now);
       expect(content, isNull);
     });
 
@@ -141,56 +143,58 @@ void main() {
       },
     );
 
-    test('syncTaskNotifications tracks active IDs and clears when disabled', () async {
-      final prefs = await SharedPreferences.getInstance();
-      final settings = SettingsRepository(prefs);
-      await NotificationService.instance.init(prefs);
+    test(
+      'syncTaskNotifications tracks active IDs and clears when disabled',
+      () async {
+        final prefs = await SharedPreferences.getInstance();
+        final settings = SettingsRepository(prefs);
+        await NotificationService.instance.init(prefs);
 
-      final futureDue = DateTime.now().add(const Duration(hours: 3));
-      final tasks = [
-        Task(
-          id: 't-active',
-          title: 'Active reminder',
-          deadline: futureDue,
-          reminderEnabled: true,
-          reminderOffsetMinutes: 30,
-        ),
-        Task(
-          id: 't-past',
-          title: 'Past reminder',
-          deadline: DateTime.now().subtract(const Duration(hours: 2)),
-          reminderEnabled: true,
-          reminderOffsetMinutes: 30,
-        ),
-        Task(
-          id: 't-off',
-          title: 'No reminder',
-          deadline: futureDue,
-          reminderEnabled: false,
-        ),
-      ];
+        final futureDue = DateTime.now().add(const Duration(hours: 3));
+        final tasks = [
+          Task(
+            id: 't-active',
+            title: 'Active reminder',
+            deadline: futureDue,
+            reminderEnabled: true,
+            reminderOffsetMinutes: 30,
+          ),
+          Task(
+            id: 't-past',
+            title: 'Past reminder',
+            deadline: DateTime.now().subtract(const Duration(hours: 2)),
+            reminderEnabled: true,
+            reminderOffsetMinutes: 30,
+          ),
+          Task(
+            id: 't-off',
+            title: 'No reminder',
+            deadline: futureDue,
+            reminderEnabled: false,
+          ),
+        ];
 
-      await NotificationService.instance.syncTaskNotifications(
-        tasks: tasks,
-        settings: settings,
-      );
+        await NotificationService.instance.syncTaskNotifications(
+          tasks: tasks,
+          settings: settings,
+        );
 
-      final storedIds = prefs.getStringList('scheduled_task_reminder_ids_v1');
-      expect(
-        storedIds,
-        equals([NotificationService.taskNotificationId('t-active').toString()]),
-      );
+        final storedIds = prefs.getStringList('scheduled_task_reminder_ids_v1');
+        expect(
+          storedIds,
+          equals([
+            NotificationService.taskNotificationId('t-active').toString(),
+          ]),
+        );
 
-      await settings.setTaskRemindersEnabled(false);
-      await NotificationService.instance.syncTaskNotifications(
-        tasks: tasks,
-        settings: settings,
-      );
+        await settings.setTaskRemindersEnabled(false);
+        await NotificationService.instance.syncTaskNotifications(
+          tasks: tasks,
+          settings: settings,
+        );
 
-      expect(
-        prefs.getStringList('scheduled_task_reminder_ids_v1'),
-        isEmpty,
-      );
-    });
+        expect(prefs.getStringList('scheduled_task_reminder_ids_v1'), isEmpty);
+      },
+    );
   });
 }

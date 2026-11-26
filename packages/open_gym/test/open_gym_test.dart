@@ -8,6 +8,7 @@ import 'package:health_keepr/health_keepr.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:open_gym/open_gym.dart';
+import 'package:open_gym/src/ui/active_workout_screen.dart';
 
 void main() {
   late Directory tempDir;
@@ -1109,6 +1110,82 @@ void main() {
         await tester.pump(const Duration(milliseconds: 350));
 
         expect(findHandler().enabled, isFalse);
+      },
+    );
+
+    testWidgets(
+      'ActiveWorkoutScreen steps weight by 1 and supports inline tap-to-edit for weight and reps',
+      (tester) async {
+        final memoryStore = _MemoryHealthDataStore();
+        final controller = OpenGymController(store: memoryStore);
+        await tester.runAsync(() async {
+          await controller.initialize();
+          await controller.savePreferences(
+            controller.preferences.copyWith(soundEnabled: false),
+          );
+        });
+        controller.startEmptyWorkout(title: 'Step Test');
+        final bench = controller.exercises.firstWhere((e) => e.id == '0025');
+        controller.addExerciseToActiveWorkout(bench);
+        controller.updateSet(0, 0, weight: 60, reps: 8);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ActiveWorkoutScreen(controller: controller),
+          ),
+        );
+        await tester.pump();
+
+        // Cards layout: weight + / - steps by 1
+        final addButtons = find.byIcon(Icons.add);
+        await tester.tap(addButtons.first);
+        await tester.pump();
+        expect(controller.activeWorkout!.entries[0].sets[0].weight, 61);
+
+        final minusButtons = find.byIcon(Icons.remove);
+        await tester.tap(minusButtons.first);
+        await tester.pump();
+        expect(controller.activeWorkout!.entries[0].sets[0].weight, 60);
+
+        // Tap weight number -> inline TextField -> enter 42.5 -> submit
+        await tester.tap(find.text('60'));
+        await tester.pump();
+        expect(find.byType(TextField), findsOneWidget);
+        await tester.enterText(find.byType(TextField), '42.5');
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pump();
+        expect(controller.activeWorkout!.entries[0].sets[0].weight, 42.5);
+        expect(find.text('42.5'), findsOneWidget);
+
+        // Tap reps number -> inline TextField -> enter 12 -> submit
+        await tester.tap(find.text('8'));
+        await tester.pump();
+        expect(find.byType(TextField), findsOneWidget);
+        await tester.enterText(find.byType(TextField), '12');
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pump();
+        expect(controller.activeWorkout!.entries[0].sets[0].reps, 12);
+        expect(find.text('12'), findsOneWidget);
+
+        // Switch to lb and Focus layout -> weight still steps by 1
+        await tester.runAsync(() async {
+          await controller.savePreferences(
+            controller.preferences.copyWith(
+              usePounds: true,
+              workoutLayout: 'focus',
+            ),
+          );
+        });
+        await tester.pump();
+        expect(find.text('Weight (lb)'), findsOneWidget);
+
+        await tester.tap(find.byIcon(Icons.add).first);
+        await tester.pump();
+        expect(controller.activeWorkout!.entries[0].sets[0].weight, 43.5);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        controller.dispose();
       },
     );
   });
